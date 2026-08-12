@@ -160,16 +160,32 @@ ldrb r3, [r7, #3]    ; used as a map y index
 
 so:
 
-| field | offset |
-|---|---|
-| unit type, **1-based** (0 = empty slot) | +0 |
-| owning army | +1 |
-| map x | +2 |
-| map y | +3 |
-| internal HP, 1..100 | +4 |
+| field | offset | notes |
+|---|---|---|
+| unit type, **1-based** | +0 | 0 = empty slot |
+| has acted this turn | +1 | confirmed: set on exactly the unit that acted, cleared at turn end |
+| map x | +2 | |
+| map y | +3 | |
+| hp / ammo | +4 (u16) | `hp = v & 0x7F`, `ammo = v >> 7` |
+| fuel | +6 (u8) | `fuel = v & 0x7F`; bit 7 is a separate, unidentified flag |
 
 Records are **12 bytes**; the base is the EWRAM pointer stored in ROM at
 `0x08282CB8`, which reads `0x02019F34`.
+
+**The army is the block, not a field.** 64 slots per army, so `army = slot / 64`
+— P1's units occupy slots 1–8, P2's 65–72. Confirmed structurally: 4 × 64 × 12 =
+`0xC00`, and `base + 0xC00` = `0x0201AB34`, exactly the next pointer in ROM.
+
+**Bit 7 is a flag bit in two different fields**, which is the trap here. A Mech
+read `hp=228` and a Tank read `fuel=189` when taken as plain bytes; they are
+`100 | (3<<7)` and `61 | 0x80`. Masking is safe for fuel because AW1's maximum
+is 99. Verified against a live 8-unit capture where seven units matched a fresh
+unit's ammo and fuel exactly, and the eighth was a Tank at 42 HP with 8 ammo
+(one spent on a counterattack) and 58 of 70 fuel.
+
+The fuel bit-7 flag is **not** identified. It is not "has acted" (it survives
+end-of-turn, while +1 clears), not "damaged" and not "has moved" — a Tank that
+is both does not carry it.
 
 Confirmed against a live capture rather than assumed. A Tank showing 5 bars was
 found by change-detection at `0x02019F8C`; that is

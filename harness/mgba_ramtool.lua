@@ -35,11 +35,16 @@
 -- so the array base is the EWRAM pointer stored in ROM at 0x08282CB8, records
 -- are 12 bytes:
 --     +0    unit type, 1-BASED (0 = empty; subtract 1 for the damage table)
---     +1    acted-this-turn flag (hypothesis: set only on the unit that moved)
+--     +1    has-acted-this-turn (CONFIRMED: set on exactly the unit that
+--           acted, and cleared when the turn ended)
 --     +2    map x
 --     +3    map y
 --     +4:2  u16 bitfield -> hp = v & 0x7F, ammo = v >> 7
---     +6    fuel
+--     +6    fuel = v & 0x7F; bit 7 is a separate flag, meaning UNKNOWN.
+--           It is not "acted" (it survives end-of-turn), not "damaged" and not
+--           "has moved" -- a Tank that is both damaged and short on fuel does
+--           not have it. Suspect it clears at the start of that army's own next
+--           turn. Masking is safe regardless: max fuel in AW1 is 99 < 128.
 --
 -- The army is NOT a field: it is the block. 64 slots per army, so
 -- army = slot / 64. That is confirmed structurally -- 4*64 records * 12 bytes
@@ -93,12 +98,9 @@ function units(n)
         flag = "  <-- IMPOSSIBLE HP"
         bad = bad + 1
       end
-      -- Two candidate "acted" indicators, both set on the one unit that had
-      -- moved. A single sample cannot tell them apart, so show both rather
-      -- than pick one and call it solved.
       local marks = ""
-      if emu:read8(a + 1) ~= 0 then marks = marks .. string.format(" +1=%d", emu:read8(a + 1)) end
-      if unitfuelflag(a) then marks = marks .. " fuel:bit7" end
+      if emu:read8(a + 1) ~= 0 then marks = marks .. " acted" end
+      if unitfuelflag(a) then marks = marks .. " ?bit7" end
       console:log(string.format(
         "  [%3d] 0x%08X P%d %-11s (%2d,%2d) hp=%3d (%2d bars) ammo=%2d fuel=%3d%s%s",
         i, a, army + 1, TYPE_NAMES[t] or "?",
