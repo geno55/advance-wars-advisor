@@ -116,6 +116,37 @@ function range(lo, hi)
   report(string.format("range(%d,%d)", lo, hi))
 end
 
+-- Convenience: the unit shows N bars, so internal HP is 10N-9 .. 10N.
+-- Much tighter than range(1,100) and costs nothing to apply.
+function bars(n)
+  range(n * 10 - 9, n * 10)
+end
+
+-- Structural filter. A unit record is: type at +0 (1..24), map x at +2,
+-- map y at +3 (both small). We do not know HP's offset within the record, so
+-- try every plausible offset K and keep the candidate if ANY K makes the bytes
+-- around it look like a real unit record. Kills volatile counters that happen
+-- to sit in the right value range but have no record structure around them.
+function unitlike(maxoff, maxxy)
+  maxoff, maxxy = maxoff or 32, maxxy or 40
+  if cands == nil then console:log("filter with dec()/chg() first"); return end
+  local kept = {}
+  for addr in pairs(cands) do
+    for k = 0, maxoff do
+      local base = addr - k
+      local t = emu:read8(base)
+      local x = emu:read8(base + 2)
+      local y = emu:read8(base + 3)
+      if t >= 1 and t <= 24 and x < maxxy and y < maxxy then
+        kept[addr] = true
+        break
+      end
+    end
+  end
+  cands = kept
+  report(string.format("unitlike(maxoff=%d)", maxoff))
+end
+
 function list()
   if cands == nil then console:log("no filtering yet"); return end
   local t = {}
