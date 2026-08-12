@@ -59,23 +59,41 @@ end
 
 -- Dump the live board. This is the state reader in miniature.
 function units(n)
-  n = n or 60
+  n = n or 256
   local base = unitbase()
-  console:log(string.format("unit array @ 0x%08X, stride %d", base, UNIT_STRIDE))
-  local shown = 0
+  console:log(string.format("unit array @ 0x%08X, stride %d, scanning %d slots",
+    base, UNIT_STRIDE, n))
+  local shown, bad, armies = 0, 0, {}
   for i = 0, n - 1 do
     local a = base + i * UNIT_STRIDE
     local t = emu:read8(a)
     if t >= 1 and t <= 24 then
-      console:log(string.format(
-        "  [%2d] 0x%08X %-11s army=%d  (%2d,%2d)  hp=%3d (%d bars)",
-        i, a, TYPE_NAMES[t] or "?", emu:read8(a + 1),
-        emu:read8(a + 2), emu:read8(a + 3), emu:read8(a + HP_OFF),
-        math.ceil(emu:read8(a + HP_OFF) / 10)))
+      local hp = emu:read8(a + HP_OFF)
+      local army = emu:read8(a + 1)
+      armies[army] = (armies[army] or 0) + 1
+      -- HP is 1..100. Anything else means HP_OFF is wrong for this record,
+      -- so say so rather than printing a fictional bar count.
+      local hptxt
+      if hp >= 1 and hp <= 100 then
+        hptxt = string.format("hp=%3d (%2d bars)", hp, math.ceil(hp / 10))
+      else
+        hptxt = string.format("hp=%3d  <-- IMPOSSIBLE, +%d is not HP here",
+          hp, HP_OFF)
+        bad = bad + 1
+      end
+      console:log(string.format("  [%3d] 0x%08X %-11s army=%d  (%2d,%2d)  %s",
+        i, a, TYPE_NAMES[t] or "?", army,
+        emu:read8(a + 2), emu:read8(a + 3), hptxt))
       shown = shown + 1
     end
   end
-  console:log(string.format("  %d live units", shown))
+  local as = {}
+  for army, cnt in pairs(armies) do as[#as + 1] = string.format("army %d: %d", army, cnt) end
+  console:log(string.format("  %d units (%s)", shown, table.concat(as, ", ")))
+  if bad > 0 then
+    console:log(string.format("  %d record(s) have an impossible HP -- run "
+      .. "hexdump(0x%08X, 128) and send it over", bad, base))
+  end
 end
 
 -- HP address of one unit slot, for reading before/after an attack.
