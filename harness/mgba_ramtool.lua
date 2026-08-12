@@ -160,6 +160,46 @@ function list()
   end
 end
 
+-- Multi-row hexdump, 16 bytes per line with addresses. Use this to see the
+-- unit ARRAY: once you know one record, the repeating pattern gives the stride.
+function hexdump(addr, count)
+  count = count or 128
+  local start = addr - (addr % 16)
+  for row = 0, math.ceil(count / 16) - 1 do
+    local a = start + row * 16
+    local hex, txt = {}, {}
+    for i = 0, 15 do
+      local v = emu:read8(a + i)
+      hex[#hex + 1] = string.format("%02X", v)
+      txt[#txt + 1] = string.format("%3d", v)
+    end
+    console:log(string.format("%08X  %s", a, table.concat(hex, " ")))
+    console:log(string.format("          %s", table.concat(txt, " ")))
+  end
+end
+
+-- Given one record's HP address and the offset of HP within the record, scan
+-- forward for records with the same shape and report the stride.
+function scanarray(hpaddr, hpoff, n)
+  hpoff, n = hpoff or 4, n or 24
+  local base = hpaddr - hpoff
+  console:log(string.format("assuming record base 0x%08X (hp at +%d)", base, hpoff))
+  local last = nil
+  for i = 0, n - 1 do
+    for _, stride in ipairs({ 8, 12, 16, 20, 24, 28, 32, 40, 48 }) do
+      local a = base + i * stride
+      local t = emu:read8(a)
+      if t >= 1 and t <= 24 and emu:read8(a + 2) < 40 and emu:read8(a + 3) < 40
+         and emu:read8(a + hpoff) >= 1 and emu:read8(a + hpoff) <= 100 then
+        if last ~= stride then
+          console:log(string.format("  stride %2d: 0x%08X type=%2d x=%2d y=%2d hp=%3d",
+            stride, a, t, emu:read8(a + 2), emu:read8(a + 3), emu:read8(a + hpoff)))
+        end
+      end
+    end
+  end
+end
+
 -- Show bytes around an address. Unit type/x/y should be visible nearby.
 function dump(addr, before, after)
   before, after = before or 8, after or 16
