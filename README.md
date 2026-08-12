@@ -78,12 +78,21 @@ python tests/calibrate.py --selftest
 Then record real battles with the interactive recorder — do not hand-edit the CSV:
 
 ```bash
-python harness/record.py
+python harness/record.py --exact --counter
 ```
 
 It takes a matchup once, then one number per battle, appends valid rows, and
 re-runs the hypothesis sweep after every entry so you stop the moment it
 converges. `u` undoes, blank line changes matchup, `q` quits.
+
+**Flags.** `--exact` if you can read internal HP from RAM (see
+`mgba_ramtool.lua`) — far more informative than counting bars. `--counter` also
+records the defender's return strike, which fires at its post-damage HP on the
+attacker's tile: a partial-health observation on a second terrain, free with
+every battle. Simulated, that roughly halves the work — 12 battles with counters
+matches 30 without. `--shared-luck` only if repeating an attack from a save
+state gives identical results; if the roll varies, this flag will wrongly
+eliminate the true hypothesis.
 
 Protocol:
 

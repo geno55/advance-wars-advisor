@@ -21,7 +21,7 @@ sys.path.insert(0, str(HERE.parent))
 sys.path.insert(0, str(HERE.parent / "tests"))
 
 from calibrate import Obs, agreement, outcome, predict  # noqa: E402
-from engine.damage import VARIANTS  # noqa: E402
+from engine.damage import VARIANTS, select_weapon  # noqa: E402
 
 TERRAINS = ["road", "plains", "woods", "mountain"]
 PLAN = [
@@ -118,6 +118,48 @@ HURT = [(a, d, t, hp)
         for (a, d, t) in PLAN[:6]
         for hp in (73, 46, 28)]
 
+def residual_counters(order, truth, rng, att_terrains):
+    """Same, but each battle also yields the defender's return strike.
+
+    The counter fires at the defender's POST-DAMAGE hp, on the attacker's tile,
+    so one battle produces both a full-health and a partial-health observation
+    -- and touches two terrains instead of one.
+    """
+    hyps = [(v, dict(zip(TERRAINS, c)))
+            for v in VARIANTS
+            for c in itertools.product(range(5), repeat=len(TERRAINS))]
+    for i, battle in enumerate(order):
+        a, d, t = battle[0], battle[1], battle[2]
+        at = att_terrains[i % len(att_terrains)]
+        p1 = probe(a, d, t)
+        dmg1 = outcome(p1, truth[0], truth[1][t], rng.randrange(10))
+        hyps = [h for h in hyps if dmg1 in predict(p1, h[0], h[1][t])]
+        survivor = 100 - dmg1
+        if survivor > 0 and select_weapon(d, a) is not None:
+            p2 = probe(d, a, at, survivor)
+            dmg2 = outcome(p2, truth[0], truth[1][at], rng.randrange(10))
+            hyps = [h for h in hyps if dmg2 in predict(p2, h[0], h[1][at])]
+    stars_ok = len({tuple(sorted(h[1].items())) for h in hyps}) == 1
+    scen, _, kill, spread = agreement(hyps)
+    return len(hyps), stars_ok, 100.0 * kill / scen, spread
+
+
+def strategy_c(name, order, trials=8):
+    ats = ["plains", "woods", "road", "mountain"]
+    kills, nstars, sizes = [], 0, []
+    for seed in range(trials):
+        rng = random.Random(seed)
+        truth = (list(VARIANTS)[seed % len(VARIANTS)], TRUTH_STARS)
+        n, ok, killpct, _ = residual_counters(order, truth, rng, ats)
+        kills.append(killpct)
+        sizes.append(n)
+        nstars += 1 if ok else 0
+    kills.sort()
+    print(f"  {name:26s} {len(order):3d} battles -> {min(sizes)}-{max(sizes)} left, "
+          f"stars pinned {nstars}/{trials}, kill-disagreement "
+          f"{kills[0]:.1f}-{kills[-1]:.1f}% (median {kills[len(kills)//2]:.1f}%)")
+
+
 print("luck VARIES per battle (confirmed empirically). exact-HP observations.\n")
 print("full-health attackers only:")
 strategy("  12 distinct, 1 each", list(PLAN))
@@ -127,3 +169,7 @@ strategy("  12 full + 18 damaged", list(PLAN) + HURT)
 strategy("  6 full + 18 damaged", list(PLAN[:6]) + HURT)
 strategy("  6 full + 9 damaged", list(PLAN[:6]) + HURT[:9])
 strategy("  4 full + 6 damaged", list(PLAN[:4]) + HURT[:6])
+
+print("\nwith counterattacks recorded (two observations per battle):")
+strategy_c("  12 distinct, 1 each", list(PLAN))
+strategy_c("  12 distinct x 2 repeats", [b for b in PLAN for _ in range(2)])

@@ -53,6 +53,20 @@ TERRAINS = ["plains", "woods", "mountain", "road", "city", "river", "bridge",
 UNITS = sorted(tables()["unit_ids"].values())
 
 
+# Indirect units fire from range, so they are never countered, and they cannot
+# counter when attacked adjacent (their minimum range is 2). Assumption: this
+# list is from unit behaviour, not extracted from the ROM -- the range table has
+# not been located yet. Getting it wrong only costs a skipped observation,
+# because the recorder still asks and accepts a blank.
+INDIRECT = {"Artillery", "Rockets", "Missiles", "Battleship"}
+
+
+def can_counter(defender, attacker):
+    if defender in INDIRECT or attacker in INDIRECT:
+        return False
+    return select_weapon(defender, attacker) is not None
+
+
 def load_existing():
     if not CSV_PATH.exists():
         return []
@@ -85,6 +99,7 @@ def drop_last_row():
 
 SHARED_LUCK = False
 EXACT = False           # --exact: you can read internal HP (1..100) from RAM
+COUNTER = False         # --counter: also record the defender's return strike
 
 
 def status(obs):
@@ -146,14 +161,26 @@ def ask_matchup():
         if not (1 <= ahp <= 100 and 1 <= dhp <= 100):
             print("  hp must be 1-100")
             continue
-        return att, dfn, terr, ahp, dhp
+        aterr = ""
+        if COUNTER:
+            # The counterattack happens on the ATTACKER's tile, so we need it.
+            aterr = input("  attacker's own terrain> ").strip().lower()
+            if not aterr:
+                print("  needed for the counterattack; skipping counters here")
+        return att, dfn, terr, ahp, dhp, aterr
 
 
 def main():
-    global SHARED_LUCK, EXACT
+    global SHARED_LUCK, EXACT, COUNTER
     SHARED_LUCK = "--shared-luck" in sys.argv
     EXACT = "--exact" in sys.argv
+    COUNTER = "--counter" in sys.argv
     print(__doc__.split("Protocol")[0].strip())
+    if COUNTER:
+        print("\nCOUNTER MODE: the defender's return strike is recorded as a")
+        print("second observation. It fires at its post-damage HP, so these are")
+        print("the partial-HP attacker readings that full-health battles cannot")
+        print("give you -- roughly two observations per battle instead of one.")
     if EXACT:
         print("\nEXACT MODE: you type the defender's internal HP (0-100) from RAM.")
         print("Far more informative than bars -- expect to converge in a few battles.")
@@ -176,7 +203,7 @@ def main():
         m = ask_matchup()
         if m is None:
             break
-        att, dfn, terr, ahp, dhp = m
+        att, dfn, terr, ahp, dhp, aterr = m
         hi = 100 if EXACT else 10
         what = ("INTERNAL HP (0-100, read from RAM)" if EXACT
                 else "remaining HP bars (0-10)")
@@ -232,6 +259,29 @@ def main():
             obs.append(o)
             run.append(val)
             trial += 1
+
+            # The counterattack is a second, free damage measurement: the
+            # defender fires back at its POST-DAMAGE hp, on the attacker's tile.
+            # That is precisely the partial-HP attacker data that full-health
+            # battles cannot provide.
+            if COUNTER and EXACT and aterr and val > 0 and can_counter(dfn, att):
+                raw2 = input(f"    attacker's hp after the counter "
+                             f"(was {ahp}, blank if none)> ").strip()
+                if raw2 and raw2.isdigit():
+                    after = int(raw2)
+                    if 0 <= after <= ahp:
+                        crow = {"attacker": dfn, "defender": att,
+                                "att_hp": val, "def_hp": ahp,
+                                "terrain": aterr, "mode": "exact",
+                                "observed": ahp - after,
+                                "co_attack": 100, "co_defense": 100,
+                                "notes": f"counter co={co}"}
+                        append_row(crow)
+                        obs.append(Obs({k: str(v) for k, v in crow.items()}, 0))
+                        print(f"    + counter recorded: {dfn}@{val} -> {att} "
+                              f"on {aterr}, {ahp - after} damage")
+                    else:
+                        print(f"    ignored: must be 0-{ahp}")
             if not reachable:
                 print(f"    !! {val} is impossible for this matchup under every "
                       "formula and terrain value.")
