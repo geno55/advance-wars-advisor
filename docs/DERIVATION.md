@@ -144,3 +144,44 @@ useful later when we want to predict enemy behaviour.
 **Not yet recovered from code:** HP scaling, terrain defence, and the luck roll.
 Those live further along the combat path than we have walked. Calibration still
 covers them.
+
+## 8. The unit array in RAM
+
+The AI loop at `0x08060B06` walks the live units:
+
+```
+lsls r1, r2, #1 ; add r1, sb ; lsls r1, r1, #2   ; r1 = index * 12
+ldr  r0, [r0]                                     ; base = [0x08282CB8]
+adds r7, r0, r1
+ldrb r2, [r7]        ; type, skipped when 0
+ldrb r4, [r7, #2]    ; used as a map x index
+ldrb r3, [r7, #3]    ; used as a map y index
+```
+
+so:
+
+| field | offset |
+|---|---|
+| unit type, **1-based** (0 = empty slot) | +0 |
+| owning army | +1 |
+| map x | +2 |
+| map y | +3 |
+| internal HP, 1..100 | +4 |
+
+Records are **12 bytes**; the base is the EWRAM pointer stored in ROM at
+`0x08282CB8`, which reads `0x02019F34`.
+
+Confirmed against a live capture rather than assumed. A Tank showing 5 bars was
+found by change-detection at `0x02019F8C`; that is
+`0x02019F34 + 12*7 + 4`, i.e. unit index 7 with HP at +4. Its record reads
+type `5`, army `0`, x `7`, y `5`, hp `42` — and `ceil(42/10) = 5` bars.
+
+Note the type: `5` is **Tank**, not Recon. The damage tables are 0-based but RAM
+type ids are 1-based, exactly as the `subs r1, r3, #1` in the damage path
+implies. Reading a RAM type straight into the damage table is an off-by-one that
+silently returns the wrong row, so `harness/mgba_ramtool.lua` subtracts before
+naming anything.
+
+Neighbouring pointers, not yet decoded: `0x08282CBC` -> `0x0201AB34` (the army
+structs, stride 0x68 per the damage path), `0x08282CC0` -> `0x0201AD3C`,
+`0x08282CC4` -> `0x03004500`. The map row pointer table is at `0x03003600`.

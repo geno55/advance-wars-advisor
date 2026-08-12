@@ -27,6 +27,64 @@
 --   dump(0x0200XXXX)             -- confirm type/x/y sit nearby
 --   stride()                     -- infer the array stride from 2+ hits
 
+-- ---------------------------------------------------------------------------
+-- THE UNIT ARRAY  (solved -- see docs/DERIVATION.md)
+--
+-- The AI loop at 0x08060B06 does:
+--     r1 = index*12 ; r0 = [0x08282CB8] ; r7 = r0 + r1 ; type = [r7]
+-- so the array base is the EWRAM pointer stored in ROM at 0x08282CB8, records
+-- are 12 bytes, and:
+--     +0 unit type, 1-BASED (0 = empty slot; subtract 1 for the damage table)
+--     +1 owning army
+--     +2 map x
+--     +3 map y
+--     +4 internal HP, 1..100
+-- Confirmed against a live capture: a Tank at (7,5) on 5 bars read
+-- type=5 (=table row 4, Tank), hp=42, at index 7.
+-- ---------------------------------------------------------------------------
+UNIT_BASE_PTR = 0x08282CB8
+UNIT_STRIDE = 12
+HP_OFF = 4
+
+-- Indexed by the 1-based in-RAM type id.
+local TYPE_NAMES = {
+  "Infantry", "Mech", "MdTank", "-", "Tank", "Recon", "APC", "-", "-",
+  "Artillery", "Rockets", "-", "-", "AntiAir", "Missiles", "Fighter",
+  "Bomber", "-", "BCopter", "TCopter", "Battleship", "Cruiser", "Lander", "Sub",
+}
+
+function unitbase()
+  return emu:read32(UNIT_BASE_PTR)
+end
+
+-- Dump the live board. This is the state reader in miniature.
+function units(n)
+  n = n or 60
+  local base = unitbase()
+  console:log(string.format("unit array @ 0x%08X, stride %d", base, UNIT_STRIDE))
+  local shown = 0
+  for i = 0, n - 1 do
+    local a = base + i * UNIT_STRIDE
+    local t = emu:read8(a)
+    if t >= 1 and t <= 24 then
+      console:log(string.format(
+        "  [%2d] 0x%08X %-11s army=%d  (%2d,%2d)  hp=%3d (%d bars)",
+        i, a, TYPE_NAMES[t] or "?", emu:read8(a + 1),
+        emu:read8(a + 2), emu:read8(a + 3), emu:read8(a + HP_OFF),
+        math.ceil(emu:read8(a + HP_OFF) / 10)))
+      shown = shown + 1
+    end
+  end
+  console:log(string.format("  %d live units", shown))
+end
+
+-- HP address of one unit slot, for reading before/after an attack.
+function hpaddr(i)
+  local a = unitbase() + i * UNIT_STRIDE + HP_OFF
+  console:log(string.format("unit %d hp at 0x%08X = %d", i, a, emu:read8(a)))
+  return a
+end
+
 local REGIONS = {
   { base = 0x02000000, len = 0x40000, name = "EWRAM" },
   { base = 0x03000000, len = 0x08000, name = "IWRAM" },
