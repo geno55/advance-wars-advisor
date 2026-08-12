@@ -83,29 +83,34 @@ def drop_last_row():
     return False
 
 
+SHARED_LUCK = False
+
+
 def status(obs):
     """Re-run the sweep and describe where we stand."""
     if not obs:
         return "no observations yet"
-    alive = survivors(obs)
+    alive = survivors(obs, shared_luck=SHARED_LUCK)
     terrains = sorted({o.terrain for o in obs})
-    total = len(VARIANTS) * 5 ** len(terrains)
+    total = len(VARIANTS) * 5 ** len(terrains) * (10 if SHARED_LUCK else 1)
     if not alive:
-        return ("*** NOTHING survives -- a row is probably mis-recorded, or a CO\n"
-                "    modifier was active. Use 'u' to undo the last entry.")
+        return ("*** NOTHING survives -- a row is probably mis-recorded, a CO\n"
+                "    modifier was active, or (in shared-luck mode) the roll is not\n"
+                "    actually frozen. Use 'u' to undo the last entry.")
     if len(alive) == 1:
-        v, sm = alive[0]
-        return (f"*** CONVERGED. variant={v} stars={sm}\n"
-                f"    You can stop recording. Run:\n"
-                f"      python tests/calibrate.py harness/observations.csv")
-    vs = sorted({v for v, _ in alive})
+        v, sm = alive[0][0], alive[0][1]
+        extra = f" luck={alive[0][2]}" if len(alive[0]) > 2 else ""
+        return (f"*** CONVERGED. variant={v} stars={sm}{extra}\n"
+                f"    You can stop recording.")
+    vs = sorted({h[0] for h in alive})
     bits = [f"{len(alive)}/{total} hypotheses", f"{len(vs)} formula(s)"]
     for t in terrains:
-        vals = sorted({sm[t] for _, sm in alive})
-        if len(vals) == 1:
-            bits.append(f"{t}={vals[0]}*")
-        else:
-            bits.append(f"{t}={'/'.join(map(str, vals))}")
+        vals = sorted({h[1][t] for h in alive})
+        bits.append(f"{t}={vals[0]}*" if len(vals) == 1
+                    else f"{t}={'/'.join(map(str, vals))}")
+    if SHARED_LUCK:
+        lucks = sorted({h[2] for h in alive})
+        bits.append(f"luck={lucks[0]}*" if len(lucks) == 1 else f"luck x{len(lucks)}")
     return "  " + ", ".join(bits)
 
 
@@ -116,7 +121,7 @@ def ask_matchup():
     print("  hp is internal 1-100 and defaults to 100 (full). Blank line quits.")
     while True:
         raw = input("matchup> ").strip()
-        if not raw:
+        if not raw or raw.lower() in ("q", "quit", "exit"):
             return None
         parts = raw.split()
         if len(parts) < 3:
@@ -144,7 +149,13 @@ def ask_matchup():
 
 
 def main():
+    global SHARED_LUCK
+    SHARED_LUCK = "--shared-luck" in sys.argv
     print(__doc__.split("Protocol")[0].strip())
+    if SHARED_LUCK:
+        print("\nSHARED-LUCK MODE: assuming one frozen roll explains every battle.")
+        print("Only valid if every battle is launched from the SAME save state and")
+        print("your determinism test showed identical repeats.")
     print(f"\nappending to {CSV_PATH}")
     obs = load_existing()
     print(f"existing observations: {len(obs)}")

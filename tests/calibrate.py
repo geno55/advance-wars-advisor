@@ -87,6 +87,26 @@ def predict(obs, variant, stars):
                     obs.mode, obs.co_atk, obs.co_def, variant, stars)
 
 
+@functools.lru_cache(maxsize=None)
+def _outcome(attacker, defender, att_hp, def_hp, mode, co_atk, co_def,
+             variant, stars, luck):
+    """The single outcome for one specific luck roll."""
+    w = select_weapon(attacker, defender)
+    if w is None:
+        return None
+    raw = VARIANTS[variant](w.base, display_hp(att_hp), co_atk, co_def,
+                            stars, display_hp(def_hp), luck)
+    dmg = max(0, min(raw, def_hp))
+    if mode == "exact":
+        return dmg
+    return display_hp(max(0, def_hp - dmg))
+
+
+def outcome(obs, variant, stars, luck):
+    return _outcome(obs.attacker, obs.defender, obs.att_hp, obs.def_hp,
+                    obs.mode, obs.co_atk, obs.co_def, variant, stars, luck)
+
+
 def consistent(obs, variant, star_map):
     return obs.observed in predict(obs, variant, star_map[obs.terrain])
 
@@ -98,11 +118,27 @@ def enumerate_hypotheses(terrains):
             yield variant, dict(zip(terrains, combo))
 
 
-def survivors(observations):
+def survivors(observations, shared_luck=False):
+    """Surviving hypotheses as tuples: (variant, star_map[, luck]).
+
+    shared_luck=False treats each observation independently -- it only asserts
+    that SOME roll in 0..9 explains it. Correct when the roll actually varies.
+
+    shared_luck=True additionally requires ONE roll to explain every observation
+    in the batch. Use this when a save state restores the RNG and every battle is
+    launched from the same state, so the roll is frozen. It is a far stronger
+    constraint: without it, a constant hidden roll cannot be disentangled from
+    the formula and calibration stalls with dozens of survivors.
+    """
     terrains = {o.terrain for o in observations}
     alive = []
     for variant, star_map in enumerate_hypotheses(terrains):
-        if all(consistent(o, variant, star_map) for o in observations):
+        if shared_luck:
+            for luck in range(LUCK_MIN, LUCK_MAX + 1):
+                if all(outcome(o, variant, star_map[o.terrain], luck) == o.observed
+                       for o in observations):
+                    alive.append((variant, star_map, luck))
+        elif all(consistent(o, variant, star_map) for o in observations):
             alive.append((variant, star_map))
     return alive
 
@@ -120,15 +156,19 @@ def report(observations, alive):
         print("Both are worth knowing; do not 'fix' this by widening the luck range.")
         return
 
-    vs = sorted({v for v, _ in alive})
+    vs = sorted({h[0] for h in alive})
     print(f"formula variants still possible ({len(vs)}): {', '.join(vs)}")
     for t in terrains:
-        vals = sorted({sm[t] for _, sm in alive})
+        vals = sorted({h[1][t] for h in alive})
         star = "determined" if len(vals) == 1 else "ambiguous"
         print(f"  {t:10s} stars: {vals}  ({star})")
+    if len(alive[0]) > 2:
+        lucks = sorted({h[2] for h in alive})
+        print(f"  shared luck roll: {lucks}"
+              + ("  (determined)" if len(lucks) == 1 else ""))
 
     if len(alive) == 1:
-        v, sm = alive[0]
+        v, sm = alive[0][0], alive[0][1]
         print(f"\nCONVERGED: variant={v}  stars={sm}")
         print("Set provenance.verified_against_emulator=true in data/aw1_damage.json")
         print(f"and DEFAULT_VARIANT='{v}' in engine/damage.py.")
@@ -165,9 +205,9 @@ def suggest(alive, terrains, top=8):
                      "def_hp": str(dhp), "terrain": terr,
                      "mode": "display_after", "observed": "0"}, 0)
         buckets = {}
-        for variant, sm in alive:
-            key = frozenset(predict(probe, variant, sm[terr]))
-            buckets.setdefault(key, []).append((variant, sm))
+        for h in alive:
+            key = frozenset(predict(probe, h[0], h[1][terr]))
+            buckets.setdefault(key, []).append(h)
         if len(buckets) < 2:
             continue
         # Even splits are best; score by the size of the largest remaining group.
@@ -222,7 +262,7 @@ def selftest():
     print(f"generated {len(obs)} synthetic observations")
     alive = survivors(obs)
     report(obs, alive)
-    ok = any(v == truth_variant and sm == truth_stars for v, sm in alive)
+    ok = any(h[0] == truth_variant and h[1] == truth_stars for h in alive)
     print(f"\ntruth retained in survivor set: {ok}")
     if not ok:
         sys.exit("SELFTEST FAILED: calibration eliminated the true hypothesis")
@@ -246,7 +286,10 @@ def main(argv):
     if not rows:
         sys.exit(f"{path} has no observations yet -- go record some battles.")
     observations = [Obs(r, i + 2) for i, r in enumerate(rows)]
-    alive = survivors(observations)
+    shared = "--shared-luck" in argv
+    if shared:
+        print("shared-luck mode: requiring ONE roll to explain every observation\n")
+    alive = survivors(observations, shared_luck=shared)
     report(observations, alive)
     if "--suggest" in argv and alive:
         suggest(alive, {o.terrain for o in observations})
