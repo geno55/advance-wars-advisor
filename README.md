@@ -75,16 +75,40 @@ python tests/test_damage.py
 python tests/calibrate.py --selftest
 ```
 
-Then record real battles. Protocol — the save state is what makes this fast:
+Then record real battles with the interactive recorder — do not hand-edit the CSV:
 
-1. Start any mission. Pick a matchup with **both units at full health** (10 HP);
-   full health is the only internal HP you can be sure of by looking.
-2. Note the **defender's** terrain.
-3. Save state → attack → write down the defender's displayed HP → load state.
-4. Repeat ~10× per matchup so the hidden 0–9 luck roll gets sampled.
-5. Add one row per trial to `harness/observations.csv`.
+```bash
+python harness/record.py
+```
 
-Twenty or so rows across two or three different terrains is generally enough.
+It takes a matchup once, then one number per battle, appends valid rows, and
+re-runs the hypothesis sweep after every entry so you stop the moment it
+converges. `u` undoes, blank line changes matchup, `q` quits.
+
+Protocol:
+
+1. Play a **neutral CO** with no power active. CO modifiers are real and large
+   (the ROM has entries at 150/100 and 170/100); the wrong CO silently scales
+   every observation.
+2. Use **both units at full health** — the only internal HP you can be sure of
+   by looking.
+3. Note the **defender's** terrain.
+4. Save state → attack → read the defender's HP → load state.
+
+**On repeats and the RNG.** A save state restores the RNG along with everything
+else. If AW1 only advances its RNG on demand, reloading and repeating the same
+attack reproduces the same luck roll and the repeat teaches you nothing. If it
+ticks per frame, your timing decorrelates them and repeats do sample. This is
+unverified — test it first: repeat one identical attack three times and see
+whether the results differ. If they are identical, **vary the matchup, terrain,
+or attacker HP instead of repeating**; each distinct combination is a fresh
+constraint and converges faster. `record.py` detects the identical-run case and
+tells you to move on.
+
+Either way the solver stays sound: it only ever asserts "some luck value in 0–9
+explains this", so a frozen roll slows convergence but cannot produce a wrong
+answer.
+
 Then:
 
 ```bash

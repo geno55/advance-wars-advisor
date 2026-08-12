@@ -12,6 +12,23 @@ Protocol reminders it enforces for you:
     internal HP you can know by looking)
   * a neutral CO with no power active (it asks, and records what you said)
   * the terrain is the DEFENDER's tile
+
+ON SAVE STATES AND THE RNG -- read this before grinding out repeats.
+
+A save state restores the whole machine, RNG included. If the game only advances
+its RNG when it asks for a number, then reloading and repeating the SAME attack
+reproduces the SAME luck roll, and ten "trials" are ten copies of one
+observation. If instead the RNG ticks every frame, your variable timing between
+load and confirm decorrelates them and repeats really do sample.
+
+Which one AW1 does is unverified. Test it first: attack, note the result, reload,
+repeat the identical attack, three times over.
+  * results differ  -> repeats sample fine
+  * results identical -> deterministic; repeats teach you nothing, so vary the
+    matchup, terrain, or attacker HP instead. Each distinct combination is a
+    fresh constraint, and you will converge on fewer total battles.
+
+This tool watches for the identical-run case and tells you when to move on.
 """
 from __future__ import annotations
 
@@ -148,6 +165,7 @@ def main():
         print("Save state, attack, read the DEFENDER's remaining HP bars, type it.")
         print("  0-10 = record a trial   u = undo last   <blank> = new matchup   q = quit")
         trial = 0
+        run = []          # results for this matchup, to spot a frozen RNG
         while True:
             raw = input(f"  [{terr}] {att}->{dfn} result> ").strip().lower()
             if raw == "q":
@@ -160,6 +178,8 @@ def main():
                 if obs and drop_last_row():
                     obs.pop()
                     trial = max(0, trial - 1)
+                    if run:
+                        run.pop()
                     print(f"    undone. {len(obs)} left.\n{status(obs)}")
                 else:
                     print("    nothing to undo")
@@ -185,6 +205,7 @@ def main():
                             for v in VARIANTS for s in range(5))
             append_row(row)
             obs.append(o)
+            run.append(val)
             trial += 1
             if not reachable:
                 print(f"    !! {val} is impossible for this matchup under every "
@@ -193,6 +214,12 @@ def main():
                       "at the stated health. 'u' to undo.")
             print(f"    trial {trial} (total {len(obs)})")
             print(status(obs))
+            if len(run) >= 3 and len(set(run)) == 1:
+                print(f"    note: {len(run)} identical results ({run[0]}). Your save "
+                      "state is restoring the RNG,")
+                print("       so further repeats of THIS attack add no information. "
+                      "Change matchup,")
+                print("       terrain, or attacker HP -- blank line for a new matchup.")
 
 
 if __name__ == "__main__":
