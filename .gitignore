@@ -1,0 +1,28 @@
+# The ROM is copyrighted commercial software and is NOT part of this repo.
+# The repo root is advisor/, and the ROM lives in the parent directory, so it is
+# outside the tree by design. These patterns are belt-and-braces in case anyone
+# moves files around later.
+*.gba
+*.gb
+*.gbc
+*.nds
+*.sav
+*.srm
+*.ss[0-9]
+
+# Emulator binaries and archives -- download mGBA yourself, don't vendor it.
+*.7z
+emulator/
+mGBA*/
+
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+
+# Editor / OS noise
+.vscode/
+.idea/
+Thumbs.db
+desktop.ini

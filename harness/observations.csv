@@ -1,0 +1,20 @@
+attacker,defender,att_hp,def_hp,terrain,mode,observed,co_attack,co_defense,notes
+# Every row is one observed battle. Delete nothing; add rows as you record them.
+#
+# att_hp / def_hp : INTERNAL hp, 1..100. A unit that has never been damaged is
+#                   exactly 100. That is the only value you can know by looking,
+#                   so prefer full-health units for calibration.
+# terrain         : the DEFENDER's tile (plains, woods, mountain, road, city, ...)
+# mode            : display_after -> `observed` is the defender's displayed HP
+#                                    (1..10, or 0 if destroyed) after the attack
+#                   exact         -> `observed` is internal damage dealt, only
+#                                    available once you can read RAM
+# co_attack/co_defense : 100 unless a CO power is active. Andy/Max/Sami etc.
+#                        have per-unit modifiers not yet extracted -- for now,
+#                        calibrate with a plain CO and no power active.
+#
+# Recording protocol (see README.md): save state, attack, record, load state,
+# repeat ~10x per matchup so the hidden 0..9 luck roll gets sampled.
+#
+# Example of what a filled-in row looks like (delete once you have real data):
+# Infantry,Infantry,100,100,plains,display_after,5,100,100,save-state trial 1
