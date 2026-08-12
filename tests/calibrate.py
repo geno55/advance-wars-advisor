@@ -253,7 +253,7 @@ CANDIDATE_ATTACKS = [
 CANDIDATE_HP = [100, 70, 50, 30]
 
 
-def suggest(alive, terrains, top=8):
+def suggest(alive, terrains, mode="display_after", top=8):
     """Pick experiments that split the surviving hypotheses most evenly.
 
     An experiment is informative in proportion to how many distinct predicted
@@ -267,7 +267,7 @@ def suggest(alive, terrains, top=8):
             continue
         probe = Obs({"attacker": att, "defender": dfn, "att_hp": str(ahp),
                      "def_hp": str(dhp), "terrain": terr,
-                     "mode": "display_after", "observed": "0"}, 0)
+                     "mode": mode, "observed": "0"}, 0)
         buckets = {}
         for h in alive:
             key = frozenset(predict(probe, h[0], h[1][terr]))
@@ -356,7 +356,12 @@ def main(argv):
     alive = survivors(observations, shared_luck=shared)
     report(observations, alive)
     if "--suggest" in argv and alive:
-        suggest(alive, {o.terrain for o in observations})
+        # Rank experiments in whatever mode is actually being recorded --
+        # an exact-HP reading is far more informative than a bar count, so
+        # ranking in the wrong mode recommends the wrong battles.
+        modes = {o.mode for o in observations}
+        mode = "exact" if modes == {"exact"} else "display_after"
+        suggest(alive, {o.terrain for o in observations}, mode=mode)
 
 
 if __name__ == "__main__":
