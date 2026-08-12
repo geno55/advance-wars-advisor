@@ -67,9 +67,13 @@ function unitbase()
 end
 
 -- Dump the live board. This is the state reader in miniature.
--- hp and ammo share a 16-bit bitfield at +4: hp in bits 0-6, ammo above.
+-- Bit 7 is used as a flag bit in more than one field, so mask before reading.
+--   +4 (u16): hp = v & 0x7F, ammo = v >> 7
+--   +6 (u8) : fuel = v & 0x7F, bit 7 is a flag
 function unithp(a) return emu:read16(a + HP_OFF) % 128 end
 function unitammo(a) return math.floor(emu:read16(a + HP_OFF) / 128) end
+function unitfuel(a) return emu:read8(a + 6) % 128 end
+function unitfuelflag(a) return emu:read8(a + 6) >= 128 end
 
 function units(n)
   n = n or 256
@@ -89,12 +93,17 @@ function units(n)
         flag = "  <-- IMPOSSIBLE HP"
         bad = bad + 1
       end
+      -- Two candidate "acted" indicators, both set on the one unit that had
+      -- moved. A single sample cannot tell them apart, so show both rather
+      -- than pick one and call it solved.
+      local marks = ""
+      if emu:read8(a + 1) ~= 0 then marks = marks .. string.format(" +1=%d", emu:read8(a + 1)) end
+      if unitfuelflag(a) then marks = marks .. " fuel:bit7" end
       console:log(string.format(
         "  [%3d] 0x%08X P%d %-11s (%2d,%2d) hp=%3d (%2d bars) ammo=%2d fuel=%3d%s%s",
         i, a, army + 1, TYPE_NAMES[t] or "?",
         emu:read8(a + 2), emu:read8(a + 3), hp, math.ceil(hp / 10),
-        ammo, emu:read8(a + 6),
-        emu:read8(a + 1) ~= 0 and " acted" or "", flag))
+        ammo, unitfuel(a), marks, flag))
       shown = shown + 1
     end
   end
