@@ -33,18 +33,27 @@
 -- The AI loop at 0x08060B06 does:
 --     r1 = index*12 ; r0 = [0x08282CB8] ; r7 = r0 + r1 ; type = [r7]
 -- so the array base is the EWRAM pointer stored in ROM at 0x08282CB8, records
--- are 12 bytes, and:
---     +0 unit type, 1-BASED (0 = empty slot; subtract 1 for the damage table)
---     +1 owning army
---     +2 map x
---     +3 map y
---     +4 internal HP, 1..100
--- Confirmed against a live capture: a Tank at (7,5) on 5 bars read
--- type=5 (=table row 4, Tank), hp=42, at index 7.
+-- are 12 bytes:
+--     +0    unit type, 1-BASED (0 = empty; subtract 1 for the damage table)
+--     +1    acted-this-turn flag (hypothesis: set only on the unit that moved)
+--     +2    map x
+--     +3    map y
+--     +4:2  u16 bitfield -> hp = v & 0x7F, ammo = v >> 7
+--     +6    fuel
+--
+-- The army is NOT a field: it is the block. 64 slots per army, so
+-- army = slot / 64. That is confirmed structurally -- 4*64 records * 12 bytes
+-- = 0xC00, and base + 0xC00 lands exactly on 0x0201AB34, the next known
+-- pointer in ROM (0x08282CBC).
+--
+-- Verified byte-for-byte against a live capture of 8 units: Mech ammo 3,
+-- Artillery ammo 9, APC/Recon/Infantry ammo 0, fuel 99/70/70/80/50, and a Tank
+-- on 42 HP with 8 ammo after spending one on a counterattack.
 -- ---------------------------------------------------------------------------
 UNIT_BASE_PTR = 0x08282CB8
 UNIT_STRIDE = 12
 HP_OFF = 4
+ARMY_SLOTS = 64        -- slots per army; army index = slot / 64
 
 -- Indexed by the 1-based in-RAM type id.
 local TYPE_NAMES = {
@@ -58,42 +67,51 @@ function unitbase()
 end
 
 -- Dump the live board. This is the state reader in miniature.
+-- hp and ammo share a 16-bit bitfield at +4: hp in bits 0-6, ammo above.
+function unithp(a) return emu:read16(a + HP_OFF) % 128 end
+function unitammo(a) return math.floor(emu:read16(a + HP_OFF) / 128) end
+
 function units(n)
   n = n or 256
   local base = unitbase()
-  console:log(string.format("unit array @ 0x%08X, stride %d, scanning %d slots",
-    base, UNIT_STRIDE, n))
+  console:log(string.format("unit array @ 0x%08X, stride %d, %d slots/army",
+    base, UNIT_STRIDE, ARMY_SLOTS))
   local shown, bad, armies = 0, 0, {}
   for i = 0, n - 1 do
     local a = base + i * UNIT_STRIDE
     local t = emu:read8(a)
     if t >= 1 and t <= 24 then
-      local hp = emu:read8(a + HP_OFF)
-      local army = emu:read8(a + 1)
+      local hp, ammo = unithp(a), unitammo(a)
+      local army = math.floor(i / ARMY_SLOTS)
       armies[army] = (armies[army] or 0) + 1
-      -- HP is 1..100. Anything else means HP_OFF is wrong for this record,
-      -- so say so rather than printing a fictional bar count.
-      local hptxt
-      if hp >= 1 and hp <= 100 then
-        hptxt = string.format("hp=%3d (%2d bars)", hp, math.ceil(hp / 10))
-      else
-        hptxt = string.format("hp=%3d  <-- IMPOSSIBLE, +%d is not HP here",
-          hp, HP_OFF)
+      local flag = ""
+      if hp < 1 or hp > 100 then
+        flag = "  <-- IMPOSSIBLE HP"
         bad = bad + 1
       end
-      console:log(string.format("  [%3d] 0x%08X %-11s army=%d  (%2d,%2d)  %s",
-        i, a, TYPE_NAMES[t] or "?", army,
-        emu:read8(a + 2), emu:read8(a + 3), hptxt))
+      console:log(string.format(
+        "  [%3d] 0x%08X P%d %-11s (%2d,%2d) hp=%3d (%2d bars) ammo=%2d fuel=%3d%s%s",
+        i, a, army + 1, TYPE_NAMES[t] or "?",
+        emu:read8(a + 2), emu:read8(a + 3), hp, math.ceil(hp / 10),
+        ammo, emu:read8(a + 6),
+        emu:read8(a + 1) ~= 0 and " acted" or "", flag))
       shown = shown + 1
     end
   end
   local as = {}
-  for army, cnt in pairs(armies) do as[#as + 1] = string.format("army %d: %d", army, cnt) end
+  for army, cnt in pairs(armies) do
+    as[#as + 1] = string.format("P%d: %d", army + 1, cnt)
+  end
   console:log(string.format("  %d units (%s)", shown, table.concat(as, ", ")))
   if bad > 0 then
     console:log(string.format("  %d record(s) have an impossible HP -- run "
       .. "hexdump(0x%08X, 128) and send it over", bad, base))
   end
+end
+
+-- HP address of a unit by army and slot, e.g. hpaddr(1, 7) for P2 slot 7.
+function unitaddr(army, slot)
+  return unitbase() + (army * ARMY_SLOTS + slot) * UNIT_STRIDE
 end
 
 -- HP address of one unit slot, for reading before/after an attack.
