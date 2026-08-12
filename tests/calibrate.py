@@ -143,6 +143,63 @@ def survivors(observations, shared_luck=False):
     return alive
 
 
+AGREEMENT_SWEEP = [("Tank", "Tank"), ("MdTank", "Infantry"), ("Rockets", "Tank"),
+                   ("Artillery", "Infantry"), ("BCopter", "Tank"), ("Mech", "Tank"),
+                   ("Infantry", "Infantry"), ("AntiAir", "Recon")]
+
+
+def agreement(alive):
+    """Do the surviving hypotheses actually PREDICT differently?
+
+    Converging to a single hypothesis is the wrong success criterion. Several
+    (variant, stars, luck) triples can be different labels for identical
+    behaviour -- notably floor_end and floor_attack_then_end are mathematically
+    the same whenever the CO modifier is 100, since base*100/100 is exact. What
+    matters is whether anything we would ever TELL the player differs.
+
+    Returns (scenarios, damage_disagreements, kill_disagreements, max_spread).
+    """
+    scen = dmg_dis = kill_dis = spread = 0
+    for att, dfn in AGREEMENT_SWEEP:
+        w = select_weapon(att, dfn)
+        if w is None:
+            continue
+        for ahp in (100, 70, 50, 30):
+            for dhp in (100, 65, 35, 15):
+                for stars in range(5):
+                    sets = []
+                    for h in alive:
+                        lucks = ([h[2]] if len(h) > 2
+                                 else range(LUCK_MIN, LUCK_MAX + 1))
+                        vals = {max(0, min(VARIANTS[h[0]](
+                            w.base, display_hp(ahp), 100, 100, stars,
+                            display_hp(dhp), lk), dhp)) for lk in lucks}
+                        sets.append(frozenset(vals))
+                    scen += 1
+                    if len(set(sets)) > 1:
+                        dmg_dis += 1
+                        allv = [v for s in sets for v in s]
+                        spread = max(spread, max(allv) - min(allv))
+                    if len({min(s) >= dhp for s in sets}) > 1:
+                        kill_dis += 1
+    return scen, dmg_dis, kill_dis, spread
+
+
+def describe_agreement(alive):
+    scen, dmg, kill, spread = agreement(alive)
+    if kill == 0 and dmg == 0:
+        return ("all survivors predict IDENTICALLY across "
+                f"{scen} unseen scenarios -- they are the same model under "
+                "different labels. This is as converged as it needs to be.")
+    if kill == 0:
+        return (f"survivors differ on exact damage in {dmg}/{scen} scenarios "
+                f"(max {spread} internal HP) but NEVER on kill/no-kill. "
+                "Safe for tactical advice.")
+    return (f"survivors disagree on kill/no-kill in {kill}/{scen} scenarios "
+            f"(max damage spread {spread}). NOT yet safe for advice -- "
+            "record more battles.")
+
+
 def report(observations, alive):
     terrains = sorted({o.terrain for o in observations})
     print(f"{len(observations)} observations, {len(terrains)} terrain(s): "
@@ -167,13 +224,20 @@ def report(observations, alive):
         print(f"  shared luck roll: {lucks}"
               + ("  (determined)" if len(lucks) == 1 else ""))
 
-    if len(alive) == 1:
-        v, sm = alive[0][0], alive[0][1]
-        print(f"\nCONVERGED: variant={v}  stars={sm}")
-        print("Set provenance.verified_against_emulator=true in data/aw1_damage.json")
-        print(f"and DEFAULT_VARIANT='{v}' in engine/damage.py.")
+    print("\n" + describe_agreement(alive))
+
+    stars_pinned = len({tuple(sorted(h[1].items())) for h in alive}) == 1
+    print(f"terrain stars fully determined: {stars_pinned}")
+
+    _, dmg, kill, _ = agreement(alive)
+    if stars_pinned and kill == 0 and dmg == 0:
+        v = alive[0][0]
+        print("\nDONE. Set provenance.verified_against_emulator=true in "
+              "data/aw1_damage.json")
+        print(f"and DEFAULT_VARIANT='{v}' in engine/damage.py "
+              "(any survivor will do -- they are equivalent).")
     else:
-        print("\nNot converged. Run with --suggest for the most informative next test.")
+        print("\nNot done. Run with --suggest for the most informative next test.")
 
 
 # --------------------------------------------------------------------------

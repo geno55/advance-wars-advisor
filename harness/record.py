@@ -84,6 +84,7 @@ def drop_last_row():
 
 
 SHARED_LUCK = False
+EXACT = False           # --exact: you can read internal HP (1..100) from RAM
 
 
 def status(obs):
@@ -149,9 +150,13 @@ def ask_matchup():
 
 
 def main():
-    global SHARED_LUCK
+    global SHARED_LUCK, EXACT
     SHARED_LUCK = "--shared-luck" in sys.argv
+    EXACT = "--exact" in sys.argv
     print(__doc__.split("Protocol")[0].strip())
+    if EXACT:
+        print("\nEXACT MODE: you type the defender's internal HP (0-100) from RAM.")
+        print("Far more informative than bars -- expect to converge in a few battles.")
     if SHARED_LUCK:
         print("\nSHARED-LUCK MODE: assuming one frozen roll explains every battle.")
         print("Only valid if every battle is launched from the SAME save state and")
@@ -172,9 +177,13 @@ def main():
         if m is None:
             break
         att, dfn, terr, ahp, dhp = m
+        hi = 100 if EXACT else 10
+        what = ("INTERNAL HP (0-100, read from RAM)" if EXACT
+                else "remaining HP bars (0-10)")
         print(f"\nRecording {att} ({ahp}) -> {dfn} ({dhp}) on {terr}.")
-        print("Save state, attack, read the DEFENDER's remaining HP bars, type it.")
-        print("  0-10 = record a trial   u = undo last   <blank> = new matchup   q = quit")
+        print(f"Save state, attack, read the DEFENDER's {what}, type it.")
+        print(f"  0-{hi} = record a trial   u = undo last   "
+              "<blank> = new matchup   q = quit")
         trial = 0
         run = []          # results for this matchup, to spot a frozen RNG
         while True:
@@ -200,13 +209,18 @@ def main():
             except ValueError:
                 print("    type a number 0-10, or u / blank / q")
                 continue
-            if not (0 <= val <= 10):
-                print("    HP bars are 0-10")
+            if not (0 <= val <= hi):
+                print(f"    value must be 0-{hi}")
                 continue
 
+            # In exact mode the player types the DEFENDER'S REMAINING internal
+            # HP; the schema wants damage dealt, so convert here rather than
+            # making them do arithmetic at the keyboard.
+            observed = (dhp - val) if EXACT else val
             row = {"attacker": att, "defender": dfn, "att_hp": ahp,
-                   "def_hp": dhp, "terrain": terr, "mode": "display_after",
-                   "observed": val, "co_attack": 100, "co_defense": 100,
+                   "def_hp": dhp, "terrain": terr,
+                   "mode": "exact" if EXACT else "display_after",
+                   "observed": observed, "co_attack": 100, "co_defense": 100,
                    "notes": f"co={co}"}
             o = Obs({k: str(v) for k, v in row.items()}, 0)
 
