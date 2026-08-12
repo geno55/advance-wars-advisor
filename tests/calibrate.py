@@ -21,6 +21,7 @@ Usage:
 from __future__ import annotations
 
 import csv
+import functools
 import itertools
 import pathlib
 import sys
@@ -53,24 +54,37 @@ class Obs:
                 f"on {self.terrain}: {self.mode}={self.observed}")
 
 
-def predict(obs, variant, stars):
-    """All outcomes this hypothesis considers possible, over the luck range."""
-    w = select_weapon(obs.attacker, obs.defender)
+@functools.lru_cache(maxsize=None)
+def _predict(attacker, defender, att_hp, def_hp, mode, co_atk, co_def,
+             variant, stars):
+    """All outcomes this hypothesis considers possible, over the luck range.
+
+    Memoised on primitives: the recording protocol repeats each matchup ~10x,
+    so this collapses the hypothesis sweep from millions of Fraction operations
+    to a few thousand, which is what makes live feedback while recording
+    feasible.
+    """
+    w = select_weapon(attacker, defender)
     if w is None:
-        return set()
+        return frozenset()
     fn = VARIANTS[variant]
     out = set()
     for luck in range(LUCK_MIN, LUCK_MAX + 1):
-        raw = fn(w.base, display_hp(obs.att_hp), obs.co_atk, obs.co_def,
-                 stars, display_hp(obs.def_hp), luck)
-        dmg = max(0, min(raw, obs.def_hp))
-        if obs.mode == "exact":
+        raw = fn(w.base, display_hp(att_hp), co_atk, co_def,
+                 stars, display_hp(def_hp), luck)
+        dmg = max(0, min(raw, def_hp))
+        if mode == "exact":
             out.add(dmg)
-        elif obs.mode == "display_after":
-            out.add(display_hp(max(0, obs.def_hp - dmg)))
+        elif mode == "display_after":
+            out.add(display_hp(max(0, def_hp - dmg)))
         else:
-            raise ValueError(f"line {obs.line}: unknown mode {obs.mode!r}")
-    return out
+            raise ValueError(f"unknown mode {mode!r}")
+    return frozenset(out)
+
+
+def predict(obs, variant, stars):
+    return _predict(obs.attacker, obs.defender, obs.att_hp, obs.def_hp,
+                    obs.mode, obs.co_atk, obs.co_def, variant, stars)
 
 
 def consistent(obs, variant, star_map):
