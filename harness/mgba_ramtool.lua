@@ -98,8 +98,13 @@ function units(n)
         flag = "  <-- IMPOSSIBLE HP"
         bad = bad + 1
       end
+      -- +1 was labelled "acted" on the strength of a single observation (a tank
+      -- that had just attacked). A loaded transport that has NOT moved also has
+      -- it set, so the label was wrong. Print the raw value instead of an
+      -- interpretation until we know what it means.
       local marks = ""
-      if emu:read8(a + 1) ~= 0 then marks = marks .. " acted" end
+      local st = emu:read8(a + 1)
+      if st ~= 0 then marks = marks .. string.format(" st=%d", st) end
       if unitfuelflag(a) then marks = marks .. " ?bit7" end
       console:log(string.format(
         "  [%3d] 0x%08X P%d %-11s (%2d,%2d) hp=%3d (%2d bars) ammo=%2d fuel=%3d%s%s",
@@ -123,6 +128,45 @@ end
 -- HP address of a unit by army and slot, e.g. hpaddr(1, 7) for P2 slot 7.
 function unitaddr(army, slot)
   return unitbase() + (army * ARMY_SLOTS + slot) * UNIT_STRIDE
+end
+
+-- All 12 bytes of one unit record, labelled. Known fields are named; the rest
+-- are shown raw, because +7..+11 are still undecoded and cargo probably lives
+-- there.
+function unitrec(slot)
+  local a = unitbase() + slot * UNIT_STRIDE
+  local b = {}
+  for i = 0, 11 do b[i] = emu:read8(a + i) end
+  local hpammo = emu:read16(a + 4)
+  console:log(string.format("slot %d @0x%08X  %s", slot, a,
+    TYPE_NAMES[b[0]] or ("id" .. b[0])))
+  console:log(string.format("  +0 type=%-3d +1 st=%-3d +2 x=%-3d +3 y=%-3d",
+    b[0], b[1], b[2], b[3]))
+  console:log(string.format("  +4:2 hp=%d ammo=%d   +6 fuel=%d (bit7 %s)",
+    hpammo % 128, math.floor(hpammo / 128), b[6] % 128,
+    b[6] >= 128 and "set" or "clear"))
+  console:log(string.format("  undecoded: +7=%d +8=%d +9=%d +10=%d +11=%d",
+    b[7], b[8], b[9], b[10], b[11]))
+  console:log("  raw: " .. table.concat({ b[0], b[1], b[2], b[3], b[4], b[5],
+    b[6], b[7], b[8], b[9], b[10], b[11] }, " "))
+end
+
+-- Byte-by-byte diff of two unit records. The fastest way to see what "loaded"
+-- costs: compare a transport carrying something against an identical one that
+-- is not.
+function unitcmp(slotA, slotB)
+  local a = unitbase() + slotA * UNIT_STRIDE
+  local b = unitbase() + slotB * UNIT_STRIDE
+  console:log(string.format("slot %d vs slot %d", slotA, slotB))
+  local diffs = 0
+  for i = 0, 11 do
+    local x, y = emu:read8(a + i), emu:read8(b + i)
+    if x ~= y then
+      console:log(string.format("  +%-2d  %3d  vs %3d", i, x, y))
+      diffs = diffs + 1
+    end
+  end
+  console:log(string.format("  %d byte(s) differ", diffs))
 end
 
 -- HP address of one unit slot, for reading before/after an attack.
