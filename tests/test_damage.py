@@ -12,9 +12,9 @@ import unittest
 
 sys.path.insert(0, str(pathlib.Path(__file__).resolve().parent.parent))
 from engine.damage import (Attack, DEFAULT_DISPLAY, DEFAULT_VARIANT,  # noqa: E402
-                           DISPLAY_VARIANTS, Unverified, VARIANTS, can_attack,
-                           counterattack, damage_for_luck, display_hp, resolve,
-                           screen_bars, select_weapon, tables)
+                           DISPLAY_VARIANTS, SURVIVING_VARIANTS, Unverified, VARIANTS,
+                           can_attack, counterattack, damage_for_luck,
+                           display_hp, resolve, screen_bars, select_weapon, tables)
 
 
 class TestTables(unittest.TestCase):
@@ -153,9 +153,48 @@ class TestHpConventions(unittest.TestCase):
 
 
 class TestEngineBehaviour(unittest.TestCase):
-    def test_resolve_refuses_to_pretend_it_is_verified(self):
-        with self.assertRaises(Unverified):
-            resolve(Attack("Tank", "Infantry"))
+    def test_resolve_works_now_that_calibration_passed(self):
+        self.assertTrue(tables()["provenance"]["verified_against_emulator"])
+        self.assertIsNotNone(resolve(Attack("Tank", "Infantry")))
+
+    def test_the_unverified_guard_still_functions(self):
+        """The guard is what stopped the tool giving advice under an unvalidated
+        model. It must still fire if the flag is ever cleared."""
+        import engine.damage as dmg
+        saved = dmg.tables()["provenance"]["verified_against_emulator"]
+        dmg.tables()["provenance"]["verified_against_emulator"] = False
+        try:
+            with self.assertRaises(Unverified):
+                resolve(Attack("Tank", "Infantry"))
+        finally:
+            dmg.tables()["provenance"]["verified_against_emulator"] = saved
+
+    def test_envelope_covers_both_surviving_variants(self):
+        """max_damage must be the wider of the two, so we never claim something
+        cannot die when one surviving variant says it might."""
+        a = Attack("Tank", "Infantry", terrain_stars=4)
+        env = resolve(a)
+        for v in SURVIVING_VARIANTS:
+            single = resolve(a, variant=v)
+            self.assertGreaterEqual(env.max_damage, single.max_damage, v)
+            self.assertLessEqual(env.min_damage, single.min_damage, v)
+
+    def test_guaranteed_kill_is_exact_not_an_envelope(self):
+        """The survivors agree on minimum damage, so guaranteed_kill is not
+        widened by the ensemble -- it is the same under either variant."""
+        for stars in range(5):
+            for dhp in (100, 60, 30, 12):
+                a = Attack("Tank", "Infantry", defender_hp=dhp, terrain_stars=stars)
+                mins = {resolve(a, variant=v).min_damage for v in SURVIVING_VARIANTS}
+                self.assertEqual(len(mins), 1, f"{stars} stars, {dhp} hp")
+
+    def test_disagreement_is_flagged(self):
+        """On defended terrain the variants differ at the top; say so."""
+        self.assertFalse(resolve(Attack("Tank", "Infantry", terrain_stars=4))
+                         .variants_agree)
+        # At 0 stars the terrain multiplier is 1, so they coincide exactly.
+        self.assertTrue(resolve(Attack("Tank", "Infantry", terrain_stars=0))
+                        .variants_agree)
 
     def test_damage_is_monotonic_in_attacker_hp(self):
         for variant in VARIANTS:
@@ -197,4 +236,5 @@ class TestEngineBehaviour(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main(verbosity=2)
+
 

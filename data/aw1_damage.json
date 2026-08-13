@@ -10,7 +10,31 @@
    "0x3f4dfc"
   ],
   "stride": 24,
-  "verified_against_emulator": false
+  "verified_against_emulator": true
+ },
+ "calibration": {
+  "observations": 14,
+  "source": "harness/observations.csv, exact internal HP read from RAM",
+  "co": "single neutral CO on both armies, no power active; validated by a Tank->Infantry road reading of 78 against a ROM base of 75",
+  "display_rule": "floor_min1 -- combat scales by a TRUNCATED tenth of internal HP, min 1. ceil, round and plain floor are all refuted by observation.",
+  "terrain_stars": {
+   "road": 0,
+   "plains": 1,
+   "mountain": 4
+  },
+  "terrain_source": "read from the in-game Def display; road, plains and mountain were independently re-derived from damage data and agreed",
+  "formula_variants_refuted": [
+   "floor_end",
+   "floor_attack_then_end",
+   "floor_each_step",
+   "round_end"
+  ],
+  "formula_variants_surviving": [
+   "luck_after_hp",
+   "luck_last"
+  ],
+  "residual_uncertainty": "The two survivors agree exactly on MINIMUM damage, so guaranteed-kill calls are exact. They differ on MAXIMUM damage by up to 4 on 4-star terrain. resolve() reports the envelope over both rather than picking one.",
+  "why_not_resolved": "Separating them needs the top of the luck range, and the GBA advances its RNG per frame -- save-state replays sample a narrow, timing-dependent band rather than the full 0..9. Over 35 trials the maximum appeared once. Not worth more grinding for a difference that never changes a kill decision."
  },
  "copy_discrepancies": [
   {

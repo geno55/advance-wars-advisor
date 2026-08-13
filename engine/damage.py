@@ -190,6 +190,16 @@ VARIANTS = {
 # itself unverified and currently looks doubtful.
 DEFAULT_VARIANT = "luck_after_hp"
 
+# Calibration ended with two variants standing. Rather than pick one and pretend,
+# the engine evaluates BOTH and reports the envelope:
+#   * they agree exactly on minimum damage, so guaranteed_kill is exact
+#   * they differ on maximum damage by up to 4 on 4-star terrain, so
+#     possible_kill takes the wider view and never says "cannot kill" when one
+#     of them says it might
+# Erring outward on the uncertain end and exactly on the certain end is the only
+# safe asymmetry for a tool that tells you whether something dies.
+SURVIVING_VARIANTS = ("luck_after_hp", "luck_last")
+
 
 class Unverified(RuntimeError):
     pass
@@ -222,6 +232,9 @@ class Outcome:
     guaranteed_kill: bool
     possible_kill: bool
     variant: str
+    # False when the two surviving formula variants disagree about the top of
+    # the damage range here, so max_damage is an envelope rather than a figure.
+    variants_agree: bool = True
 
 
 def damage_for_luck(a: Attack, luck: int, variant: str = DEFAULT_VARIANT,
@@ -253,9 +266,16 @@ def resolve(a: Attack, variant: str = DEFAULT_VARIANT,
     w = select_weapon(a.attacker, a.defender, a.ammo)
     if w is None:
         return None
-    lo = damage_for_luck(a, LUCK_MIN, variant)
-    hi = damage_for_luck(a, LUCK_MAX, variant)
-    lo, hi = min(lo, hi), max(lo, hi)
+
+    # Evaluate every surviving variant and take the envelope. `variant` still
+    # forces a single one, for calibration work that needs to isolate them.
+    variants = (variant,) if variant != DEFAULT_VARIANT else SURVIVING_VARIANTS
+    los, his = [], []
+    for v in variants:
+        vals = [damage_for_luck(a, lk, v) for lk in (LUCK_MIN, LUCK_MAX)]
+        los.append(min(vals))
+        his.append(max(vals))
+    lo, hi = min(los), max(his)
     return Outcome(
         min_damage=lo, max_damage=hi,
         min_remaining_hp=max(0, a.defender_hp - hi),
@@ -263,7 +283,8 @@ def resolve(a: Attack, variant: str = DEFAULT_VARIANT,
         weapon=w.slot, base=w.base,
         guaranteed_kill=lo >= a.defender_hp,
         possible_kill=hi >= a.defender_hp,
-        variant=variant,
+        variant="+".join(variants),
+        variants_agree=len(set(his)) == 1,
     )
 
 

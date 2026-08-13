@@ -1,4 +1,4 @@
-"""Quote a single matchup. The first user-facing output of the advisor.
+﻿"""Quote a single matchup. The first user-facing output of the advisor.
 
     python tools/quote.py Tank Infantry --stars 1
     python tools/quote.py MdTank Tank --att-hp 60 --def-hp 80 --stars 2
@@ -9,7 +9,7 @@ import sys
 
 sys.path.insert(0, str(pathlib.Path(__file__).resolve().parent.parent))
 from engine.damage import (Attack, DEFAULT_VARIANT, counterattack,  # noqa: E402
-                           display_hp, resolve, tables)
+                           display_hp, resolve, screen_bars, tables)
 
 
 def main():
@@ -38,13 +38,25 @@ def main():
               + (" with 0 ammo" if a.ammo == 0 else ""))
         return
 
-    print(f"{a.attacker} ({display_hp(a.att_hp)} HP) attacks "
-          f"{a.defender} ({display_hp(a.def_hp)} HP) on {a.stars}-star terrain")
+    # Show the player what the SCREEN shows. display_hp() is the combat scaling
+    # and is deliberately different -- a unit on 57 shows 6 bars but attacks
+    # as 5. Printing the combat value would look like a bug to anyone reading
+    # it off the game.
+    def bars(hp):
+        s = screen_bars(hp)
+        c = display_hp(hp)
+        return f"{s} bars" + (f", attacks as {c}" if c != s else "")
+
+    print(f"{a.attacker} ({bars(a.att_hp)}) attacks "
+          f"{a.defender} ({bars(a.def_hp)}) on {a.stars}-star terrain")
     print(f"  weapon        {out.weapon} (base {out.base})")
     print(f"  damage        {out.min_damage}-{out.max_damage} internal "
           f"({out.min_damage/10:.1f}-{out.max_damage/10:.1f} bars)")
-    print(f"  defender left {display_hp(out.min_remaining_hp)}-"
-          f"{display_hp(out.max_remaining_hp)} HP")
+    if not out.variants_agree:
+        print(f"                (upper end is an envelope: two formula variants "
+              f"survive calibration and differ at the top)")
+    print(f"  defender left {screen_bars(out.min_remaining_hp)}-"
+          f"{screen_bars(out.max_remaining_hp)} bars")
     if out.guaranteed_kill:
         print("  KILL          guaranteed, even on the worst luck roll")
     elif out.possible_kill:
@@ -67,3 +79,4 @@ def main():
 
 if __name__ == "__main__":
     main()
+
