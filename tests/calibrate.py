@@ -23,6 +23,7 @@ from __future__ import annotations
 import csv
 import functools
 import itertools
+import json
 import pathlib
 import sys
 
@@ -32,6 +33,23 @@ from engine.damage import (VARIANTS, DISPLAY_VARIANTS, LUCK_MIN,  # noqa: E402
                            select_weapon, tables)
 
 STAR_RANGE = range(0, 5)          # AW terrain defence is 0..4 stars
+
+# The game shows terrain defence as "Def" when you highlight a tile, so it is
+# observable, not something to infer. Known values are pinned; anything absent
+# stays a free parameter. This collapses the search enormously -- with four
+# terrains it is 5^4 = 625 star maps versus 1.
+_TERRAIN_FILE = pathlib.Path(__file__).resolve().parent.parent / "data" / "aw1_terrain.json"
+try:
+    KNOWN_STARS = json.loads(_TERRAIN_FILE.read_text(encoding="utf-8"))["stars"]
+except (OSError, ValueError, KeyError):
+    KNOWN_STARS = {}
+
+
+def star_options(terrain):
+    """Candidate star values for one terrain: pinned if we know it."""
+    if terrain in KNOWN_STARS:
+        return (KNOWN_STARS[terrain],)
+    return tuple(STAR_RANGE)
 
 
 class Obs:
@@ -125,9 +143,10 @@ def enumerate_hypotheses(terrains):
     the data eliminates.
     """
     terrains = sorted(terrains)
+    options = [star_options(t) for t in terrains]
     for variant in VARIANTS:
         for disp in DISPLAY_VARIANTS:
-            for combo in itertools.product(STAR_RANGE, repeat=len(terrains)):
+            for combo in itertools.product(*options):
                 yield variant, dict(zip(terrains, combo)), disp
 
 
@@ -261,9 +280,15 @@ def explain(obs):
 
 def report(observations, alive):
     terrains = sorted({o.terrain for o in observations})
+    pinned = [t for t in terrains if t in KNOWN_STARS]
     print(f"{len(observations)} observations, {len(terrains)} terrain(s): "
           + ", ".join(terrains))
-    total = len(VARIANTS) * 5 ** len(terrains)
+    if pinned:
+        print("terrain Def read from the game (not inferred): "
+              + ", ".join(f"{t}={KNOWN_STARS[t]}" for t in pinned))
+    total = len(VARIANTS) * len(DISPLAY_VARIANTS)
+    for t in terrains:
+        total *= len(star_options(t))
     print(f"{len(alive)} of {total} hypotheses survive\n")
 
     if not alive:

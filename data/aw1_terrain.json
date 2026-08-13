@@ -1,0 +1,29 @@
+{
+  "_comment": [
+    "Terrain defence stars. The game DISPLAYS this as 'Def' when you highlight a",
+    "tile, so it is directly observable and does not need to be inferred from",
+    "damage. Values here are read off that display.",
+    "",
+    "Cross-check: calibration independently derived road=0, plains=1, mountain=4",
+    "from damage observations alone, before we knew the display existed. All",
+    "three match. That is a genuine confirmation of the damage model, since the",
+    "two routes share no inputs.",
+    "",
+    "Terrains not listed are UNKNOWN and must be read from the game before use;",
+    "they are deliberately absent rather than guessed."
+  ],
+  "provenance": {
+    "method": "read from the in-game Def display",
+    "cross_checked_by_calibration": ["road", "plains", "mountain"]
+  },
+  "stars": {
+    "road": 0,
+    "river": 0,
+    "plains": 1,
+    "wood": 2,
+    "woods": 2,
+    "city": 3,
+    "hq": 4,
+    "mountain": 4
+  }
+}
