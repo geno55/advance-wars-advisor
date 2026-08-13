@@ -32,8 +32,12 @@ class Unit:
     y: int
     hp: int          # internal 1..100
     ammo: int
+    capture: int     # capture progress, 0..20; a property falls at 20
     fuel: int
-    state: int       # raw +1 byte, meaning UNKNOWN -- see below
+    acted: bool
+    carrying: bool
+    loaded: bool     # sitting inside a transport
+    state: int       # raw +1 byte, kept so unrecognised bits stay visible
     cargo: int       # slot of the carried unit, 0 = empty
 
     @property
@@ -42,14 +46,13 @@ class Unit:
         return -(-self.hp // 10)
 
     @property
-    def is_carrying(self) -> bool:
-        return self.cargo != 0
-
-    # `state` is left raw on purpose. It was once decoded as has-acted-this-turn
-    # on the strength of a single observation, and a loaded transport that had
-    # not moved falsified that. Observed values so far: 0, 1 (a unit that had
-    # just attacked), 11 (a unit loaded into a transport), 16 (the transport
-    # carrying it). Four points is not enough to name it.
+    def capture_turns_left(self) -> Optional[int]:
+        """Turns to finish, at this unit's current HP. Capture rate is the
+        DISPLAYED bar count, so a damaged unit captures slower."""
+        if self.capture == 0:
+            return None
+        remaining = 20 - self.capture
+        return -(-remaining // max(1, self.bars))
 
 
 @dataclass(frozen=True)
@@ -132,7 +135,9 @@ def load(path) -> Board:
     board = Board(
         width=raw["width"], height=raw["height"],
         units=[Unit(u["slot"], u["player"], u["type"], u["x"], u["y"],
-                    u["hp"], u["ammo"], u["fuel"],
+                    u["hp"], u["ammo"], u.get("capture", 0), u["fuel"],
+                    u.get("acted", False), u.get("carrying", False),
+                    u.get("loaded", False),
                     u.get("state", 0), u.get("cargo", 0))
                for u in raw["units"]],
         armies=[Army(a["player"], a["funds"], a["income"]) for a in raw["armies"]],
@@ -168,9 +173,12 @@ def summarise(b: Board) -> str:
             if u.slot in carried:
                 continue        # listed under its transport instead
             terr = b.terrain_name(u.x, u.y)
+            extra = "  acted" if u.acted else ""
+            if u.capture:
+                extra += (f"  capturing {u.capture}/20 "
+                          f"({u.capture_turns_left} more turn(s))")
             out.append(f"      {u.type:10s} ({u.x:2d},{u.y:2d}) {u.bars:2d} bars "
-                       f"ammo {u.ammo} fuel {u.fuel} on {terr}"
-                       f"{f'  st={u.state}' if u.state else ''}")
+                       f"ammo {u.ammo} fuel {u.fuel} on {terr}{extra}")
             c = b.cargo_of(u)
             if c:
                 out.append(f"        carrying {c.type} ({c.bars} bars, "

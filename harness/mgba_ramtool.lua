@@ -79,13 +79,34 @@ function unitbase()
 end
 
 -- Dump the live board. This is the state reader in miniature.
--- Bit 7 is used as a flag bit in more than one field, so mask before reading.
---   +4 (u16): hp = v & 0x7F, ammo = v >> 7
---   +6 (u8) : fuel = v & 0x7F, bit 7 is a flag
+-- +4 is a u16 holding THREE fields, not two:
+--     hp      = bits 0-6    (max 100, needs 7 bits)
+--     ammo    = bits 7-10   (max   9, needs 4)
+--     capture = bits 11-15  (max  20, needs 5)
+-- 7 + 4 + 5 = 16 exactly. This was originally decoded as hp + (v >> 7) as ammo,
+-- which is right only while capture is zero -- and it was, in everything dumped
+-- until a capturing infantry reported "ammo 160".
+--
+-- +6 is fuel in bits 0-6 with bit 7 a separate, still-unidentified flag.
 function unithp(a) return emu:read16(a + HP_OFF) % 128 end
-function unitammo(a) return math.floor(emu:read16(a + HP_OFF) / 128) end
+function unitammo(a) return math.floor(emu:read16(a + HP_OFF) / 128) % 16 end
+function unitcapture(a) return math.floor(emu:read16(a + HP_OFF) / 2048) % 32 end
 function unitfuel(a) return emu:read8(a + 6) % 128 end
 function unitfuelflag(a) return emu:read8(a + 6) >= 128 end
+
+-- +1 is a bitfield, not a boolean or an enum:
+--     bit 0 (1)  has acted this turn
+--     bit 4 (16) is carrying cargo
+--     bits 1 and 3 (2 and 8) both set while a unit is INSIDE a transport
+-- Observed: 0 idle, 1 acted, 11 loaded (1+2+8), 16 carrying and unmoved,
+-- 17 carrying and moved. Unloading dropped both units to 1, clearing bit 4 on
+-- the transport, which is what identified that bit.
+function unitacted(a) return emu:read8(a + 1) % 2 == 1 end
+function unitcarrying(a) return math.floor(emu:read8(a + 1) / 16) % 2 == 1 end
+function unitloaded(a)
+  local s = emu:read8(a + 1)
+  return math.floor(s / 2) % 2 == 1 and math.floor(s / 8) % 2 == 1
+end
 
 function units(n)
   n = n or 256
@@ -110,8 +131,17 @@ function units(n)
       -- it set, so the label was wrong. Print the raw value instead of an
       -- interpretation until we know what it means.
       local marks = ""
-      local st = emu:read8(a + 1)
-      if st ~= 0 then marks = marks .. string.format(" st=%d", st) end
+      if unitacted(a) then marks = marks .. " acted" end
+      if unitloaded(a) then marks = marks .. " LOADED" end
+      local cap = unitcapture(a)
+      if cap > 0 then marks = marks .. string.format(" capturing %d/20", cap) end
+      -- Surface any bit of +1 we cannot yet account for, so a new state
+      -- announces itself instead of being silently swallowed.
+      local rest = emu:read8(a + 1)
+      for _, bit in ipairs({ 16, 8, 2, 1 }) do
+        if math.floor(rest / bit) % 2 == 1 then rest = rest - bit end
+      end
+      if rest ~= 0 then marks = marks .. string.format(" ?bits=%d", rest) end
       local cargo = emu:read8(a + 7)
       if cargo ~= 0 then
         local ct = emu:read8(base + cargo * UNIT_STRIDE)
@@ -123,7 +153,7 @@ function units(n)
         "  [%3d] 0x%08X P%d %-11s (%2d,%2d) hp=%3d (%2d bars) ammo=%2d fuel=%3d%s%s",
         i, a, army + 1, TYPE_NAMES[t] or "?",
         emu:read8(a + 2), emu:read8(a + 3), hp, math.ceil(hp / 10),
-        ammo, unitfuel(a), marks, flag))
+        unitammo(a), unitfuel(a), marks, flag))
       shown = shown + 1
     end
   end

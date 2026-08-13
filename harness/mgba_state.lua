@@ -74,18 +74,25 @@ function state(path)
     local t = emu:read8(a)
     if t >= 1 and t <= 24 then
       local hpammo = emu:read16(a + 4)
-      -- "state" is the raw +1 byte, deliberately not interpreted. It was once
-      -- labelled has-acted on one observation and a loaded transport that had
-      -- not moved falsified that; values 0, 1, 11 and 16 have all been seen.
-      -- "cargo" is the carried unit's slot, 0 meaning empty.
+      -- +4 packs three fields: hp bits 0-6, ammo bits 7-10, capture bits 11-15.
+      -- +1 is a bitfield: bit 0 acted, bit 4 carrying, bits 1 and 3 both set
+      -- while inside a transport. The raw byte ships too, so an unrecognised
+      -- state is visible rather than lost.
+      local st = emu:read8(a + 1)
       rows[#rows + 1] = string.format(
         '    {"slot": %d, "player": %d, "type": %s, "x": %d, "y": %d, '
-        .. '"hp": %d, "ammo": %d, "fuel": %d, "state": %d, "cargo": %d}',
+        .. '"hp": %d, "ammo": %d, "capture": %d, "fuel": %d, '
+        .. '"acted": %s, "carrying": %s, "loaded": %s, "state": %d, "cargo": %d}',
         i, math.floor(i / ARMY_SLOTS) + 1, q(UNIT[t] or ("id" .. t)),
         emu:read8(a + 2), emu:read8(a + 3),
-        hpammo % 128, math.floor(hpammo / 128),
+        hpammo % 128, math.floor(hpammo / 128) % 16,
+        math.floor(hpammo / 2048) % 32,
         emu:read8(a + 6) % 128,
-        emu:read8(a + 1), emu:read8(a + 7))
+        st % 2 == 1 and "true" or "false",
+        math.floor(st / 16) % 2 == 1 and "true" or "false",
+        (math.floor(st / 2) % 2 == 1 and math.floor(st / 8) % 2 == 1)
+          and "true" or "false",
+        st, emu:read8(a + 7))
     end
   end
   w_(table.concat(rows, ",\n"))
