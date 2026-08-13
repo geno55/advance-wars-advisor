@@ -59,9 +59,11 @@ function state(path)
   local rows = {}
   for p = 1, 4 do
     local a = abase + p * ARMY_STRIDE
+    -- +0x20 is the CO power meter, cumulative from 0. Both the dealer and the
+    -- receiver of damage charge. Scale and activation threshold unknown.
     rows[#rows + 1] = string.format(
-      '    {"player": %d, "funds": %d, "income": %d}',
-      p, emu:read32(a), emu:read32(a + 8))
+      '    {"player": %d, "funds": %d, "income": %d, "power": %d}',
+      p, emu:read32(a), emu:read32(a + 8), emu:read16(a + 0x20))
   end
   w_(table.concat(rows, ",\n"))
   w_("  ],")

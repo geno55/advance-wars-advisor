@@ -678,9 +678,9 @@ function armies(n)
   for p = 1, n do
     local a = armyaddr(p)
     console:log(string.format(
-      "  P%d @0x%08X  funds=%d  income=%d  playerno=%d  +1D=%d +1E=%d",
-      p, a, emu:read32(a), emu:read32(a + 8), emu:read8(a + 0x1A),
-      emu:read8(a + 0x1D), emu:read8(a + 0x1E)))
+      "  P%d @0x%08X  funds=%d  income=%d  power=%d  playerno=%d  +1D=%d +1E=%d",
+      p, a, emu:read32(a), emu:read32(a + 8), emu:read16(a + 0x20),
+      emu:read8(a + 0x1A), emu:read8(a + 0x1D), emu:read8(a + 0x1E)))
   end
   console:log("  funds is 0 for everyone except the player whose turn it is")
 end

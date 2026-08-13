@@ -60,6 +60,10 @@ class Army:
     player: int
     funds: int
     income: int
+    # CO power charge, cumulative from 0. Both the dealer and the receiver of
+    # damage gain. The activation threshold and the gain formula are UNKNOWN, so
+    # this is a raw number, not a percentage -- do not render it as one.
+    power: int = 0
 
 
 @dataclass
@@ -140,7 +144,8 @@ def load(path) -> Board:
                     u.get("loaded", False),
                     u.get("state", 0), u.get("cargo", 0))
                for u in raw["units"]],
-        armies=[Army(a["player"], a["funds"], a["income"]) for a in raw["armies"]],
+        armies=[Army(a["player"], a["funds"], a["income"], a.get("power", 0))
+                for a in raw["armies"]],
         terrain=[r["t"] for r in rows],
         owner=[r["owner"] for r in rows],
     )
@@ -167,7 +172,7 @@ def summarise(b: Board) -> str:
         if not us and not props:
             continue
         out.append(f"  P{a.player}: {a.funds} funds (+{a.income}), "
-                   f"{len(us)} units, {len(props)} properties")
+                   f"power {a.power}, {len(us)} units, {len(props)} properties")
         carried = {x.cargo for x in b.units if x.cargo}
         for u in sorted(us, key=lambda u: (u.y, u.x)):
             if u.slot in carried:

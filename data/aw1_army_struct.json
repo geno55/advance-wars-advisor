@@ -21,6 +21,8 @@
              "note": "spendable now; zero for every player whose turn it is not"},
     "0x08": {"type": "u32", "name": "funds_incoming",
              "note": "income shown on the status screen; equal for all players here"},
+    "0x20": {"type": "u16", "name": "co_power_meter",
+             "note": "Charge, cumulative from 0. Confirmed by snapshotting the army records, attacking, and diffing: a single A-Air-on-Tank attack took P2 (attacker) 0 -> 3725 and P1 (defender) 0 -> 2900. Both sides charge, as AW does. The SCALE is unknown -- the activation threshold and the gain formula have not been worked out, and one attack is not enough to derive them."},
     "0x1A": {"type": "u8", "name": "player_number", "note": "1..4, matches the record index"},
     "0x1D": {"type": "u8", "name": "co_related",
              "note": "differs per CO: Andy 1, Max 2, Sami 4. Read by the damage path only when a CO power is active, where it is scaled by 292."},
