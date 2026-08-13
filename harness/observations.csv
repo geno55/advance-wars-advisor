@@ -28,4 +28,7 @@ Tank,Mech,100,100,mountain,exact,43,100,100,co=Andy
 Mech,Tank,57,100,plains,exact,27,100,100,counter co=Andy
 Infantry,Infantry,9,100,road,exact,7,100,100,last-bar attacker floor vs floor_min1 probe
 Infantry,Infantry,9,100,road,exact,11,100,100,last-bar trial 2 - refutes plain floor
-Tank,Infantry,100,100,mountain,exact,49,100,100,highest of ~10 trials on mountain
+Tank,Infantry,100,100,mountain,exact,49,100,100,mountain repeat trials
+Tank,Infantry,100,100,mountain,exact,47,100,100,mountain repeat trials
+Tank,Infantry,100,100,mountain,exact,48,100,100,mountain repeat trials
+Tank,Infantry,100,100,mountain,exact,50,100,100,max over 35 trials with varied timing
