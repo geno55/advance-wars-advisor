@@ -67,15 +67,43 @@ def main(argv):
         if never:
             # Probability of missing exactly these rolls under a uniform model.
             p = ((10 - len(never)) / 10) ** len(obs)
+            seen_rolls = sorted(lk for lk in range(10) if rolls[lk] > 0)
+            contiguous = (seen_rolls ==
+                          list(range(seen_rolls[0], seen_rolls[-1] + 1)))
             print(f"{'':15s} rolls NEVER seen: {never}   "
                   f"P(that under a uniform roll) = {p:.4f}")
-            if p < 0.01:
-                print(f"{'':15s} -> uniformity is doubtful for this variant")
+            if contiguous and len(seen_rolls) < 10:
+                print(f"{'':15s} -> observed rolls {seen_rolls[0]}-{seen_rolls[-1]} "
+                      "form a CONTIGUOUS BAND.")
+            elif p < 0.01:
+                print(f"{'':15s} -> scattered gaps: suspect the MODEL, not sampling")
         else:
             print(f"{'':15s} every roll 0-9 observed; consistent with uniform")
 
+
+EPILOGUE = """
+Reading the result
+------------------
+CONTIGUOUS BAND under every variant means the model is fine and the SAMPLING is
+clustered. The GBA advances its RNG as frames pass, so if you reload a save
+state and confirm the attack after roughly the same delay each time, you sample
+a narrow window of the sequence rather than the whole range. Twenty trials at a
+consistent tempo can easily be twenty draws from five adjacent rolls.
+
+This matters: any inference of the form "we never saw a high roll, therefore the
+high-roll variant is wrong" is INVALID under clustered sampling. It assumes
+every roll had a fair chance of appearing.
+
+To sample properly, vary the delay ON PURPOSE between loading and confirming:
+wait a different count each time, or move the cursor a varying number of tiles
+first. You want the observed band to widen, ideally covering 0-9.
+
+SCATTERED gaps are the opposite diagnosis: rolls missing from the middle of an
+otherwise-covered range point at the model, not the sampling.
+"""
 
 if __name__ == "__main__":
     if len(sys.argv) < 7:
         sys.exit(__doc__)
     main(sys.argv)
+    print(EPILOGUE)

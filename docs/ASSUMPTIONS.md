@@ -50,10 +50,26 @@ Not extracted. Deliberately *not* typed in from memory either — they are solve
 as free parameters by calibration alongside the formula.
 **Kill it by:** the same calibration run.
 
-### A4. Luck roll is uniform 0..9
-Standard for AW1 with a plain CO. Nell and Flak differ.
-**Kill it by:** repeated identical attacks from a save state; the observed
-outcome spread bounds the roll.
+### A4. Luck roll is uniform 0..9 — the range is fine, the SAMPLING is not
+20 repeated trials of one matchup produced only three distinct damage values
+(47x9, 48x3, 49x8). Inverted, every variant implies a **contiguous band** of
+rolls with both extremes absent — `luck_after_hp` says 4-8, `luck_last` says
+2-4. Scattered gaps would indict the model; a contiguous band indicts the
+sampling.
+
+Cause: the GBA advances its RNG as frames pass, so reloading a save state and
+confirming after a similar delay each time samples a narrow window of the
+sequence. Consistent human tempo produces consistent rolls.
+
+**Consequence, and it bit us:** an earlier "357:1 in favour of `luck_after_hp`"
+was computed from the absence of high rolls, assuming every roll had a fair
+chance of showing up. Under clustered sampling that inference is worthless, and
+it has been withdrawn.
+
+**Kill it by:** deliberately varying the delay between loading and confirming --
+different wait counts, or moving the cursor a varying number of tiles first --
+until the observed band widens. Reading the RNG state from RAM would settle it
+outright.
 
 ### A5. Display HP = ceil(internal / 10) — **REFUTED**
 This was wrong, and it is the most instructive error in the project.
