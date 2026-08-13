@@ -188,13 +188,32 @@ class TestEngineBehaviour(unittest.TestCase):
                 mins = {resolve(a, variant=v).min_damage for v in SURVIVING_VARIANTS}
                 self.assertEqual(len(mins), 1, f"{stars} stars, {dhp} hp")
 
-    def test_disagreement_is_flagged(self):
-        """On defended terrain the variants differ at the top; say so."""
-        self.assertFalse(resolve(Attack("Tank", "Infantry", terrain_stars=4))
-                         .variants_agree)
-        # At 0 stars the terrain multiplier is 1, so they coincide exactly.
-        self.assertTrue(resolve(Attack("Tank", "Infantry", terrain_stars=0))
-                        .variants_agree)
+    def test_the_formula_is_now_determined(self):
+        """This test used to assert the opposite.
+
+        The survivors DID differ at the top on defended terrain, and the engine
+        flagged it. A seeded sweep over the combat luck state then refuted
+        `luck_last` on distribution shape, leaving one variant -- so nothing
+        disagrees any more, at any star count. Kept as a test rather than
+        deleted: if a future observation reopens the question and a second name
+        goes back into SURVIVING_VARIANTS, this fails and says so.
+        """
+        self.assertEqual(len(SURVIVING_VARIANTS), 1, SURVIVING_VARIANTS)
+        self.assertEqual(SURVIVING_VARIANTS[0], "luck_after_hp")
+        for stars in range(5):
+            self.assertTrue(
+                resolve(Attack("Tank", "Infantry", terrain_stars=stars))
+                .variants_agree, f"{stars} stars")
+
+    def test_the_envelope_is_now_a_point(self):
+        """With one variant, max_damage is the real maximum rather than the
+        wider of two guesses -- so 'cannot kill' is finally exact in both
+        directions, not just on the guaranteed end."""
+        a = Attack("Tank", "Infantry", terrain_stars=4)
+        env = resolve(a)
+        single = resolve(a, variant="luck_after_hp")
+        self.assertEqual(env.max_damage, single.max_damage)
+        self.assertEqual(env.min_damage, single.min_damage)
 
     def test_damage_is_monotonic_in_attacker_hp(self):
         for variant in VARIANTS:

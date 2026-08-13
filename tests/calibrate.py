@@ -300,6 +300,16 @@ def report(observations, alive):
     vs = sorted({h[0] for h in alive})
     ds = sorted({h[2] for h in alive})
     print(f"formula variants still possible ({len(vs)}): {', '.join(vs)}")
+    if len(vs) > 1:
+        # This tool asks only "does SOME luck value reproduce each observation".
+        # That can never separate variants whose ranges nest, and luck_after_hp's
+        # range sits inside luck_last's whenever the defence multiplier is <= 1,
+        # which with a neutral CO is always. Saying so beats leaving a reader to
+        # conclude the question is open when it has been settled elsewhere.
+        print("  NOTE: this is set-based elimination -- it cannot separate "
+              "variants whose ranges nest, which these do.")
+        print("  The formula was settled by a seeded sweep instead "
+              "(tools/rng_fit.py, DERIVATION.md 17): luck_after_hp.")
     print(f"display rule ({len(ds)}): {', '.join(ds)}"
           + ("  (determined)" if len(ds) == 1 else ""))
     for t in terrains:

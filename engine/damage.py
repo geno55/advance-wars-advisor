@@ -60,7 +60,8 @@ def tables() -> dict:
 # calibration decides, exactly like the formula variants.
 #
 # floor vs floor_min1 differ only below 10 internal HP: plain floor says a unit
-# on its last bar attacks at strength 0 and deals nothing. That is untested.
+# on its last bar attacks at strength 0 and deals nothing. Tested and settled --
+# see DEFAULT_DISPLAY below.
 DISPLAY_VARIANTS = {
     "floor":      lambda h: h // 10 if h > 0 else 0,
     "floor_min1": lambda h: max(1, h // 10) if h > 0 else 0,
@@ -198,7 +199,23 @@ DEFAULT_VARIANT = "luck_after_hp"
 #     of them says it might
 # Erring outward on the uncertain end and exactly on the certain end is the only
 # safe asymmetry for a tool that tells you whether something dies.
-SURVIVING_VARIANTS = ("luck_after_hp", "luck_last")
+#
+# NOW A SET OF ONE. `luck_last` was refuted by a seeded sweep: the combat luck
+# state (a u32 at 0x03001D30, found by bisection -- see DERIVATION.md 16) was
+# written to 128 values spread across the 32-bit space, and the resulting damage
+# histogram matched luck_after_hp's shape at chi2/df 0.74 while luck_last scored
+# 12.29 and predicted 51..54, which never appeared in 128 attacks.
+#
+# That is a POSITIVE identification, not the argument from absence that had to
+# be withdrawn before (see ASSUMPTIONS A4). The variants predict different
+# histogram SHAPES -- luck_after_hp collapses ten rolls onto six damages so some
+# occur twice as often, luck_last maps ten onto ten and is flat -- and the
+# uniformity it rests on is a property of the seeds we chose, not an assumption
+# about how the game samples.
+#
+# Kept as a tuple, and resolve() still takes the envelope over it, so that
+# reopening the question means adding a name here rather than restructuring.
+SURVIVING_VARIANTS = ("luck_after_hp",)
 
 
 class Unverified(RuntimeError):
