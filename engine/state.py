@@ -74,7 +74,28 @@ class Board:
     armies: list
     terrain: list          # [y][x] -> terrain id
     owner: list            # [y][x] -> owning player, 0 neutral
+    # Turn block at 0x03004420. day is 1-based and matches the on-screen Day;
+    # active is 1-based and comes from a real field, not from the old "only the
+    # current player has funds" inference. 0 means the reader did not supply
+    # them -- an older state.json, not a game in progress with no active player.
+    day: int = 0
+    active_player: int = 0
+    # Weather as the game stores it: an INDEX selecting one of the three
+    # movement-cost tables, from 0x0300433C. None means the reader did not
+    # supply it. The index is ROM-confirmed; the Clear/Snow/Rain names attached
+    # to those tables are still inferred, so `weather_index` is the value to
+    # trust and `weather` is a convenience over a label that may yet move.
+    weather_index: Optional[int] = None
     warnings: list = field(default_factory=list)
+
+    @property
+    def weather(self) -> Optional[str]:
+        if self.weather_index is None:
+            return None
+        tables = _load("aw1_movecost.json")["tables"]
+        if not 0 <= self.weather_index < len(tables):
+            return None
+        return tables[self.weather_index]["weather"]
 
     # -- lookups ----------------------------------------------------------
     def terrain_name(self, x: int, y: int) -> str:
@@ -93,11 +114,37 @@ class Board:
                            "off the in-game Def display and add it")
         return stars[name]
 
+    def defence_for(self, x: int, y: int, move_type: str) -> int:
+        """Defence stars the game applies to a unit of this move type here.
+
+        Air units get no cover from the ground below them. The game does this
+        by giving them terrain id 9 -- the sky, defence 0 -- rather than by
+        special-casing air in the damage code, so this stays a table lookup
+        driven by move type. Reading defence(x, y) for a Fighter parked over a
+        mountain would hand it 4 stars and silently wreck every prediction
+        involving aircraft.
+        """
+        t = _load("aw1_terrain.json")
+        if move_type == "Air":
+            return t["terrain"][str(t["sky_id"])]["stars"]
+        return self.defence(x, y)
+
     def move_cost(self, x: int, y: int, move_type: str,
-                  weather: str = "Clear") -> Optional[int]:
-        """Movement cost, or None if impassable."""
+                  weather: Optional[str] = None) -> Optional[int]:
+        """Movement cost, or None if impassable.
+
+        Defaults to the board's own weather when the dump supplied one, so
+        callers stop having to know it. Pass `weather` explicitly to ask a
+        hypothetical ("what would this cost in snow?").
+        """
         mc = _load("aw1_movecost.json")
-        table = next(t for t in mc["tables"] if t["weather"] == weather)
+        if weather is None:
+            if self.weather_index is not None:
+                table = mc["tables"][self.weather_index]
+            else:
+                table = mc["tables"][0]
+        else:
+            table = next(t for t in mc["tables"] if t["weather"] == weather)
         cost = table["costs"][move_type][self.terrain[y][x]]
         return None if cost == IMPASSABLE else cost
 
@@ -148,8 +195,62 @@ def load(path) -> Board:
                 for a in raw["armies"]],
         terrain=[r["t"] for r in rows],
         owner=[r["owner"] for r in rows],
+        day=raw.get("day", 0),
+        active_player=raw.get("active_player", 0),
+        weather_index=raw.get("weather_index"),
     )
     chk = raw.get("check", {})
+    if "day" not in raw:
+        board.warnings.append(
+            "no turn block in this dump -- reader predates it; day and active "
+            "player are unknown rather than zero")
+    if chk.get("turn_block_sane") is False:
+        board.warnings.append(
+            "the turn block failed its sanity check in the reader; day and "
+            "active player are not trustworthy for this dump")
+    if chk.get("funds_heuristic_agrees") is False:
+        board.warnings.append(
+            "the active-player field disagrees with which army holds funds -- "
+            "one of the two is wrong, see aw1_army_struct.json")
+
+    # The property list is the strongest check we have on map DIMENSIONS.
+    # mapdims() derives the height by walking the movement row-pointer table,
+    # which runs past the end of a small map into a buffer sized for a larger
+    # one -- so the terrain array gets read too far and the extra rows are the
+    # PREVIOUS map's data. That looks entirely plausible: coherent terrain,
+    # every unit still standing somewhere legal. What gives it away is that the
+    # stale rows contain properties the game does not list.
+    # Width has two independent sources -- the map descriptor byte and the
+    # row-pointer stride. Agreement is real corroboration; disagreement means
+    # one of them is not what we think it is.
+    dc = raw.get("dims_check", {})
+    if dc and not dc.get("width_sources_agree", True):
+        board.warnings.append(
+            f"width {board.width} from the map descriptor disagrees with the "
+            f"row-pointer stride {dc.get('stride_width')} -- one of the two "
+            f"addresses is wrong for this build; do not trust this board")
+
+    listed = {(p["x"], p["y"]) for p in raw.get("properties", [])}
+    if listed:
+        capturable = set(_load("aw1_terrain.json")["capturable_ids"])
+        seen = {(x, y)
+                for y in range(board.height) for x in range(board.width)
+                if board.terrain[y][x] in capturable}
+        phantom = sorted(seen - listed)
+        missing = sorted(listed - seen)
+        if phantom:
+            rows_hit = sorted({y for _, y in phantom})
+            board.warnings.append(
+                f"{len(phantom)} propert(ies) in the terrain array are absent "
+                f"from the game's own list, first at {phantom[0]} -- the map is "
+                f"almost certainly SHORTER than {board.height} rows and "
+                f"everything from row {rows_hit[0]} down is stale data from a "
+                f"previously loaded map")
+        if missing:
+            board.warnings.append(
+                f"the game lists {len(missing)} propert(ies) the terrain array "
+                f"does not show, first at {missing[0]} -- the map address or "
+                f"width is wrong")
     if chk.get("units_on_impossible_terrain"):
         board.warnings.append(
             f"{chk['units_on_impossible_terrain']} unit(s) stand on terrain they "
@@ -163,7 +264,12 @@ def load(path) -> Board:
 
 
 def summarise(b: Board) -> str:
-    out = [f"{b.width}x{b.height} board"]
+    head = f"{b.width}x{b.height} board"
+    if b.day:
+        head += f", day {b.day}, P{b.active_player} to move"
+    if b.weather_index is not None:
+        head += f", weather {b.weather} (index {b.weather_index})"
+    out = [head]
     for w in b.warnings:
         out.append(f"  !! {w}")
     for a in b.armies:

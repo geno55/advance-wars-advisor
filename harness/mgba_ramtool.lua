@@ -18,6 +18,13 @@
 -- bytes should be visible a few bytes below -- that is your confirmation.
 --
 -- TYPICAL SESSION
+--   reset()                      -- ALWAYS, when starting a new hunt. The
+--                                   candidate set is sticky and survives the
+--                                   end of the previous hunt; without this the
+--                                   filters silently narrow inside old results.
+--                                   A fresh hunt's first filter should report
+--                                   THOUSANDS of candidates. A handful means
+--                                   you are still inside the last hunt.
 --   mark()                       -- snapshot before the attack
 --   (attack a full-health unit in game)
 --   dec()                        -- keep addresses that went down
@@ -693,6 +700,7 @@ local MAX_PRINT = 60
 
 local prev = nil      -- previous snapshot, per region
 local cands = nil     -- nil means "every address is still a candidate"
+local snaps = {}      -- labelled candidate values, for tag() / tagfilter()
 
 local function readRegion(r)
   if emu.readRange then return emu:readRange(r.base, r.len) end
@@ -724,10 +732,35 @@ local function report(what)
   end
 end
 
+-- Start a NEW hunt: forget every candidate and scan all of RAM again.
+--
+-- This exists because not having it cost a whole weather hunt. The candidate
+-- set is deliberately sticky -- narrowing across several actions is the entire
+-- technique -- but it survives past the end of a hunt, and mark() does not
+-- clear it. So a second hunt silently intersects inside the first hunt's
+-- survivors and reports a plausible-looking handful of candidates that cannot
+-- possibly contain what you are now looking for.
+--
+-- The tell: the FIRST filter of a fresh hunt should return thousands of
+-- candidates. If it returns a handful, you are still inside the previous hunt.
+function reset()
+  cands = nil
+  prev = nil
+  snaps = {}
+  console:log("candidates cleared -- next filter scans all of RAM.")
+end
+
 -- Take the baseline snapshot. Call this immediately before the in-game action.
 function mark()
   prev = snapshot()
-  console:log("marked. now perform the action in game, then call dec()/unc().")
+  local n = count()
+  if n < 0 then
+    console:log("marked (fresh hunt, all addresses are candidates). "
+      .. "Now perform the action in game, then call dec()/unc()/chg().")
+  else
+    console:log(string.format("marked, NARROWING within %d existing candidate(s)"
+      .. " from the previous hunt. Call reset() first if this is a new hunt.", n))
+  end
 end
 
 -- Generic filter: keep addresses where cmp(oldByte, newByte) is true.
@@ -780,6 +813,90 @@ function bars(n)
   range(n * 10 - 9, n * 10)
 end
 
+-- ---------------------------------------------------------------------------
+-- LABELLED-STATE HUNTING  --  tag() / tagfilter()
+--
+-- For a value that is not a counter but an ENUM tracking some visible game
+-- state: weather, whose turn it is, fog on/off. chg()/unc() only ask "did this
+-- byte move", which throws away the values and stalls -- a weather hunt sat at
+-- 219 candidates that way. The real constraint is stronger:
+--
+--     a weather variable holds the SAME value on any two snow days,
+--     and a DIFFERENT value on a snow day than on a clear day.
+--
+-- So: tag("snow") on a snow day, tag("clear") on a clear day, as many as you
+-- like in any order, then tagfilter(). It keeps only addresses whose values are
+-- equal at every pair of same-labelled snapshots AND unequal at every pair of
+-- differently-labelled ones. Three or four snapshots covering two labels is
+-- usually decisive, because a coincidence has to survive every pair at once.
+--
+-- tag() stores a FULL RAM snapshot, so it works from a cold start with no
+-- prior filtering -- you do not need to spend a day of play building a
+-- candidate set first. If a candidate set does exist, tagfilter() narrows
+-- within it; otherwise it scans everything. Bytes are compared, so an enum
+-- stored wider still works as long as it fits in the low byte, which 0..2 does.
+-- ---------------------------------------------------------------------------
+
+function tag(label)
+  snaps[#snaps + 1] = { label = label, snap = snapshot() }
+  console:log(string.format("snapshot %d tagged %q  (%d total)",
+    #snaps, label, #snaps))
+end
+
+function tags()
+  if #snaps == 0 then console:log("no tagged snapshots"); return end
+  for i, s in ipairs(snaps) do
+    console:log(string.format("  %d  %q", i, s.label))
+  end
+end
+
+function tagfilter()
+  if #snaps < 2 then
+    console:log("need at least two tag() snapshots, and at least two "
+      .. "DIFFERENT labels among them")
+    return
+  end
+  local labels = {}
+  for _, s in ipairs(snaps) do labels[s.label] = true end
+  local n = 0
+  for _ in pairs(labels) do n = n + 1 end
+  if n < 2 then
+    console:log("all snapshots share one label -- nothing to discriminate "
+      .. "against. Tag a day with different weather too.")
+    return
+  end
+
+  -- Keep an address only if, for EVERY pair of snapshots, its bytes are equal
+  -- exactly when the labels are equal. Constant bytes die on the first
+  -- cross-label pair, which is most of RAM, so this exits early and stays fast.
+  local kept = {}
+  for ri, r in ipairs(REGIONS) do
+    local function holds(j)
+      for i = 1, #snaps do
+        for k = i + 1, #snaps do
+          local a = string.byte(snaps[i].snap[ri], j)
+          local b = string.byte(snaps[k].snap[ri], j)
+          if (snaps[i].label == snaps[k].label) ~= (a == b) then return false end
+        end
+      end
+      return true
+    end
+    if cands == nil then
+      for j = 1, r.len do
+        if holds(j) then kept[r.base + j - 1] = true end
+      end
+    else
+      for addr in pairs(cands) do
+        if addr >= r.base and addr < r.base + r.len then
+          if holds(addr - r.base + 1) then kept[addr] = true end
+        end
+      end
+    end
+  end
+  cands = kept
+  report(string.format("tagfilter over %d snapshot(s)", #snaps))
+end
+
 -- Structural filter. A unit record is: type at +0 (1..24), map x at +2,
 -- map y at +3 (both small). We do not know HP's offset within the record, so
 -- try every plausible offset K and keep the candidate if ANY K makes the bytes
@@ -815,6 +932,53 @@ function list()
   end
   if #t > MAX_PRINT then
     console:log(string.format("  ... and %d more", #t - MAX_PRINT))
+  end
+end
+
+-- Group surviving candidates into contiguous runs.
+--
+-- list() caps at 60 lines, and a few hundred scattered addresses are unreadable
+-- anyway. The same addresses as a handful of RUNS are immediately legible: a
+-- lone byte is an enum or a flag, while a long run is a TABLE, and its length
+-- usually identifies it outright. 140 bytes, for instance, is 7 movement types
+-- x 20 terrain slots -- the movement cost table for the active weather, copied
+-- into RAM.
+--
+-- gap is how far apart two hits can be and still count as one run; the default
+-- of 4 bridges the holes a table leaves where two weathers happen to share a
+-- value, which is common since most terrain costs the same in all weathers.
+function clusters(gap)
+  gap = gap or 4
+  if cands == nil then console:log("no filtering yet"); return end
+  local t = {}
+  for addr in pairs(cands) do t[#t + 1] = addr end
+  table.sort(t)
+  if #t == 0 then console:log("no candidates"); return end
+
+  local runs, s, e = {}, t[1], t[1]
+  for i = 2, #t do
+    if t[i] - e <= gap then
+      e = t[i]
+    else
+      runs[#runs + 1] = { s, e }
+      s, e = t[i], t[i]
+    end
+  end
+  runs[#runs + 1] = { s, e }
+
+  console:log(string.format("%d candidate(s) in %d run(s), gap<=%d:",
+    #t, #runs, gap))
+  for _, r in ipairs(runs) do
+    local n, vals = 0, {}
+    for a = r[1], r[2] do
+      if cands[a] then
+        n = n + 1
+        if #vals < 12 then vals[#vals + 1] = tostring(emu:read8(a)) end
+      end
+    end
+    console:log(string.format("  0x%08X..0x%08X  span %4d  hits %4d  [%s%s]",
+      r[1], r[2], r[2] - r[1] + 1, n, table.concat(vals, " "),
+      n > 12 and " ..." or ""))
   end
 end
 
