@@ -1,4 +1,4 @@
-"""Regression tests for the extracted tables and the damage engine.
+﻿"""Regression tests for the extracted tables and the damage engine.
 
 These lock in what we have actually established. They do NOT claim the formula
 is correct -- that is calibrate.py's job. What they lock in is:
@@ -11,10 +11,10 @@ import sys
 import unittest
 
 sys.path.insert(0, str(pathlib.Path(__file__).resolve().parent.parent))
-from engine.damage import (Attack, DEFAULT_DISPLAY, DISPLAY_VARIANTS,  # noqa: E402
-                           Unverified, VARIANTS, can_attack, counterattack,
-                           damage_for_luck, display_hp, resolve, screen_bars,
-                           select_weapon, tables)
+from engine.damage import (Attack, DEFAULT_DISPLAY, DEFAULT_VARIANT,  # noqa: E402
+                           DISPLAY_VARIANTS, Unverified, VARIANTS, can_attack,
+                           counterattack, damage_for_luck, display_hp, resolve,
+                           screen_bars, select_weapon, tables)
 
 
 class TestTables(unittest.TestCase):
@@ -108,6 +108,13 @@ class TestHpConventions(unittest.TestCase):
         self.assertEqual(display_hp(10), 1)
         self.assertEqual(display_hp(0), 0)
 
+    def test_last_bar_attacks_at_strength_one_not_zero(self):
+        """An Infantry at 9 internal HP dealt 11 damage, which plain floor
+        (strength 0, so no damage at all) cannot produce."""
+        self.assertEqual(display_hp(9), 1)
+        self.assertEqual(display_hp(1), 1)
+        self.assertEqual(DISPLAY_VARIANTS["floor"](9), 0)   # the refuted rule
+
     def test_screen_bars_round_up(self):
         self.assertEqual(screen_bars(57), 6)    # what the player sees
         self.assertEqual(screen_bars(91), 10)
@@ -115,13 +122,25 @@ class TestHpConventions(unittest.TestCase):
         self.assertEqual(screen_bars(1), 1)
 
     def test_the_two_disagree_and_that_is_the_point(self):
-        for hp in (57, 91, 22, 1):
-            if hp % 10:
-                self.assertNotEqual(display_hp(hp), screen_bars(hp), hp)
+        # Only above 10: below that, floor_min1 clamps to 1 and so does ceil,
+        # so the two rules coincide on the last bar.
+        for hp in (57, 91, 22, 13):
+            self.assertNotEqual(display_hp(hp), screen_bars(hp), hp)
 
-    def test_ceil_is_refuted_but_still_available(self):
-        self.assertIn("ceil", DISPLAY_VARIANTS)
-        self.assertEqual(DEFAULT_DISPLAY, "floor")
+    def test_refuted_rules_are_kept_but_not_default(self):
+        for refuted in ("ceil", "round", "floor"):
+            self.assertIn(refuted, DISPLAY_VARIANTS)
+            self.assertNotEqual(DEFAULT_DISPLAY, refuted)
+        self.assertEqual(DEFAULT_DISPLAY, "floor_min1")
+
+    def test_default_variant_is_not_a_refuted_one(self):
+        """Leaving a refuted variant as the default is how a tool goes quietly
+        wrong. These four were eliminated by emulator data."""
+        for refuted in ("floor_end", "floor_attack_then_end",
+                        "floor_each_step", "round_end"):
+            self.assertIn(refuted, VARIANTS)
+            self.assertNotEqual(DEFAULT_VARIANT, refuted)
+        self.assertIn(DEFAULT_VARIANT, ("luck_after_hp", "luck_last"))
 
     def test_units_in_the_same_decile_attack_identically(self):
         """20 and 29 both scale to 2 -- the off-by-one that breaks naive calcs."""
@@ -178,3 +197,4 @@ class TestEngineBehaviour(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main(verbosity=2)
+
