@@ -200,6 +200,59 @@ function grid(tableaddr, rows, cols)
   end
 end
 
+-- Find the terrain map as a FLAT array. rowtables() turned up only the
+-- movement-range scratch field (0x03003600, a flood fill where 255 is
+-- unreachable), so terrain is evidently not behind row pointers.
+--
+-- Scans for w*h consecutive cells that look like terrain indices: small values,
+-- several distinct ones, no single value swamping everything. Checks both u8
+-- and u16, since the ROM stores maps as u16 and RAM may keep that.
+function findmap(w, h, near)
+  w = w or 15
+  h = h or 10
+  local n = w * h
+  local hits = 0
+  for _, unit in ipairs({ 1, 2 }) do
+    local step = unit
+    local lo, hi = 0x02000000, 0x02040000 - n * step
+    for a = lo, hi, 2 do
+      local counts, distinct, ok, total = {}, 0, true, 0
+      for i = 0, n - 1 do
+        local v = (unit == 1) and emu:read8(a + i) or emu:read16(a + i * 2)
+        if v > 512 then ok = false break end
+        if not counts[v] then counts[v] = 0; distinct = distinct + 1 end
+        counts[v] = counts[v] + 1
+        if counts[v] > total then total = counts[v] end
+      end
+      if ok and distinct >= 4 and distinct <= 40 and total < n * 0.7 then
+        console:log(string.format("  u%d @0x%08X  %d distinct, commonest %d/%d",
+          unit * 8, a, distinct, total, n))
+        hits = hits + 1
+        if hits > 24 then
+          console:log("  (stopping, too many -- narrow with near=)")
+          return
+        end
+      end
+    end
+  end
+  console:log(string.format("%d candidate flat map array(s)", hits))
+end
+
+-- Dump a flat w*h array as a grid. unit is 1 for bytes, 2 for u16.
+function flatgrid(addr, w, h, unit)
+  w, h, unit = w or 15, h or 10, unit or 1
+  console:log(string.format("flat grid @0x%08X, %dx%d, u%d", addr, w, h, unit * 8))
+  for y = 0, h - 1 do
+    local out = {}
+    for x = 0, w - 1 do
+      local i = y * w + x
+      local v = (unit == 1) and emu:read8(addr + i) or emu:read16(addr + i * 2)
+      out[#out + 1] = string.format("%3d", v)
+    end
+    console:log(string.format("  y=%2d  %s", y, table.concat(out, " ")))
+  end
+end
+
 -- Dump the army structs. Stride 0x68 comes from the damage path, which does
 -- `movs r0,#0x68 ; muls r0,r6,r0` before indexing [0x08282CBC]. Funds is the
 -- easy field to identify: you can read it off the screen.
