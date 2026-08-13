@@ -294,6 +294,50 @@ function matchrow(y, pattern, w, h, unit)
   console:log(string.format("%d array(s) whose row %d matches that pattern", hits, y))
 end
 
+-- Find every RAM location holding a given 32-bit value -- i.e. pointers TO an
+-- address. Needed because the map array's address is NOT a ROM constant: a
+-- scan of the whole ROM for it (and for the few bytes before it) found nothing,
+-- so it is computed at runtime and must be reachable through a RAM pointer.
+--
+-- Self-contained on purpose so it does not depend on declaration order.
+function findptr(target)
+  local needle = string.char(target % 256,
+                             math.floor(target / 256) % 256,
+                             math.floor(target / 65536) % 256,
+                             math.floor(target / 16777216) % 256)
+  local total = 0
+  for _, r in ipairs({ { 0x02000000, 0x40000, "EWRAM" },
+                       { 0x03000000, 0x08000, "IWRAM" } }) do
+    local data = emu:readRange(r[1], r[2])
+    local i = 1
+    while true do
+      local p = string.find(data, needle, i, true)
+      if not p then break end
+      console:log(string.format("  %s 0x%08X holds 0x%08X",
+        r[3], r[1] + p - 1, target))
+      total = total + 1
+      i = p + 1
+      if total > 40 then console:log("  (stopping)"); return end
+    end
+  end
+  console:log(string.format("%d location(s) hold 0x%08X", total, target))
+end
+
+-- Show the bytes just before a map array. The array being at an ODD address
+-- suggests a header in front of it -- width and height would be the obvious
+-- candidates, and would explain the offset.
+function maphdr(addr, back)
+  back = back or 16
+  local out = {}
+  for i = -back, 3 do
+    out[#out + 1] = string.format("%s%d", i == 0 and ">" or "", emu:read8(addr + i))
+  end
+  console:log(string.format("bytes 0x%08X-0x%08X (> marks the array start):",
+    addr - back, addr + 3))
+  console:log("  " .. table.concat(out, " "))
+  console:log("  looking for your map's width and height as adjacent bytes")
+end
+
 -- ---------------------------------------------------------------------------
 -- TERRAIN. The map cell is a bitfield: low 5 bits terrain, high 3 bits owner.
 --     terrain = v % 32,  owner = floor(v / 32)   (0 = neutral, 1..4 = players)

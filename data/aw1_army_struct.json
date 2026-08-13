@@ -29,11 +29,17 @@
   },
   "open_questions": [
     {
-      "id": "co-passive-modifiers",
-      "question": "Do AW1 COs have any passive per-unit damage modifiers at all?",
-      "detail": "With no power active the damage path indexes the modifier table by +0x1E, which read 0 for Andy, Max and Sami. Table entry 0 is uniformly 100/100. Taken at face value that means no CO applies a passive damage modifier in AW1, and the 'use a neutral CO' precaution during calibration was unnecessary. But the ROM clearly contains other CO records with real modifiers (150/100, 170/100), so something must select them.",
-      "why_it_matters": "If true, calibration data is valid regardless of CO choice. If false, there is a selection mechanism we have not found.",
-      "resolve_by": "Record the same matchup twice, once with Andy and once with Max. Identical damage means no passive modifier; different damage means +0x1E is not the whole story."
+      "id": "co-modifier-selection",
+      "question": "How does the game select a CO's per-unit modifier record?",
+      "detail": "COs DO have passive modifiers -- Max's non-infantry direct-combat units have 150% firepower, and the ROM contains a record with exactly (150,100). So the reading below is incomplete, not a discovery that modifiers are absent.",
+      "what_we_thought": "The damage path computes its table index as unit_type*4 + [army+0x1E]*128, and +0x1E read 0 for Andy, Max and Sami alike, which would send every CO to record 0 (uniformly 100/100). That cannot be the whole mechanism.",
+      "likely_holes": [
+        "+0x1E may be populated only while a battle is resolving, not between turns when we dumped it",
+        "the 0x08060Bxx path examined is the AI's damage ESTIMATOR; the live combat path at 0x08022Exx may differ in ways not yet read",
+        "the CO record base or 128-byte stride used by tools/co_mods.py may be wrong, in which case 'record 1 is Max' was never established -- its name pointer may simply point at the start of the CO name blob, which every record would share"
+      ],
+      "why_it_matters": "It justifies the neutral-CO requirement during calibration, which was kept and turned out to be correct.",
+      "resolve_by": "Dump the army records DURING a battle animation, and re-derive the CO record layout instead of assuming stride 0x80 from the first two entries."
     },
     {
       "id": "co-id-mapping",
