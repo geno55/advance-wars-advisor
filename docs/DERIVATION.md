@@ -759,3 +759,46 @@ variant. Neither route could have done it alone.
 
 `SURVIVING_VARIANTS` is now a tuple of one and `resolve()` returns an exact
 range, so "cannot kill" is finally as reliable as "will kill".
+
+## 18. Naming the CO records
+
+The remaining eight records were named without unlocking a single CO, because
+**the CO name and portrait follow army `+0x1D` live**. Write the byte, look at
+the intel screen, read the name off it. That is a measurement, not a fingerprint.
+
+    0  (untested)   1  Andy    2  Max     3  Olaf
+    4  Sami         5  Grit    6  Kanbei  7  Sonja
+    8  Eagle        9  Drake  10  Sturm  11  Sturm
+
+Constrain writes to 0..11: the index is `co * 292` into a twelve-record table,
+so anything higher walks into garbage pointers. Work from a save state and do
+not let the game save, since a modified CO id reaching the `.sav` would persist.
+
+### The fingerprints held
+
+Every identity predicted from the ROM before naming turned out right: Eagle's
+air bonus and weak navy, Drake's rain-to-clear substitution, Olaf's
+snow-to-clear, and the two Sturm records sharing a terrain-ignoring movement
+table -- that last one predicted from the duplicate name in the CO blob.
+
+One was read wrong. Record 5 shows 80/100 on thirteen units, which looked like
+a deliberately weak "handicap" record. The point is which units are **not**
+reduced: Artillery, Rockets, Missiles and Battleship. That is Grit, the indirect
+specialist, and reading the negative space would have named him immediately.
+`extract_co.py` now asserts the *exclusion* rather than the inclusion, so the
+same misreading cannot pass again.
+
+### Kanbei identifies the global modifier pair
+
+Kanbei has **no per-unit modifiers at all** -- all 24 entries are 100/100 --
+and is nonetheless straightforwardly stronger. His header reads **120/120 at
+`+08/+09`**. That settles what those bytes are: a global attack/defence pair,
+applied army-wide and independent of the per-unit pool.
+
+It also exposes a gap. `engine/damage.py` takes `co_attack` and `co_defense` as
+parameters and nothing fills them, so a Kanbei prediction today would be 20%
+low. Calibration used a neutral CO throughout, so no existing damage data
+depends on this -- but modelling any specific CO does.
+
+`+11/+12` remains unidentified: 100/100 normally and 110/90 under power for most
+records, but Eagle's power reads 80/130 and Sturm 130/120.

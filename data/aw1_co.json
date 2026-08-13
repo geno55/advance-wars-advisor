@@ -14,14 +14,20 @@
     "with the long-standing observation that the CO name blob lists",
     "'Sturm' twice -- but it is still a fingerprint, not a measurement.",
     "",
-    "NOTE FOR THE DAMAGE MODEL: there are now THREE candidate sources of",
-    "CO scaling -- the per-unit modifier pool, the +08/+09 global pair,",
-    "and the +11/+12 pair. DERIVATION.md section 7 established that a",
-    "modifier is applied as (value * mod) / 100 truncating, twice in",
-    "sequence. Which of these three feeds those two multiplications is",
-    "UNKNOWN. Calibration used a neutral CO throughout, so no existing",
-    "damage data depends on the answer, but any attempt to model a",
-    "specific CO does."
+    "NOTE FOR THE DAMAGE MODEL. Two of the three candidate sources of CO",
+    "scaling are now identified. The per-unit pool is Max's, Sami's,",
+    "Grit's, Eagle's and Drake's mechanism. The +08/+09 pair is GLOBAL,",
+    "and Kanbei proves it: all 24 of his per-unit entries are 100/100",
+    "while +08/+09 reads 120/120, and he is unambiguously a stronger CO.",
+    "",
+    "+11/+12 is still unknown. It is 100/100 normally and 110/90 under",
+    "power for most records, but varies widely (Eagle's power 80/130,",
+    "Sturm 130/120).",
+    "",
+    "engine/damage.py models NEITHER global pair -- it takes co_attack",
+    "and co_defense as parameters and nothing fills them. Calibration",
+    "used a neutral CO throughout so no existing damage data depends on",
+    "this, but a Kanbei prediction would currently be 20% low."
   ],
   "game": "Advance Wars (USA) Rev 1",
   "rom_sha1": "15053499d5b3f49128a941d7f2d84876f5424d0c",
@@ -46,37 +52,22 @@
     "1": "Andy",
     "2": "Max",
     "3": "Olaf",
-    "4": "Sami"
+    "4": "Sami",
+    "5": "Grit",
+    "6": "Kanbei",
+    "7": "Sonja",
+    "8": "Eagle",
+    "9": "Drake",
+    "10": "Sturm",
+    "11": "Sturm"
   },
-  "confirmed_method": "read army record +0x1D while playing that CO",
+  "confirmed_method": "wrote army +0x1D live and read the CO name off the intel screen; the UI follows that byte",
+  "untested": {
+    "0": "predicted Nell, from luck 10 -> 50 under power"
+  },
   "candidates": {
     "0": [
       "luck-shaped bytes +06/+07 = 10/0 (50 under power)"
-    ],
-    "5": [
-      "80/100 on APC, AntiAir, BCopter, Bomber, Cruiser, Fighter, Infantry, Lander, MdTank, Mech, Recon, TCopter, Tank"
-    ],
-    "6": [
-      "global attack/defence 120/120 at +08/+09"
-    ],
-    "7": [
-      "luck-shaped bytes +06/+07 = 15/15 (15 under power)"
-    ],
-    "8": [
-      "80/100 on Battleship, Cruiser, Lander",
-      "115/90 on BCopter, Bomber, Fighter, TCopter"
-    ],
-    "9": [
-      "weather substitution [0, 1, 0]: uses table 0 in clear, 1 in snow, 0 in rain",
-      "80/100 on BCopter, Bomber, Fighter, TCopter"
-    ],
-    "10": [
-      "weather substitution [6, 1, 6]: uses table 6 in clear, 1 in snow, 6 in rain",
-      "clear and rain both use movement table 6, in which every passable terrain costs 1 -- terrain-ignoring movement"
-    ],
-    "11": [
-      "weather substitution [6, 1, 6]: uses table 6 in clear, 1 in snow, 6 in rain",
-      "clear and rain both use movement table 6, in which every passable terrain costs 1 -- terrain-ignoring movement"
     ]
   },
   "records": [

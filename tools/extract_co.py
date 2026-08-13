@@ -27,15 +27,27 @@ The two sub-blocks are selected by army +0x1E, and are almost certainly
 
 WHAT IS ESTABLISHED vs WHAT IS NOT
 ----------------------------------
-Established, and asserted below: the record geometry, the pointer layouts, the
-per-unit modifier fingerprints, and four CO identities measured in-game by
-reading army +0x1D while playing that CO.
+Eleven of the twelve records are named by MEASUREMENT. The CO name and portrait
+follow army +0x1D live, so writing that byte and reading the intel screen binds
+a record directly -- no unlocking required, and no inference involved.
 
-NOT established: every other CO name. The fingerprints below are suggestive --
-an air-unit specialist, a rain-immune CO, and so on -- but a fingerprint is not
-a measurement. They are emitted under "candidates" with the evidence attached,
-and deliberately NOT merged into the confirmed mapping. Fill them in by playing
-each CO and reading army +0x1D.
+Only record 0 is unnamed. Its luck bytes read 10 normally and 50 under power,
+which is Nell's Lucky Star signature, but that is a fingerprint. It stays in
+`untested` until someone writes 0 and reads the screen.
+
+Every fingerprint predicted from the ROM before naming turned out right --
+Eagle's air bonus, Drake's rain immunity, Olaf's snow immunity, and the two
+Sturm records sharing a terrain-ignoring movement table, which was predicted
+from the duplicate name in the CO blob. One was read wrong first: record 5's
+80/100 on thirteen units looked like a generic handicap, when the point is
+which units are NOT reduced -- the four indirects. That is Grit. The assertion
+below tests the exclusion rather than the inclusion, so the same misreading
+cannot pass again.
+
+Kanbei settles a question the header notes could only speculate about: he has
+no per-unit modifiers at all, yet is a straightforwardly stronger CO, and his
++08/+09 reads 120/120. That field is a GLOBAL attack/defence pair, and the
+damage engine does not model it.
 """
 import json, hashlib, pathlib, sys, struct
 
@@ -54,11 +66,22 @@ UNITS = {
     20: "Battleship", 21: "Cruiser", 22: "Lander", 23: "Sub",
 }
 
-# Measured in game: select the CO, then read army record +0x1D.
-CONFIRMED = {1: "Andy", 2: "Max", 3: "Olaf", 4: "Sami"}
+# Measured in game. The CO name and portrait follow army +0x1D live, so writing
+# that byte and reading the intel screen names a record directly -- no unlocking
+# required. Eleven of twelve were bound this way.
+CONFIRMED = {
+    1: "Andy", 2: "Max", 3: "Olaf", 4: "Sami", 5: "Grit", 6: "Kanbei",
+    7: "Sonja", 8: "Eagle", 9: "Drake", 10: "Sturm", 11: "Sturm",
+}
+# Record 0 has not been written and read back. Its luck bytes are 10 normal and
+# 50 under power, which is Nell's Lucky Star signature, but that is a
+# fingerprint and fingerprints are candidates. It stays out of CONFIRMED.
+UNTESTED = {0: "predicted Nell, from luck 10 -> 50 under power"}
 
 INDIRECT = {"Artillery", "Rockets", "Missiles", "Battleship"}
 FOOT = {"Infantry", "Mech"}
+AIR = {"Fighter", "Bomber", "BCopter", "TCopter"}
+NAVAL = {"Battleship", "Cruiser", "Lander", "Sub"}
 
 HEADER_NOTES = {
     "+06": "luck. 0 for nearly every record; co=0 reads 10 normal and 50 under "
@@ -150,6 +173,60 @@ def main(rom_path, out_path):
     check(set(groups(records[3])) == {(100, 100)},
           "Olaf (co=3) should have no per-unit modifiers")
 
+    # Grit: the reduced set is the whole roster MINUS the indirect units. Read
+    # the other way round it looks like a generic handicap, which is exactly
+    # how it was misread once -- so assert the exclusion, not the inclusion.
+    g = groups(records[5])
+    spared = {u for u in records[5]["normal"]["modifiers"]} - g.get((80, 100), set())
+    check(INDIRECT <= spared,
+          f"Grit (co=5) should leave the indirect units unreduced, spared={sorted(spared)}")
+    check(not (INDIRECT & g.get((80, 100), set())),
+          "Grit (co=5) must not weaken any indirect unit")
+
+    # Kanbei: no per-unit modifiers at all, the bonus is GLOBAL at +08/+09.
+    # This is the evidence that field exists and is an attack/defence pair.
+    kh = records[6]["normal"]["header"]
+    check(set(groups(records[6])) == {(100, 100)},
+          "Kanbei (co=6) should have no per-unit modifiers")
+    check((kh[8], kh[9]) == (120, 120),
+          f"Kanbei (co=6) should carry a global 120/120, got {kh[8]}/{kh[9]}")
+
+    # Sonja: the only record with both luck bytes set, and equal.
+    sh = records[7]["normal"]["header"]
+    check(sh[6] == sh[7] != 0,
+          f"Sonja (co=7) should carry a symmetric luck pair, got {sh[6]}/{sh[7]}")
+
+    # Eagle boosts exactly the air units and weakens exactly the naval ones.
+    g = groups(records[8])
+    check(g.get((115, 90)) == AIR,
+          f"Eagle (co=8) should boost exactly the air units, got "
+          f"{sorted(g.get((115, 90), []))}")
+    check(g.get((80, 100)) == NAVAL - {"Sub"},
+          f"Eagle (co=8) should weaken the surface navy, got "
+          f"{sorted(g.get((80, 100), []))}")
+
+    # Drake: rain costs him nothing, and his air arm is weak.
+    drake = records[9]["normal"]["weather_tables"]
+    check(drake == [0, 1, 0],
+          f"Drake (co=9) should map rain->clear, got {drake}")
+    check(groups(records[9]).get((80, 100)) == AIR,
+          "Drake (co=9) should weaken exactly the air units")
+
+    # Sturm is TWO records, and they are the only pair using a movement table
+    # in which every passable terrain costs 1. That was predicted from the
+    # duplicate name in the CO blob before either was named in game.
+    sturm = [r["co"] for r in records
+             if r["normal"]["weather_tables"][0] != 0]
+    check(sturm == [10, 11],
+          f"exactly records 10 and 11 should use a non-standard clear table, "
+          f"got {sturm}")
+    check(records[10]["normal"]["weather_tables"]
+          == records[11]["normal"]["weather_tables"],
+          "the two Sturm records should share a movement table set")
+    check(records[10]["normal"]["header"][11:13]
+          != records[11]["normal"]["header"][11:13],
+          "the two Sturm records should differ somewhere, or they are not two")
+
     print(f"{checks} structural assertions passed")
     for co, name in sorted(CONFIRMED.items()):
         print(f"  co={co} {name}: fingerprint matches")
@@ -195,14 +272,20 @@ def main(rom_path, out_path):
             "with the long-standing observation that the CO name blob lists",
             "'Sturm' twice -- but it is still a fingerprint, not a measurement.",
             "",
-            "NOTE FOR THE DAMAGE MODEL: there are now THREE candidate sources of",
-            "CO scaling -- the per-unit modifier pool, the +08/+09 global pair,",
-            "and the +11/+12 pair. DERIVATION.md section 7 established that a",
-            "modifier is applied as (value * mod) / 100 truncating, twice in",
-            "sequence. Which of these three feeds those two multiplications is",
-            "UNKNOWN. Calibration used a neutral CO throughout, so no existing",
-            "damage data depends on the answer, but any attempt to model a",
-            "specific CO does.",
+            "NOTE FOR THE DAMAGE MODEL. Two of the three candidate sources of CO",
+            "scaling are now identified. The per-unit pool is Max's, Sami's,",
+            "Grit's, Eagle's and Drake's mechanism. The +08/+09 pair is GLOBAL,",
+            "and Kanbei proves it: all 24 of his per-unit entries are 100/100",
+            "while +08/+09 reads 120/120, and he is unambiguously a stronger CO.",
+            "",
+            "+11/+12 is still unknown. It is 100/100 normally and 110/90 under",
+            "power for most records, but varies widely (Eagle's power 80/130,",
+            "Sturm 130/120).",
+            "",
+            "engine/damage.py models NEITHER global pair -- it takes co_attack",
+            "and co_defense as parameters and nothing fills them. Calibration",
+            "used a neutral CO throughout so no existing damage data depends on",
+            "this, but a Kanbei prediction would currently be 20% low.",
         ],
         "game": "Advance Wars (USA) Rev 1",
         "rom_sha1": sha1,
@@ -219,7 +302,9 @@ def main(rom_path, out_path):
         },
         "header_fields": HEADER_NOTES,
         "confirmed": {str(k): v for k, v in sorted(CONFIRMED.items())},
-        "confirmed_method": "read army record +0x1D while playing that CO",
+        "confirmed_method": "wrote army +0x1D live and read the CO name off "
+                            "the intel screen; the UI follows that byte",
+        "untested": {str(k): v for k, v in sorted(UNTESTED.items())},
         "candidates": {str(k): v for k, v in sorted(candidates.items())},
         "records": records,
     }

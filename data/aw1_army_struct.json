@@ -25,17 +25,36 @@
     "indexing": "1-based; record 0 is a dummy/neutral slot"
   },
   "fields": {
-    "0x00": {"type": "u32", "name": "funds_available",
-             "note": "spendable now; zero for every player whose turn it is not"},
-    "0x08": {"type": "u32", "name": "funds_incoming",
-             "note": "income shown on the status screen; equal for all players here"},
-    "0x20": {"type": "u16", "name": "co_power_meter",
-             "note": "Charge, cumulative from 0. Confirmed by snapshotting the army records, attacking, and diffing: a single A-Air-on-Tank attack took P2 (attacker) 0 -> 3725 and P1 (defender) 0 -> 2900. Both sides charge, as AW does. The SCALE is unknown -- the activation threshold and the gain formula have not been worked out, and one attack is not enough to derive them."},
-    "0x1A": {"type": "u8", "name": "player_number", "note": "1..4, matches the record index"},
-    "0x1D": {"type": "u8", "name": "co_related",
-             "note": "differs per CO: Andy 1, Max 2, Sami 4. Read by the damage path only when a CO power is active, where it is scaled by 292."},
-    "0x1E": {"type": "u8", "name": "co_statblock_index",
-             "note": "SOLVED, see DERIVATION.md section 11. Selects which 128-byte stat block within the CO's record applies -- almost certainly 0 = normal and 1 = CO power active. The full index read off 0x0803A734 is [0x08284A40 + weather*4 + [+0x1E]*128 + co*292]. The CO RECORD stride is 292, not 128; 128 is the sub-block stride, which is what the earlier reading got wrong. Observed as 0 for Andy, Max and Sami because no power was active in any of those captures."}
+    "0x00": {
+      "type": "u32",
+      "name": "funds_available",
+      "note": "spendable now; zero for every player whose turn it is not"
+    },
+    "0x08": {
+      "type": "u32",
+      "name": "funds_incoming",
+      "note": "income shown on the status screen; equal for all players here"
+    },
+    "0x20": {
+      "type": "u16",
+      "name": "co_power_meter",
+      "note": "Charge, cumulative from 0. Confirmed by snapshotting the army records, attacking, and diffing: a single A-Air-on-Tank attack took P2 (attacker) 0 -> 3725 and P1 (defender) 0 -> 2900. Both sides charge, as AW does. The SCALE is unknown -- the activation threshold and the gain formula have not been worked out, and one attack is not enough to derive them."
+    },
+    "0x1A": {
+      "type": "u8",
+      "name": "player_number",
+      "note": "1..4, matches the record index"
+    },
+    "0x1D": {
+      "type": "u8",
+      "name": "co_id",
+      "note": "The CO identity, 0..11. Indexes the CO record table as co*292 (see DERIVATION.md 11). WRITING IT CHANGES THE CO LIVE -- the name and portrait on the intel screen follow it -- which is how all eleven records were named without unlocking anything: 1 Andy, 2 Max, 3 Olaf, 4 Sami, 5 Grit, 6 Kanbei, 7 Sonja, 8 Eagle, 9 Drake, 10 Sturm, 11 Sturm. Record 0 untested. Constrain writes to 0..11; higher values index past a twelve-record table."
+    },
+    "0x1E": {
+      "type": "u8",
+      "name": "co_statblock_index",
+      "note": "SOLVED, see DERIVATION.md section 11. Selects which 128-byte stat block within the CO's record applies -- almost certainly 0 = normal and 1 = CO power active. The full index read off 0x0803A734 is [0x08284A40 + weather*4 + [+0x1E]*128 + co*292]. The CO RECORD stride is 292, not 128; 128 is the sub-block stride, which is what the earlier reading got wrong. Observed as 0 for Andy, Max and Sami because no power was active in any of those captures."
+    }
   },
   "open_questions": [
     {
@@ -61,14 +80,14 @@
     },
     {
       "id": "co-id-mapping",
-      "status": "PARTIAL -- 4 of 12 records bound by measurement: 1 Andy, 2 Max, 3 Olaf, 4 Sami. The gap at 3 that made the ordering look non-contiguous was just an unplayed CO; ids 1..4 run consecutively. The remaining 8 records have fingerprints in data/aw1_co.json but no measured name, and are NOT to be promoted without a +0x1D reading. Records 10 and 11 both use a movement table where every passable terrain costs 1, and are the only pair that does -- which is what the sturm-duplicate question below predicts.",
+      "status": "CLOSED for 11 of 12. The CO name and portrait follow army +0x1D LIVE, so writing that byte and reading the intel screen binds a record directly -- no unlocking needed. Mapping: 1 Andy, 2 Max, 3 Olaf, 4 Sami, 5 Grit, 6 Kanbei, 7 Sonja, 8 Eagle, 9 Drake, 10 Sturm, 11 Sturm. Record 0 is untested; its luck bytes (10 normal, 50 under power) look like Nell, but that is a fingerprint and stays in 'untested'. The 'gap at 3' that made the ordering look non-contiguous was simply an unplayed CO: ids 1..11 run consecutively.",
       "question": "What is the CO id ordering at +0x1D?",
       "detail": "Three data points: Andy 1, Max 2, Sami 4. The gap at 3 rules out a simple select-screen ordering. P4 (Olaf) was not captured. Note also that the CO name blob at 0x2EA384 runs Max, Olaf, Sami, Grit, Kanbei, Sonja, Eagle, Drake, Sturm, Sturm -- an order that does not match these ids either, so the blob is probably a display list rather than an id table.",
       "resolve_by": "armyhex(5) to reach record 4, plus a few more CO choices."
     },
     {
       "id": "sturm-duplicate",
-      "status": "CORROBORATED, not yet measured. The record table holds exactly 12 entries, and exactly two of them -- 10 and 11 -- point their clear and rain movement slots at a table in which every passable terrain costs 1. Two records with a unique terrain-ignoring trait, matching two Sturm entries in the name blob, arrived at independently. Their +11/+12 pairs differ (130/120 vs 80/80), consistent with the mode-dependent stats described below. Still needs a +0x1D reading to become a fact.",
+      "status": "ANSWERED. Records 10 and 11 BOTH report as Sturm on screen, and they are the only pair pointing their clear and rain movement slots at a table where every passable terrain costs 1. Predicted from the duplicate name in the CO blob before either was named. They differ at +11/+12 (130/120 vs 80/80), consistent with the mode-dependent stats described below.",
       "question": "Why does the CO name blob contain 'Sturm' twice?",
       "detail": "The blob at 0x2EA384 lists Sturm at both 0x2EA3C0 and 0x2EA3C8. Reported (unverified) behaviour is that Sturm's stats differ by mode -- 80/120 in VS, 130/80 in Campaign -- which two separate records would implement directly.",
       "implication": "The CO table has MORE entries than there are COs, so any attempt to map index to CO by counting names or assuming one record each is unsound. It also means a modifier record is only meaningful together with the mode it belongs to.",
