@@ -360,6 +360,40 @@ function flatgrid(addr, w, h, unit)
   end
 end
 
+-- Raw hex of the army records, including one BEFORE the array base.
+--
+-- Needed because the filtered view was ambiguous: a known funds value showed up
+-- in records 2-4 but not record 1, which either means the array is offset by a
+-- record or funds is not where it looked. Guessing between those would put a
+-- wrong offset into the state reader, so read the bytes instead.
+function armyhex(n, back)
+  n, back = n or 4, back or 1
+  local base = emu:read32(0x08282CBC)
+  console:log(string.format("army array @0x%08X, stride 0x68, showing %d record(s) before",
+    base, back))
+  for i = -back, n - 1 do
+    local a = base + i * 0x68
+    console:log(string.format("--- record %d @0x%08X %s", i, a,
+      i < 0 and "(BEFORE the array base)" or ""))
+    for row = 0, 6 do
+      local off = row * 16
+      if off < 0x68 then
+        local hex, dec = {}, {}
+        for k = 0, 15 do
+          if off + k < 0x68 then
+            local v = emu:read8(a + off + k)
+            hex[#hex + 1] = string.format("%02X", v)
+            dec[#dec + 1] = string.format("%3d", v)
+          end
+        end
+        console:log(string.format("  +%02X  %s", off, table.concat(hex, " ")))
+        console:log(string.format("       %s", table.concat(dec, " ")))
+      end
+    end
+  end
+  console:log("Look for your on-screen funds as a 32-bit little-endian value.")
+end
+
 -- Dump the army structs. Stride 0x68 comes from the damage path, which does
 -- `movs r0,#0x68 ; muls r0,r6,r0` before indexing [0x08282CBC]. Funds is the
 -- easy field to identify: you can read it off the screen.
