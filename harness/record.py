@@ -253,8 +253,17 @@ def main():
 
             # Sanity check before writing: is this even reachable under ANY
             # surviving hypothesis? If not, say so rather than poison the data.
-            reachable = any(val in predict(o, v, s)
+            # Check the quantity we RECORD, not the one the player typed. In
+            # exact mode they type remaining HP while the schema stores damage
+            # dealt, so comparing the typed value against a set of damages made
+            # every correct reading look impossible.
+            reachable = any(observed in predict(o, v, s)
                             for v in VARIANTS for s in range(5))
+            if not reachable:
+                print(f"    !! {observed} damage is impossible for this matchup "
+                      "under every formula and terrain value.")
+                print("       Check you read the DEFENDER's HP and that both "
+                      "units were at the stated health. 'u' to undo.")
             append_row(row)
             obs.append(o)
             run.append(val)
@@ -282,11 +291,6 @@ def main():
                               f"on {aterr}, {ahp - after} damage")
                     else:
                         print(f"    ignored: must be 0-{ahp}")
-            if not reachable:
-                print(f"    !! {val} is impossible for this matchup under every "
-                      "formula and terrain value.")
-                print("       Check you read the DEFENDER's HP and both units were "
-                      "at the stated health. 'u' to undo.")
             print(f"    trial {trial} (total {len(obs)})")
             print(status(obs))
             if len(run) >= 3 and len(set(run)) == 1:

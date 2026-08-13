@@ -18,3 +18,5 @@ attacker,defender,att_hp,def_hp,terrain,mode,observed,co_attack,co_defense,notes
 #
 # Example of what a filled-in row looks like (delete once you have real data):
 # Infantry,Infantry,100,100,plains,display_after,5,100,100,save-state trial 1
+Tank,Infantry,100,100,road,exact,78,100,100,co=Andy
+Infantry,Tank,22,100,road,exact,1,100,100,counter co=Andy
