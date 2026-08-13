@@ -40,6 +40,13 @@
 --     +2    map x
 --     +3    map y
 --     +4:2  u16 bitfield -> hp = v & 0x7F, ammo = v >> 7
+--     +7    CARGO: the slot number of the unit being carried, 0 = empty.
+--           Confirmed by diffing a loaded APC against an unloaded one: the only
+--           cargo-related difference was +7 holding the passenger's slot. This
+--           is also why slot 0 is never used by any army -- reserving it lets 0
+--           mean "nothing" without ambiguity. A loaded unit keeps its own
+--           record, with its coordinates tracking the transport's, so two
+--           records sharing a tile is normal rather than an error.
 --     +6    fuel = v & 0x7F; bit 7 is a separate flag, meaning UNKNOWN.
 --           It is not "acted" (it survives end-of-turn), not "damaged" and not
 --           "has moved" -- a Tank that is both damaged and short on fuel does
@@ -105,6 +112,12 @@ function units(n)
       local marks = ""
       local st = emu:read8(a + 1)
       if st ~= 0 then marks = marks .. string.format(" st=%d", st) end
+      local cargo = emu:read8(a + 7)
+      if cargo ~= 0 then
+        local ct = emu:read8(base + cargo * UNIT_STRIDE)
+        marks = marks .. string.format(" carrying[%d]=%s", cargo,
+          TYPE_NAMES[ct] or ("id" .. ct))
+      end
       if unitfuelflag(a) then marks = marks .. " ?bit7" end
       console:log(string.format(
         "  [%3d] 0x%08X P%d %-11s (%2d,%2d) hp=%3d (%2d bars) ammo=%2d fuel=%3d%s%s",
@@ -145,8 +158,11 @@ function unitrec(slot)
   console:log(string.format("  +4:2 hp=%d ammo=%d   +6 fuel=%d (bit7 %s)",
     hpammo % 128, math.floor(hpammo / 128), b[6] % 128,
     b[6] >= 128 and "set" or "clear"))
-  console:log(string.format("  undecoded: +7=%d +8=%d +9=%d +10=%d +11=%d",
-    b[7], b[8], b[9], b[10], b[11]))
+  console:log(string.format("  +7 cargo=%s", b[7] == 0 and "empty"
+    or string.format("slot %d (%s)", b[7],
+      TYPE_NAMES[emu:read8(unitbase() + b[7] * UNIT_STRIDE)] or "?")))
+  console:log(string.format("  undecoded: +8=%d +9=%d +10=%d +11=%d",
+    b[8], b[9], b[10], b[11]))
   console:log("  raw: " .. table.concat({ b[0], b[1], b[2], b[3], b[4], b[5],
     b[6], b[7], b[8], b[9], b[10], b[11] }, " "))
 end

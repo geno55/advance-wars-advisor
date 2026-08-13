@@ -74,14 +74,18 @@ function state(path)
     local t = emu:read8(a)
     if t >= 1 and t <= 24 then
       local hpammo = emu:read16(a + 4)
+      -- "state" is the raw +1 byte, deliberately not interpreted. It was once
+      -- labelled has-acted on one observation and a loaded transport that had
+      -- not moved falsified that; values 0, 1, 11 and 16 have all been seen.
+      -- "cargo" is the carried unit's slot, 0 meaning empty.
       rows[#rows + 1] = string.format(
         '    {"slot": %d, "player": %d, "type": %s, "x": %d, "y": %d, '
-        .. '"hp": %d, "ammo": %d, "fuel": %d, "acted": %s}',
+        .. '"hp": %d, "ammo": %d, "fuel": %d, "state": %d, "cargo": %d}',
         i, math.floor(i / ARMY_SLOTS) + 1, q(UNIT[t] or ("id" .. t)),
         emu:read8(a + 2), emu:read8(a + 3),
         hpammo % 128, math.floor(hpammo / 128),
         emu:read8(a + 6) % 128,
-        emu:read8(a + 1) ~= 0 and "true" or "false")
+        emu:read8(a + 1), emu:read8(a + 7))
     end
   end
   w_(table.concat(rows, ",\n"))

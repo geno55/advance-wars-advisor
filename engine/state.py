@@ -33,12 +33,23 @@ class Unit:
     hp: int          # internal 1..100
     ammo: int
     fuel: int
-    acted: bool
+    state: int       # raw +1 byte, meaning UNKNOWN -- see below
+    cargo: int       # slot of the carried unit, 0 = empty
 
     @property
     def bars(self) -> int:
         """What the screen shows. Combat scaling is different -- see damage.py."""
         return -(-self.hp // 10)
+
+    @property
+    def is_carrying(self) -> bool:
+        return self.cargo != 0
+
+    # `state` is left raw on purpose. It was once decoded as has-acted-this-turn
+    # on the strength of a single observation, and a loaded transport that had
+    # not moved falsified that. Observed values so far: 0, 1 (a unit that had
+    # just attacked), 11 (a unit loaded into a transport), 16 (the transport
+    # carrying it). Four points is not enough to name it.
 
 
 @dataclass(frozen=True)
@@ -84,7 +95,20 @@ class Board:
         return None if cost == IMPASSABLE else cost
 
     def unit_at(self, x: int, y: int) -> Optional[Unit]:
-        return next((u for u in self.units if u.x == x and u.y == y), None)
+        """The unit occupying a tile, ignoring anything being carried there.
+
+        A loaded unit keeps its own record with coordinates tracking its
+        transport, so two records legitimately share a tile. Returning the
+        passenger would make a transport look like an infantryman.
+        """
+        carried = {u.cargo for u in self.units if u.cargo}
+        return next((u for u in self.units
+                     if u.x == x and u.y == y and u.slot not in carried), None)
+
+    def cargo_of(self, unit: Unit) -> Optional[Unit]:
+        if not unit.cargo:
+            return None
+        return next((u for u in self.units if u.slot == unit.cargo), None)
 
     def units_of(self, player: int) -> list:
         return [u for u in self.units if u.player == player]
@@ -108,7 +132,8 @@ def load(path) -> Board:
     board = Board(
         width=raw["width"], height=raw["height"],
         units=[Unit(u["slot"], u["player"], u["type"], u["x"], u["y"],
-                    u["hp"], u["ammo"], u["fuel"], u["acted"])
+                    u["hp"], u["ammo"], u["fuel"],
+                    u.get("state", 0), u.get("cargo", 0))
                for u in raw["units"]],
         armies=[Army(a["player"], a["funds"], a["income"]) for a in raw["armies"]],
         terrain=[r["t"] for r in rows],
@@ -138,11 +163,18 @@ def summarise(b: Board) -> str:
             continue
         out.append(f"  P{a.player}: {a.funds} funds (+{a.income}), "
                    f"{len(us)} units, {len(props)} properties")
+        carried = {x.cargo for x in b.units if x.cargo}
         for u in sorted(us, key=lambda u: (u.y, u.x)):
+            if u.slot in carried:
+                continue        # listed under its transport instead
             terr = b.terrain_name(u.x, u.y)
             out.append(f"      {u.type:10s} ({u.x:2d},{u.y:2d}) {u.bars:2d} bars "
                        f"ammo {u.ammo} fuel {u.fuel} on {terr}"
-                       f"{'  [acted]' if u.acted else ''}")
+                       f"{f'  st={u.state}' if u.state else ''}")
+            c = b.cargo_of(u)
+            if c:
+                out.append(f"        carrying {c.type} ({c.bars} bars, "
+                           f"fuel {c.fuel})")
     return "\n".join(out)
 
 
