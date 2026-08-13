@@ -566,14 +566,68 @@ function flatgrid(addr, w, h, unit)
   end
 end
 
+-- Snapshot / diff just the army records. Whole-RAM chg() is far too noisy for
+-- this: an attack changes hundreds of bytes. Restricting the comparison to the
+-- four army records makes a CO meter tick obvious.
+--
+--   armysnap()   -- before the action
+--   ...attack in game...
+--   armydiff()   -- shows exactly which bytes moved, and by how much
+local ARMY_SNAP = nil
+
+function armysnap()
+  local base = emu:read32(0x08282CBC)
+  ARMY_SNAP = {}
+  for p = 1, 4 do
+    local a = base + p * 0x68
+    ARMY_SNAP[p] = {}
+    for i = 0, 0x67 do ARMY_SNAP[p][i] = emu:read8(a + i) end
+  end
+  console:log("army records snapshotted; perform the action then call armydiff()")
+end
+
+function armydiff()
+  if not ARMY_SNAP then console:log("call armysnap() first"); return end
+  local base = emu:read32(0x08282CBC)
+  local total = 0
+  for p = 1, 4 do
+    local a = base + p * 0x68
+    local lines = {}
+    for i = 0, 0x67 do
+      local old, new = ARMY_SNAP[p][i], emu:read8(a + i)
+      if old ~= new then
+        lines[#lines + 1] = string.format("    +%02X  %3d -> %3d  (%+d)",
+          i, old, new, new - old)
+      end
+    end
+    if #lines > 0 then
+      console:log(string.format("  P%d @0x%08X", p, a))
+      for _, l in ipairs(lines) do console:log(l) end
+      -- a meter is more likely 16-bit; show the pairs too
+      for i = 0, 0x66, 2 do
+        local o = ARMY_SNAP[p][i] + ARMY_SNAP[p][i + 1] * 256
+        local n = emu:read8(a + i) + emu:read8(a + i + 1) * 256
+        if o ~= n then
+          console:log(string.format("    u16 +%02X  %5d -> %5d  (%+d)",
+            i, o, n, n - o))
+        end
+      end
+      total = total + #lines
+    end
+  end
+  if total == 0 then console:log("  no army bytes changed") end
+end
+
 -- Raw hex of the army records, including one BEFORE the array base.
 --
 -- Needed because the filtered view was ambiguous: a known funds value showed up
 -- in records 2-4 but not record 1, which either means the array is offset by a
 -- record or funds is not where it looked. Guessing between those would put a
 -- wrong offset into the state reader, so read the bytes instead.
+-- NOTE: records are 1-indexed, so P1 is record 1. armyhex(4) reaches P4;
+-- armyhex(2) stops at P1 and will not show you P2.
 function armyhex(n, back)
-  n, back = n or 4, back or 1
+  n, back = n or 5, back or 1
   local base = emu:read32(0x08282CBC)
   console:log(string.format("army array @0x%08X, stride 0x68, showing %d record(s) before",
     base, back))
