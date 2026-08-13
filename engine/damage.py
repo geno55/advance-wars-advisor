@@ -68,8 +68,10 @@ DISPLAY_VARIANTS = {
     "round":      lambda h: (h + 5) // 10 if h > 0 else 0,
 }
 
-# Supported by 8 emulator observations; "ceil" and "round" are refuted by them.
-DEFAULT_DISPLAY = "floor"
+# Determined. "ceil" and "round" were refuted by the Mech-at-57 counterattack;
+# plain "floor" was refuted by an Infantry at 9 internal HP dealing 11 damage,
+# which floor caps at 9. A unit on its last bar attacks at strength 1, not 0.
+DEFAULT_DISPLAY = "floor_min1"
 
 
 def display_hp(internal: int, rule: Optional[str] = None) -> int:
@@ -175,8 +177,18 @@ VARIANTS = {
     "luck_last": v_luck_last,
 }
 
-# Hypothesis only. calibrate.py is what makes this a fact.
-DEFAULT_VARIANT = "floor_end"
+# Narrowed by emulator observations, not chosen.
+#
+# REFUTED: floor_end, floor_attack_then_end, floor_each_step (an Infantry at 9
+# internal HP dealt 11 damage on road, which all three cap below), and round_end.
+#
+# SURVIVING: luck_after_hp and luck_last. They differ only in whether the luck
+# roll is scaled by the terrain multiplier, so they agree exactly whenever
+# defence is 0 stars, and their MINIMUM damage is always identical -- which is
+# why guaranteed-kill advice is already safe. Evidence favours luck_after_hp at
+# roughly 357:1, but that rests on the roll being uniform over 0..9, which is
+# itself unverified and currently looks doubtful.
+DEFAULT_VARIANT = "luck_after_hp"
 
 
 class Unverified(RuntimeError):
