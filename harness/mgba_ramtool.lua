@@ -294,6 +294,57 @@ function matchrow(y, pattern, w, h, unit)
   console:log(string.format("%d array(s) whose row %d matches that pattern", hits, y))
 end
 
+-- ---------------------------------------------------------------------------
+-- TERRAIN. The map cell is a bitfield: low 5 bits terrain, high 3 bits owner.
+--     terrain = v % 32,  owner = floor(v / 32)   (0 = neutral, 1..4 = players)
+-- Confirmed against four owned bases reading 46/78/110/142, i.e. 14 + 32*n,
+-- and two HQs at 40/72 = 8 + 32*n. It is also why every terrain id is under 32.
+-- ---------------------------------------------------------------------------
+TERRAIN_NAMES = {
+  [1] = "Plain", [2] = "River", [3] = "Mountain", [4] = "Wood", [5] = "Road",
+  [6] = "City", [7] = "Sea", [8] = "HQ", [10] = "Airport", [11] = "Port",
+  [12] = "Bridge", [13] = "Shoal", [14] = "Base", [19] = "Reef",
+}
+TERRAIN_SHORT = {
+  [1] = "..", [2] = "~~", [3] = "^^", [4] = "ww", [5] = "==",
+  [6] = "Ci", [7] = "SS", [8] = "HQ", [10] = "Ap", [11] = "Pt",
+  [12] = "bb", [13] = "sh", [14] = "Ba", [19] = "rf",
+}
+
+function terrainat(addr, w, x, y)
+  local v = emu:read8(addr + y * w + x)
+  return v % 32, math.floor(v / 32)
+end
+
+-- Render the map with terrain names and ownership. Properties show their owner
+-- as a digit, so P1's base prints "Ba1".
+function terrain(addr, w, h)
+  w, h = w or 15, h or 10
+  console:log(string.format("terrain @0x%08X, %dx%d", addr, w, h))
+  local unknown = {}
+  for y = 0, h - 1 do
+    local out = {}
+    for x = 0, w - 1 do
+      local t, owner = terrainat(addr, w, x, y)
+      local s = TERRAIN_SHORT[t]
+      if not s then
+        s = string.format("?%d", t)
+        unknown[t] = true
+      end
+      out[#out + 1] = s .. (owner > 0 and tostring(owner) or " ")
+    end
+    console:log(string.format("  y=%2d %s", y, table.concat(out, " ")))
+  end
+  local u = {}
+  for t in pairs(unknown) do u[#u + 1] = t end
+  if #u > 0 then
+    console:log("unknown terrain ids present: " .. table.concat(u, ", "))
+  end
+  console:log("  .. Plain  ~~ River  ^^ Mountain  ww Wood  == Road  bb Bridge")
+  console:log("  Ci City  Ba Base  Ap Airport  Pt Port  HQ HQ  SS Sea  sh Shoal  rf Reef")
+  console:log("  trailing digit = owning player, blank = neutral")
+end
+
 -- Dump a flat w*h array as a grid. unit is 1 for bytes, 2 for u16.
 function flatgrid(addr, w, h, unit)
   w, h, unit = w or 15, h or 10, unit or 1

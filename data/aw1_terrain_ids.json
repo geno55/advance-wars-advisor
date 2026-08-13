@@ -1,46 +1,54 @@
 {
   "_comment": [
-    "Terrain type ids as stored in the live map array (u8, flat w*h, row-major).",
-    "Located at 0x02016C2A in one session; the address is map/session specific,",
-    "so find it with matchrow() rather than hard-coding it.",
+    "Terrain type ids as stored in the live map array (u8, flat, row-major,",
+    "index = y * width + x).",
     "",
-    "Derived from a captured 15x10 map plus the player's reading of row 5. Most",
-    "entries are structural rather than asserted -- see 'evidence' on each.",
+    "Each cell is a BITFIELD: low 5 bits terrain, high 3 bits owner.",
+    "    terrain = value & 31,  owner = value >> 5   (0 neutral, 1..4 players)",
+    "Confirmed against four owned bases reading 46, 78, 110 and 142 -- that is",
+    "14 + 32n -- and two HQs at 40 and 72 = 8 + 32n. It also explains why every",
+    "terrain id falls below 32.",
     "",
-    "IMPORTANT: these ids agree with the column indices of the movement-cost",
-    "tables in aw1_movecost.json, which is what resolves the Mountain/River",
-    "ambiguity those tables could not settle on their own."
+    "These ids share an index space with the movement-cost table columns in",
+    "aw1_movecost.json, which is what resolved the Mountain/River ambiguity the",
+    "movement costs alone could not (their costs are identical for every unit).",
+    "",
+    "The array ADDRESS is session specific. Locate it with matchrow(); do not",
+    "hard-code the example below."
   ],
   "provenance": {
-    "method": "live RAM capture cross-referenced with the movement tables",
+    "method": "live RAM capture, cross-referenced with the ROM movement tables and confirmed on screen by the player",
     "map_array_example": "0x02016C2A",
     "layout": "u8, flat, index = y * width + x",
-    "ownership_encoding": "owned property = type + 32 * owner (owner 1 = P1)"
+    "encoding": "terrain = value & 31, owner = value >> 5"
   },
   "ids": {
-    "1": {"name": "Plain", "evidence": "most common value; movement col 1 is Plain (Tires 2, Treads 1)"},
-    "2": {"name": "River", "evidence": "player read row 5 as river; fixes movement col 2"},
-    "3": {"name": "Mountain", "evidence": "two vertical 2-wide ranges; movement col 3 is the other foot-only column, so River at 2 forces Mountain here"},
-    "4": {"name": "Wood", "evidence": "scattered patches; movement col 4 is Wood (Tires 3, Treads 2)"},
-    "5": {"name": "Road", "evidence": "forms connected lines at x=1,7,13 meeting the bridges in row 5"},
-    "6": {"name": "City", "evidence": "PROVISIONAL - small clusters, normal land movement; needs confirming on screen"},
-    "7": {"name": "Sea", "evidence": "movement table: ships and lander only"},
-    "8": {"name": "HQ", "evidence": "seen only as 40 and 72, i.e. 8+32 and 8+64, one per player in opposite corners"},
-    "11": {"name": "Port", "evidence": "movement table: ships, lander and all land units"},
-    "12": {"name": "Bridge", "evidence": "player read row 5; sits exactly where roads cross the river"},
-    "13": {"name": "Shoal", "evidence": "movement table: lander yes, ships no"},
-    "19": {"name": "Reef", "evidence": "movement table: ships and lander at cost 2"}
+    "1": "Plain",
+    "2": "River",
+    "3": "Mountain",
+    "4": "Wood",
+    "5": "Road",
+    "6": "City",
+    "7": "Sea",
+    "8": "HQ",
+    "10": "Airport",
+    "11": "Port",
+    "12": "Bridge",
+    "13": "Shoal",
+    "14": "Base",
+    "19": "Reef"
   },
+  "properties": [6, 8, 10, 11, 14],
   "unresolved": {
-    "0": "never seen in a live map; likely out-of-bounds",
-    "9": "movement table says air-only, which matches no known AW1 terrain",
-    "10": "normal land movement, unidentified",
-    "14": "normal land movement, unidentified",
-    "15-18": "impassable to everything including air; likely unused slots"
+    "0": "never observed in a live map; presumed out-of-bounds",
+    "9": "movement tables say air-only, which matches no known AW1 terrain; possibly an unused slot",
+    "15-18": "impassable to everything including air; presumed unused slots",
+    "silo": "Missile Silo has not appeared on a captured map, so its id is unknown. Deliberately absent rather than guessed."
   },
-  "needs_confirmation": [
-    "id 6 assumed City -- could be Base or Airport, all of which move identically",
-    "the 32-per-owner ownership step is inferred from two HQ tiles only",
-    "no Base or Airport appeared on this map, so their ids are still unknown"
+  "cross_checks": [
+    "Road (5) forms connected lines at x=1,7,13 meeting the bridges in row 5",
+    "Port (11) is the only property the movement tables let ships enter",
+    "Airport (10) and Base (14) move like normal land, consistent with their columns",
+    "HQ (8) is never seen neutral, as expected"
   ]
 }
