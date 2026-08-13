@@ -1,0 +1,45 @@
+{
+  "_comment": [
+    "Per-army records in RAM. Base is the EWRAM pointer stored in ROM at",
+    "0x08282CBC; stride 0x68 comes from the damage path, which does",
+    "`movs r0,#0x68 ; muls r0,r6,r0` before indexing it.",
+    "",
+    "The array is 1-INDEXED. Record 0 is a dummy and P1 is record 1. That is not",
+    "a guess: with P1 to move, record 1 held the on-screen funds at +00 while",
+    "records 2 and 3 held zero, and only the active player has spendable funds.",
+    "It also lines up with the terrain ownership encoding, where owner 0 is",
+    "neutral and 1..4 are the players -- so army record N owns tiles tagged N."
+  ],
+  "provenance": {
+    "method": "live RAM capture, offsets pinned by on-screen values",
+    "base_pointer": "0x08282CBC",
+    "stride": "0x68",
+    "indexing": "1-based; record 0 is a dummy/neutral slot"
+  },
+  "fields": {
+    "0x00": {"type": "u32", "name": "funds_available",
+             "note": "spendable now; zero for every player whose turn it is not"},
+    "0x08": {"type": "u32", "name": "funds_incoming",
+             "note": "income shown on the status screen; equal for all players here"},
+    "0x1A": {"type": "u8", "name": "player_number", "note": "1..4, matches the record index"},
+    "0x1D": {"type": "u8", "name": "co_related",
+             "note": "differs per CO: Andy 1, Max 2, Sami 4. Read by the damage path only when a CO power is active, where it is scaled by 292."},
+    "0x1E": {"type": "u8", "name": "co_modifier_index",
+             "note": "the damage path computes co*128+292 from this to reach the per-unit modifier table. Observed as 0 for Andy, Max and Sami alike."}
+  },
+  "open_questions": [
+    {
+      "id": "co-passive-modifiers",
+      "question": "Do AW1 COs have any passive per-unit damage modifiers at all?",
+      "detail": "With no power active the damage path indexes the modifier table by +0x1E, which read 0 for Andy, Max and Sami. Table entry 0 is uniformly 100/100. Taken at face value that means no CO applies a passive damage modifier in AW1, and the 'use a neutral CO' precaution during calibration was unnecessary. But the ROM clearly contains other CO records with real modifiers (150/100, 170/100), so something must select them.",
+      "why_it_matters": "If true, calibration data is valid regardless of CO choice. If false, there is a selection mechanism we have not found.",
+      "resolve_by": "Record the same matchup twice, once with Andy and once with Max. Identical damage means no passive modifier; different damage means +0x1E is not the whole story."
+    },
+    {
+      "id": "co-id-mapping",
+      "question": "What is the CO id ordering at +0x1D?",
+      "detail": "Three data points: Andy 1, Max 2, Sami 4. The gap at 3 rules out a simple select-screen ordering. P4 (Olaf) was not captured.",
+      "resolve_by": "armyhex(5) to reach record 4, plus a few more CO choices."
+    }
+  ]
+}

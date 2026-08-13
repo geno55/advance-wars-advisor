@@ -397,31 +397,32 @@ end
 -- Dump the army structs. Stride 0x68 comes from the damage path, which does
 -- `movs r0,#0x68 ; muls r0,r6,r0` before indexing [0x08282CBC]. Funds is the
 -- easy field to identify: you can read it off the screen.
+-- Army records. The array is 1-INDEXED: record 0 is a dummy and P1 is record 1,
+-- which matches the terrain ownership encoding where 0 is neutral and 1..4 are
+-- players. Army record N therefore owns tiles tagged owner N.
+--
+--   +00 u32  available funds  (spendable now; zero for players whose turn it
+--                              is not, which is what pinned this offset)
+--   +08 u32  incoming funds   (income; equal for all players on a fresh map)
+--   +1A u8   player number, 1..4
+--   +1D u8   CO-related, differs per CO
+--   +1E u8   the byte the damage path uses as its CO-modifier table index
+function armyaddr(player)
+  return emu:read32(0x08282CBC) + player * 0x68
+end
+
 function armies(n)
   n = n or 4
-  local base = emu:read32(0x08282CBC)
-  console:log(string.format("army array @0x%08X, stride 0x68", base))
-  for i = 0, n - 1 do
-    local a = base + i * 0x68
-    local u16, u32 = {}, {}
-    for off = 0, 0x66, 2 do
-      local v = emu:read16(a + off)
-      if v > 0 and v <= 99999 then
-        u16[#u16 + 1] = string.format("+%02X=%d", off, v)
-      end
-    end
-    for off = 0, 0x64, 4 do
-      local v = emu:read32(a + off)
-      if v > 999 and v <= 999999 then
-        u32[#u32 + 1] = string.format("+%02X=%d", off, v)
-      end
-    end
-    console:log(string.format("P%d @0x%08X  co bytes +1D=%d +1E=%d",
-      i + 1, a, emu:read8(a + 0x1D), emu:read8(a + 0x1E)))
-    console:log("     u16 candidates: " .. table.concat(u16, " "))
-    console:log("     u32 candidates: " .. table.concat(u32, " "))
+  console:log(string.format("army array @0x%08X, stride 0x68, 1-indexed",
+    emu:read32(0x08282CBC)))
+  for p = 1, n do
+    local a = armyaddr(p)
+    console:log(string.format(
+      "  P%d @0x%08X  funds=%d  income=%d  playerno=%d  +1D=%d +1E=%d",
+      p, a, emu:read32(a), emu:read32(a + 8), emu:read8(a + 0x1A),
+      emu:read8(a + 0x1D), emu:read8(a + 0x1E)))
   end
-  console:log("Compare against the funds shown on screen to pin the offset.")
+  console:log("  funds is 0 for everyone except the player whose turn it is")
 end
 
 local REGIONS = {
