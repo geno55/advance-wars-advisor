@@ -1,0 +1,39 @@
+{
+  "_comment": [
+    "Per-unit stats. INCOMPLETE and deliberately so -- only values actually",
+    "observed are recorded, and everything else is absent rather than guessed.",
+    "",
+    "The ROM table these come from has NOT been found. Searching for a strided",
+    "array keyed on observed max-fuel values failed at every stride from 1 to 40,",
+    "in both the sparse 24-slot id space the damage tables use and the compact",
+    "18-unit order the name blob implies, as u8 and as u16. Adding vision as a",
+    "second anchor at a constant offset also found nothing. The stats are",
+    "evidently not laid out as parallel per-unit arrays.",
+    "",
+    "This does not block anything: the game DISPLAYS vision in the unit info",
+    "panel, exactly as it displays terrain Def, and reading values off the screen",
+    "proved the better source there too."
+  ],
+  "provenance": {
+    "fuel_and_ammo": "read from the live unit array in RAM (fresh, undamaged units)",
+    "vision": "read from the in-game unit info panel",
+    "rom_table": "not located"
+  },
+  "stats": {
+    "Infantry":  {"max_fuel": 99, "max_ammo": 0, "vision": 2},
+    "Mech":      {"max_fuel": 70, "max_ammo": 3, "vision": 2},
+    "Tank":      {"max_fuel": 70, "max_ammo": 9, "vision": 3},
+    "Recon":     {"max_fuel": 80, "max_ammo": 0, "vision": 5},
+    "APC":       {"max_fuel": 70, "max_ammo": 0, "vision": 1},
+    "Artillery": {"max_fuel": 50, "max_ammo": 9}
+  },
+  "missing": {
+    "vision": ["MdTank", "Artillery", "Rockets", "AntiAir", "Missiles",
+               "Fighter", "Bomber", "BCopter", "TCopter", "Battleship",
+               "Cruiser", "Lander", "Sub"],
+    "max_fuel_and_ammo": ["MdTank", "Rockets", "AntiAir", "Missiles", "Fighter",
+                          "Bomber", "BCopter", "TCopter", "Battleship",
+                          "Cruiser", "Lander", "Sub"],
+    "how_to_fill": "Vision is on the in-game unit info panel. Max fuel and ammo appear on a freshly built unit and can be read straight out of the unit array with units()."
+  }
+}

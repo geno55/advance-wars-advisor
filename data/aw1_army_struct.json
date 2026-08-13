@@ -40,7 +40,13 @@
         "CO stats appear to be MODE-DEPENDENT, so there is more than one record per CO -- see the sturm-duplicate note below"
       ],
       "why_it_matters": "It justifies the neutral-CO requirement during calibration, which was kept and turned out to be correct.",
-      "resolve_by": "Dump the army records DURING a battle animation, and re-derive the CO record layout instead of assuming stride 0x80 from the first two entries."
+      "resolve_by": "Dump the army records DURING a battle animation, and re-derive the CO record layout instead of assuming stride 0x80 from the first two entries.",
+      "progress": {
+        "modifier_pool_found": "The (attack, defence) pairs live in a shared POOL of 12-byte structs starting at 0x28491C, with attack at +5 and defence at +6. Observed pairs: (100,100), (120,90), (140,80), (150,100), (170,100), (90,110), (115,90), (80,100).",
+        "significance": "(150,100) is exactly Max's documented 150% firepower, so the mechanism is clear: a CO record holds one pointer per unit type, each selecting an entry from this pool. That is how a CO can be 150% on some unit types and 100% on others, and it explains why an earlier look found 'all pointers identical' -- that record simply was not Max's.",
+        "still_wrong": "The CO record layout itself. Assuming base 0x284B70 with stride 0x80, no record indexes the pool with a MIXED set of values, which cannot be right if any CO has selective bonuses. The base, the stride, or both are wrong.",
+        "next_step": "Find the CO records by searching for any 24-pointer run whose targets all fall inside the pool AND are not all identical. That locates real CO records without assuming a base or stride."
+      }
     },
     {
       "id": "co-id-mapping",
