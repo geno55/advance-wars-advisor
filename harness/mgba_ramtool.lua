@@ -132,6 +132,104 @@ function hpaddr(i)
   return a
 end
 
+-- ---------------------------------------------------------------------------
+-- MILESTONE 1: the map and the armies
+--
+-- The game addresses map-sized data through ROW POINTER TABLES: a run of 32-bit
+-- pointers, one per map row, each pointing at a row of bytes. The AI loop at
+-- 0x08060B1C does exactly this via the table at 0x03003600:
+--     row = [0x03003600 + y*4] ; value = row[x]
+-- but it sign-extends that byte and requires it > 0, which reads more like a
+-- reachability/scratch array than terrain. So do NOT assume 0x03003600 is the
+-- map -- find the tables empirically and look at what is in them.
+--
+-- A row-pointer table is easy to spot: consecutive words that are all valid RAM
+-- pointers separated by a CONSTANT positive delta. That delta is the row
+-- stride, which hands you the map width for free.
+-- ---------------------------------------------------------------------------
+
+local function isram(p)
+  return (p >= 0x02000000 and p < 0x02040000)
+      or (p >= 0x03000000 and p < 0x03008000)
+end
+
+-- Find candidate row-pointer tables. minrows should be about your map height.
+function rowtables(minrows)
+  minrows = minrows or 8
+  local found = 0
+  for _, r in ipairs({ { 0x03000000, 0x8000 }, { 0x02000000, 0x40000 } }) do
+    local base, len = r[1], r[2]
+    local a = base
+    while a < base + len - 8 do
+      local p0, p1 = emu:read32(a), emu:read32(a + 4)
+      if isram(p0) and isram(p1) and p1 > p0 and (p1 - p0) <= 64 then
+        local delta, n = p1 - p0, 2
+        while true do
+          local nxt = emu:read32(a + n * 4)
+          if isram(nxt) and nxt - emu:read32(a + (n - 1) * 4) == delta then
+            n = n + 1
+          else
+            break
+          end
+        end
+        if n >= minrows then
+          console:log(string.format(
+            "  0x%08X: %2d rows, stride %d, first row @0x%08X", a, n, delta, p0))
+          found = found + 1
+          a = a + n * 4
+        end
+      end
+      a = a + 4
+    end
+  end
+  console:log(string.format("%d candidate row-pointer table(s)", found))
+end
+
+-- Dump the 2D array behind a row-pointer table.
+function grid(tableaddr, rows, cols)
+  rows = rows or 12
+  cols = cols or 20
+  console:log(string.format("grid via 0x%08X, %dx%d", tableaddr, cols, rows))
+  for y = 0, rows - 1 do
+    local row = emu:read32(tableaddr + y * 4)
+    local out = {}
+    for x = 0, cols - 1 do
+      out[#out + 1] = string.format("%3d", emu:read8(row + x))
+    end
+    console:log(string.format("  y=%2d  %s", y, table.concat(out, " ")))
+  end
+end
+
+-- Dump the army structs. Stride 0x68 comes from the damage path, which does
+-- `movs r0,#0x68 ; muls r0,r6,r0` before indexing [0x08282CBC]. Funds is the
+-- easy field to identify: you can read it off the screen.
+function armies(n)
+  n = n or 4
+  local base = emu:read32(0x08282CBC)
+  console:log(string.format("army array @0x%08X, stride 0x68", base))
+  for i = 0, n - 1 do
+    local a = base + i * 0x68
+    local u16, u32 = {}, {}
+    for off = 0, 0x66, 2 do
+      local v = emu:read16(a + off)
+      if v > 0 and v <= 99999 then
+        u16[#u16 + 1] = string.format("+%02X=%d", off, v)
+      end
+    end
+    for off = 0, 0x64, 4 do
+      local v = emu:read32(a + off)
+      if v > 999 and v <= 999999 then
+        u32[#u32 + 1] = string.format("+%02X=%d", off, v)
+      end
+    end
+    console:log(string.format("P%d @0x%08X  co bytes +1D=%d +1E=%d",
+      i + 1, a, emu:read8(a + 0x1D), emu:read8(a + 0x1E)))
+    console:log("     u16 candidates: " .. table.concat(u16, " "))
+    console:log("     u32 candidates: " .. table.concat(u32, " "))
+  end
+  console:log("Compare against the funds shown on screen to pin the offset.")
+end
+
 local REGIONS = {
   { base = 0x02000000, len = 0x40000, name = "EWRAM" },
   { base = 0x03000000, len = 0x08000, name = "IWRAM" },
