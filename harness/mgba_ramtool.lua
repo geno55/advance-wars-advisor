@@ -294,6 +294,78 @@ function matchrow(y, pattern, w, h, unit)
   console:log(string.format("%d array(s) whose row %d matches that pattern", hits, y))
 end
 
+-- ---------------------------------------------------------------------------
+-- MAP LOCATION. No pointer to the terrain array exists: it is absent from the
+-- ROM as a literal, absent from the EWRAM pointer table at 0x282CAC..0x282CC4
+-- (which holds only seven entries, none of them the map), and a live RAM scan
+-- found nothing holding its address. It survived a map switch unchanged, so it
+-- is evidently a static allocation the game never re-points.
+--
+-- So we use a known address and VERIFY it, rather than trusting it. Dimensions
+-- come from the movement-range row table at 0x03003600, which is at a fixed
+-- IWRAM address and whose row count and pointer stride are the map's height and
+-- width. verifymap() then checks the terrain array is self-consistent with the
+-- unit array, which is what will catch the address moving.
+-- ---------------------------------------------------------------------------
+MAP_ADDR = 0x02016C2A
+
+-- Height and width, read from the movement-range row table.
+function mapdims()
+  local base = 0x03003600
+  local p0, p1 = emu:read32(base), emu:read32(base + 4)
+  local w = p1 - p0
+  local h = 1
+  while true do
+    local a = emu:read32(base + h * 4)
+    local b = emu:read32(base + (h - 1) * 4)
+    if a - b ~= w then break end
+    h = h + 1
+  end
+  return w, h
+end
+
+-- Land units must not stand on water and naval units must not stand on land.
+-- If MAP_ADDR ever drifts this fails loudly instead of yielding a plausible
+-- but wrong board.
+local WATER = { [7] = true, [19] = true }             -- Sea, Reef
+local NAVAL_OK = { [7] = true, [11] = true, [13] = true, [19] = true }
+local NAVAL_UNIT = { [21] = true, [22] = true, [23] = true, [24] = true }
+
+function verifymap(addr)
+  addr = addr or MAP_ADDR
+  local w, h = mapdims()
+  console:log(string.format("map %dx%d from the 0x03003600 row table, terrain @0x%08X",
+    w, h, addr))
+  local bad, checked = 0, 0
+  local base = unitbase()
+  for i = 0, 255 do
+    local a = base + i * UNIT_STRIDE
+    local t = emu:read8(a)
+    if t >= 1 and t <= 24 then
+      local x, y = emu:read8(a + 2), emu:read8(a + 3)
+      if x < w and y < h then
+        local cell = emu:read8(addr + y * w + x) % 32
+        checked = checked + 1
+        local naval = NAVAL_UNIT[t]
+        local wrong = (naval and not NAVAL_OK[cell]) or (not naval and WATER[cell])
+        if wrong then
+          bad = bad + 1
+          console:log(string.format("  MISMATCH: %s at (%d,%d) on terrain %s",
+            TYPE_NAMES[t] or t, x, y, TERRAIN_NAMES[cell] or cell))
+        end
+      end
+    end
+  end
+  if bad == 0 then
+    console:log(string.format("  OK: all %d units stand on terrain they can occupy", checked))
+  else
+    console:log(string.format("  %d/%d units on impossible terrain -- MAP_ADDR is wrong,",
+      bad, checked))
+    console:log("  re-find it with matchrow()")
+  end
+  return bad == 0
+end
+
 -- Find every RAM location holding a given 32-bit value -- i.e. pointers TO an
 -- address. Needed because the map array's address is NOT a ROM constant: a
 -- scan of the whole ROM for it (and for the few bytes before it) found nothing,
