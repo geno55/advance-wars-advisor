@@ -19,6 +19,7 @@
   "stars": {
     "road": 0,
     "river": 0,
+    "bridge": 0,
     "plains": 1,
     "wood": 2,
     "woods": 2,

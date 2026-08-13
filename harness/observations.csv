@@ -26,3 +26,4 @@ Tank,Infantry,100,100,plains,exact,75,100,100,co=Andy
 Infantry,Tank,25,100,plains,exact,0,100,100,counter co=Andy
 Tank,Mech,100,100,mountain,exact,43,100,100,co=Andy
 Mech,Tank,57,100,plains,exact,27,100,100,counter co=Andy
+Infantry,Infantry,9,100,road,exact,7,100,100,last-bar attacker, floor vs floor_min1 probe
