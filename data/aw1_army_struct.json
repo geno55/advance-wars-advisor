@@ -36,7 +36,8 @@
       "likely_holes": [
         "+0x1E may be populated only while a battle is resolving, not between turns when we dumped it",
         "the 0x08060Bxx path examined is the AI's damage ESTIMATOR; the live combat path at 0x08022Exx may differ in ways not yet read",
-        "the CO record base or 128-byte stride used by tools/co_mods.py may be wrong, in which case 'record 1 is Max' was never established -- its name pointer may simply point at the start of the CO name blob, which every record would share"
+        "the CO record base or 128-byte stride used by tools/co_mods.py may be wrong, in which case 'record 1 is Max' was never established -- its name pointer may simply point at the start of the CO name blob, which every record would share",
+        "CO stats appear to be MODE-DEPENDENT, so there is more than one record per CO -- see the sturm-duplicate note below"
       ],
       "why_it_matters": "It justifies the neutral-CO requirement during calibration, which was kept and turned out to be correct.",
       "resolve_by": "Dump the army records DURING a battle animation, and re-derive the CO record layout instead of assuming stride 0x80 from the first two entries."
@@ -44,8 +45,16 @@
     {
       "id": "co-id-mapping",
       "question": "What is the CO id ordering at +0x1D?",
-      "detail": "Three data points: Andy 1, Max 2, Sami 4. The gap at 3 rules out a simple select-screen ordering. P4 (Olaf) was not captured.",
+      "detail": "Three data points: Andy 1, Max 2, Sami 4. The gap at 3 rules out a simple select-screen ordering. P4 (Olaf) was not captured. Note also that the CO name blob at 0x2EA384 runs Max, Olaf, Sami, Grit, Kanbei, Sonja, Eagle, Drake, Sturm, Sturm -- an order that does not match these ids either, so the blob is probably a display list rather than an id table.",
       "resolve_by": "armyhex(5) to reach record 4, plus a few more CO choices."
+    },
+    {
+      "id": "sturm-duplicate",
+      "question": "Why does the CO name blob contain 'Sturm' twice?",
+      "detail": "The blob at 0x2EA384 lists Sturm at both 0x2EA3C0 and 0x2EA3C8. Reported (unverified) behaviour is that Sturm's stats differ by mode -- 80/120 in VS, 130/80 in Campaign -- which two separate records would implement directly.",
+      "implication": "The CO table has MORE entries than there are COs, so any attempt to map index to CO by counting names or assuming one record each is unsound. It also means a modifier record is only meaningful together with the mode it belongs to.",
+      "supporting_observation": "An earlier survey of the table found records carrying (80,100) as well as (150,100) and (170,100), consistent with several distinct stat sets rather than one per CO.",
+      "resolve_by": "Compare the same CO's modifier record between a VS match and a Campaign mission."
     }
   ]
 }
