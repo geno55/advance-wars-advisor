@@ -11,9 +11,10 @@ import sys
 import unittest
 
 sys.path.insert(0, str(pathlib.Path(__file__).resolve().parent.parent))
-from engine.damage import (Attack, Unverified, VARIANTS, can_attack,  # noqa: E402
-                           counterattack, damage_for_luck, display_hp,
-                           resolve, select_weapon, tables)
+from engine.damage import (Attack, DEFAULT_DISPLAY, DISPLAY_VARIANTS,  # noqa: E402
+                           Unverified, VARIANTS, can_attack, counterattack,
+                           damage_for_luck, display_hp, resolve, screen_bars,
+                           select_weapon, tables)
 
 
 class TestTables(unittest.TestCase):
@@ -93,22 +94,43 @@ class TestWeaponSelection(unittest.TestCase):
 
 
 class TestHpConventions(unittest.TestCase):
-    def test_display_hp_is_ceiling(self):
+    """The screen and the combat maths use DIFFERENT roundings.
+
+    This was originally modelled as ceil() for both, and the emulator refuted
+    it: a Mech at 57 internal HP shows 6 bars but attacks as 5. Conflating the
+    two is what produced the contradiction.
+    """
+
+    def test_combat_scaling_truncates(self):
         self.assertEqual(display_hp(100), 10)
-        self.assertEqual(display_hp(91), 10)
-        self.assertEqual(display_hp(90), 9)
-        self.assertEqual(display_hp(1), 1)
+        self.assertEqual(display_hp(57), 5)     # NOT 6
+        self.assertEqual(display_hp(99), 9)
+        self.assertEqual(display_hp(10), 1)
         self.assertEqual(display_hp(0), 0)
 
-    def test_a_unit_at_21_and_30_internal_attack_identically(self):
-        """Both display as 3 HP, so both hit for the same amount -- the classic
-        off-by-one that breaks naive calculators."""
-        a = Attack("Tank", "Infantry", attacker_hp=21)
-        b = Attack("Tank", "Infantry", attacker_hp=30)
+    def test_screen_bars_round_up(self):
+        self.assertEqual(screen_bars(57), 6)    # what the player sees
+        self.assertEqual(screen_bars(91), 10)
+        self.assertEqual(screen_bars(90), 9)
+        self.assertEqual(screen_bars(1), 1)
+
+    def test_the_two_disagree_and_that_is_the_point(self):
+        for hp in (57, 91, 22, 1):
+            if hp % 10:
+                self.assertNotEqual(display_hp(hp), screen_bars(hp), hp)
+
+    def test_ceil_is_refuted_but_still_available(self):
+        self.assertIn("ceil", DISPLAY_VARIANTS)
+        self.assertEqual(DEFAULT_DISPLAY, "floor")
+
+    def test_units_in_the_same_decile_attack_identically(self):
+        """20 and 29 both scale to 2 -- the off-by-one that breaks naive calcs."""
+        a = Attack("Tank", "Infantry", attacker_hp=20)
+        b = Attack("Tank", "Infantry", attacker_hp=29)
         self.assertEqual(damage_for_luck(a, 0), damage_for_luck(b, 0))
 
     def test_but_they_die_differently(self):
-        self.assertNotEqual(display_hp(21 - 15), display_hp(30 - 15))
+        self.assertNotEqual(20 - 15, 29 - 15)
 
 
 class TestEngineBehaviour(unittest.TestCase):

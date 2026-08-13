@@ -52,11 +52,38 @@ def tables() -> dict:
     return _TABLES
 
 
-def display_hp(internal: int) -> int:
-    """Internal HP (1..100) -> displayed HP (1..10). Zero stays zero."""
+# How internal HP (1..100) maps to the value the damage formula scales by.
+#
+# This was assumed to be ceil() and that was WRONG -- refuted by emulator data.
+# A Mech at 57 internal HP displays 6 bars but attacks as 5, so the bar count on
+# screen is not what drives damage. No candidate rule is hard-coded now; the
+# calibration decides, exactly like the formula variants.
+#
+# floor vs floor_min1 differ only below 10 internal HP: plain floor says a unit
+# on its last bar attacks at strength 0 and deals nothing. That is untested.
+DISPLAY_VARIANTS = {
+    "floor":      lambda h: h // 10 if h > 0 else 0,
+    "floor_min1": lambda h: max(1, h // 10) if h > 0 else 0,
+    "ceil":       lambda h: -(-h // 10) if h > 0 else 0,
+    "round":      lambda h: (h + 5) // 10 if h > 0 else 0,
+}
+
+# Supported by 8 emulator observations; "ceil" and "round" are refuted by them.
+DEFAULT_DISPLAY = "floor"
+
+
+def display_hp(internal: int, rule: Optional[str] = None) -> int:
+    """Internal HP -> the value the damage formula scales by. Zero stays zero."""
+    return DISPLAY_VARIANTS[rule or DEFAULT_DISPLAY](internal)
+
+
+def screen_bars(internal: int) -> int:
+    """What the PLAYER sees, which is a different question. The HP shown on
+    screen rounds up; the combat maths does not. Keeping these separate is the
+    whole point -- conflating them is what produced a refuted model."""
     if internal <= 0:
         return 0
-    return -(-internal // 10)          # ceil division
+    return -(-internal // 10)
 
 
 # --------------------------------------------------------------------------
@@ -185,13 +212,15 @@ class Outcome:
     variant: str
 
 
-def damage_for_luck(a: Attack, luck: int, variant: str = DEFAULT_VARIANT) -> Optional[int]:
+def damage_for_luck(a: Attack, luck: int, variant: str = DEFAULT_VARIANT,
+                    display: Optional[str] = None) -> Optional[int]:
     w = select_weapon(a.attacker, a.defender, a.ammo)
     if w is None:
         return None
     fn = VARIANTS[variant]
-    raw = fn(w.base, display_hp(a.attacker_hp), a.co_attack,
-             a.co_defense, a.terrain_stars, display_hp(a.defender_hp), luck)
+    raw = fn(w.base, display_hp(a.attacker_hp, display), a.co_attack,
+             a.co_defense, a.terrain_stars, display_hp(a.defender_hp, display),
+             luck)
     return max(0, min(raw, a.defender_hp))
 
 

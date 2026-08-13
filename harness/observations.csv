@@ -20,3 +20,9 @@ attacker,defender,att_hp,def_hp,terrain,mode,observed,co_attack,co_defense,notes
 # Infantry,Infantry,100,100,plains,display_after,5,100,100,save-state trial 1
 Tank,Infantry,100,100,road,exact,78,100,100,co=Andy
 Infantry,Tank,22,100,road,exact,1,100,100,counter co=Andy
+Tank,Infantry,100,100,road,exact,76,100,100,co=Andy
+Infantry,Tank,24,100,road,exact,1,100,100,counter co=Andy
+Tank,Infantry,100,100,plains,exact,75,100,100,co=Andy
+Infantry,Tank,25,100,plains,exact,0,100,100,counter co=Andy
+Tank,Mech,100,100,mountain,exact,43,100,100,co=Andy
+Mech,Tank,57,100,plains,exact,27,100,100,counter co=Andy

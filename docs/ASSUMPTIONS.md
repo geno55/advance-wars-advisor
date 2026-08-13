@@ -55,9 +55,26 @@ Standard for AW1 with a plain CO. Nell and Flak differ.
 **Kill it by:** repeated identical attacks from a save state; the observed
 outcome spread bounds the roll.
 
-### A5. Display HP = ceil(internal / 10)
-Confident, and tested for self-consistency, but self-consistency is not proof.
-**Kill it by:** reading a damaged unit's internal HP from RAM and comparing.
+### A5. Display HP = ceil(internal / 10) — **REFUTED**
+This was wrong, and it is the most instructive error in the project.
+
+Attack strength scales with a *truncated* tenth of internal HP, not the bar
+count on screen. A Mech at 57 internal HP **displays 6 bars but attacks as 5**.
+Screen rounding and combat rounding are different functions, and the engine now
+keeps them apart: `display_hp()` for the maths, `screen_bars()` for the player.
+
+How it died: a recorded counterattack (Mech at 57 HP hitting a Tank on plains
+for 27) was impossible under `ceil` for every terrain value, while a direct
+attack on the same tile demanded 0 or 1 stars. The two were irreconcilable. The
+first instinct was that the terrain label was mis-recorded — it was not, and the
+player said so. Re-testing the four candidate rules against all observations
+refuted `ceil` and `round`, and left `floor` fitting everything.
+
+The display rule is now a free parameter in calibration rather than an
+assumption, exactly like the formula variant. `floor` vs `floor_min1` remains
+open: they differ only below 10 internal HP, where plain `floor` says a unit on
+its last bar attacks at strength 0 and deals nothing.
+**Kill that one by:** attacking with a unit at under 10 internal HP.
 
 ## Unknown — not modelled
 

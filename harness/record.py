@@ -163,8 +163,11 @@ def ask_matchup():
             continue
         aterr = ""
         if COUNTER:
-            # The counterattack happens on the ATTACKER's tile, so we need it.
-            aterr = input("  attacker's own terrain> ").strip().lower()
+            # The counterattack happens on the ATTACKER's tile. This is only a
+            # DEFAULT: the attacker moves between battles, so it gets confirmed
+            # per trial. Asking once and reusing it silently mislabels terrain
+            # and produces contradictions that look like bad readings.
+            aterr = input("  attacker's usual terrain (default for each trial)> ").strip().lower()
             if not aterr:
                 print("  needed for the counterattack; skipping counters here")
         return att, dfn, terr, ahp, dhp, aterr
@@ -278,17 +281,21 @@ def main():
                              f"(was {ahp}, blank if none)> ").strip()
                 if raw2 and raw2.isdigit():
                     after = int(raw2)
+                    # Confirm the tile the ATTACKER is standing on right now --
+                    # it changes as the unit moves between battles.
+                    cterr = input(f"    attacker standing on [{aterr}]> "
+                                  ).strip().lower() or aterr
                     if 0 <= after <= ahp:
                         crow = {"attacker": dfn, "defender": att,
                                 "att_hp": val, "def_hp": ahp,
-                                "terrain": aterr, "mode": "exact",
+                                "terrain": cterr, "mode": "exact",
                                 "observed": ahp - after,
                                 "co_attack": 100, "co_defense": 100,
                                 "notes": f"counter co={co}"}
                         append_row(crow)
                         obs.append(Obs({k: str(v) for k, v in crow.items()}, 0))
                         print(f"    + counter recorded: {dfn}@{val} -> {att} "
-                              f"on {aterr}, {ahp - after} damage")
+                              f"on {cterr}, {ahp - after} damage")
                     else:
                         print(f"    ignored: must be 0-{ahp}")
             print(f"    trial {trial} (total {len(obs)})")
