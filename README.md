@@ -46,24 +46,39 @@ docs/ASSUMPTIONS.md       what is established, assumed, and unknown
 
 ## Status
 
-**Done and verified against the ROM:**
+**Milestone 2 — the damage model. Done.**
 - Both 24×24 damage matrices, all 18 units, extracted from `0x283B48` and
   `0x283D88` and cross-checked 17 ways.
 - Internal unit ID map recovered structurally, not guessed.
 - Weapon selection reproducing known behaviour (Md Tank → 105 on Infantry with
   its MG, 85 on Tank with its cannon; out-of-ammo fallback).
-- 23 regression tests, all passing.
-- Calibration machinery proven correct by synthetic round-trip: from 3750
-  hypotheses it recovers the exact formula variant and terrain-star map.
+- Calibrated against 14 exact-HP observations from a live game. Display rule
+  `floor_min1` determined; terrain stars confirmed; four of six formula
+  variants refuted.
+- Two variants survive and **never disagree on kill/no-kill**, so `resolve()`
+  reports the envelope over both: exact on the certain end, generous on the
+  uncertain one.
+- 33 regression tests, all passing.
 
-**Not yet verified — needs you and an emulator:**
-- The damage *formula* (6 candidate variants).
-- Terrain defence stars (solved as free parameters by the same run).
-- The `fighter-secondary` ROM discrepancy.
+**Milestone 1 — the state reader. Done.**
+- `harness/mgba_state.lua` dumps the whole board as JSON; `engine/state.py`
+  loads it and joins it to the ROM-derived tables.
+- Unit array via the ROM pointer `[0x08282CB8]`: type, owner, position, HP,
+  ammo, fuel, acted flag. HP and ammo share a bitfield; so does fuel.
+- Army records via `[0x08282CBC]`, 1-indexed: available funds and income.
+- Terrain map, ids and the `type + 32×owner` ownership encoding. Dimensions
+  read live from the row table at `0x03003600`.
+- Terrain movement costs for all three weathers, extracted from ROM.
 
-No emulator was available here, so nothing in this project has yet touched the
-running game. That is the gap milestone 2 closes, and it needs ~20 minutes of
-your time.
+**Known gaps, none blocking:**
+- The terrain array has no pointer anywhere — it is a static address, verified
+  stable across map switches and emulator restarts, and sanity-checked on
+  every read against unit positions.
+- Missile Silo's terrain id has never been observed.
+- How the game selects a CO's damage modifiers is unresolved; the CO table
+  appears to hold more records than there are COs, apparently because stats
+  differ between VS and Campaign. Calibration used a neutral CO throughout, so
+  none of the damage data depends on this.
 
 ## Closing the loop
 
