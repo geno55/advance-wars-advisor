@@ -31,9 +31,9 @@ Eleven of the twelve records are named by MEASUREMENT. The CO name and portrait
 follow army +0x1D live, so writing that byte and reading the intel screen binds
 a record directly -- no unlocking required, and no inference involved.
 
-Only record 0 is unnamed. Its luck bytes read 10 normally and 50 under power,
-which is Nell's Lucky Star signature, but that is a fingerprint. It stays in
-`untested` until someone writes 0 and reads the screen.
+All twelve are named. Record 0 is Nell, which its luck bytes had predicted --
+10 normally, 50 under power, the Lucky Star signature -- but the prediction was
+kept in `untested` until the screen confirmed it.
 
 Every fingerprint predicted from the ROM before naming turned out right --
 Eagle's air bonus, Drake's rain immunity, Olaf's snow immunity, and the two
@@ -70,13 +70,10 @@ UNITS = {
 # that byte and reading the intel screen names a record directly -- no unlocking
 # required. Eleven of twelve were bound this way.
 CONFIRMED = {
-    1: "Andy", 2: "Max", 3: "Olaf", 4: "Sami", 5: "Grit", 6: "Kanbei",
-    7: "Sonja", 8: "Eagle", 9: "Drake", 10: "Sturm", 11: "Sturm",
+    0: "Nell", 1: "Andy", 2: "Max", 3: "Olaf", 4: "Sami", 5: "Grit",
+    6: "Kanbei", 7: "Sonja", 8: "Eagle", 9: "Drake", 10: "Sturm", 11: "Sturm",
 }
-# Record 0 has not been written and read back. Its luck bytes are 10 normal and
-# 50 under power, which is Nell's Lucky Star signature, but that is a
-# fingerprint and fingerprints are candidates. It stays out of CONFIRMED.
-UNTESTED = {0: "predicted Nell, from luck 10 -> 50 under power"}
+UNTESTED = {}
 
 INDIRECT = {"Artillery", "Rockets", "Missiles", "Battleship"}
 FOOT = {"Infantry", "Mech"}

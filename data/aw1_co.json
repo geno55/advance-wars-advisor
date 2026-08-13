@@ -49,6 +49,7 @@
     "+11/+12": "a second pair, 100/100 normal and 110/90 under power for most records, but varying widely (co=8 power 80/130, co=10 130/120). How this composes with +08/+09 and the per-unit modifiers is UNKNOWN, and it matters -- see the warning printed by this tool."
   },
   "confirmed": {
+    "0": "Nell",
     "1": "Andy",
     "2": "Max",
     "3": "Olaf",
@@ -62,14 +63,8 @@
     "11": "Sturm"
   },
   "confirmed_method": "wrote army +0x1D live and read the CO name off the intel screen; the UI follows that byte",
-  "untested": {
-    "0": "predicted Nell, from luck 10 -> 50 under power"
-  },
-  "candidates": {
-    "0": [
-      "luck-shaped bytes +06/+07 = 10/0 (50 under power)"
-    ]
-  },
+  "untested": {},
+  "candidates": {},
   "records": [
     {
       "co": 0,

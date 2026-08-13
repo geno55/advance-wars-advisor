@@ -237,6 +237,44 @@ class Attack:
     co_attack: int = 100
     co_defense: int = 100
 
+    @classmethod
+    def between(cls, attacker: str, defender: str, attacker_co: int,
+                defender_co: int, attacker_power: bool = False,
+                defender_power: bool = False, **kw) -> "Attack":
+        """Build an Attack with both COs' modifiers filled from their records.
+
+        `co_attack` comes from the ATTACKER's record indexed by the attacking
+        unit type; `co_defense` from the DEFENDER's record indexed by the
+        DEFENDING unit type. Getting those two crossed is the easy mistake, so
+        this exists rather than leaving callers to wire it by hand.
+
+        Raises UnmodelledCO if either CO's strength lives in header fields the
+        damage path has not been shown to read -- Kanbei and Sturm. Pass
+        co_attack/co_defense directly to override.
+        """
+        # This module is imported two ways: as `engine.damage` by the tests and
+        # as top-level `damage` by the tools, which put engine/ on sys.path.
+        try:
+            from . import co as _co
+        except ImportError:
+            import co as _co
+        modifiers, unmodelled = _co.modifiers, _co.unmodelled
+        UnmodelledCO, record = _co.UnmodelledCO, _co.record
+        for cid, power, role in ((attacker_co, attacker_power, "attacker"),
+                                 (defender_co, defender_power, "defender")):
+            gaps = unmodelled(cid, power)
+            if gaps:
+                r = record(cid, power)
+                raise UnmodelledCO(
+                    f"{role} CO {r.name} carries {gaps}, which the damage path "
+                    "has not been shown to read -- a prediction would omit it. "
+                    "See engine/co.py for how to settle this, or pass "
+                    "co_attack/co_defense explicitly to override.")
+        return cls(attacker=attacker, defender=defender,
+                   co_attack=modifiers(attacker_co, attacker, attacker_power)[0],
+                   co_defense=modifiers(defender_co, defender, defender_power)[1],
+                   **kw)
+
 
 @dataclass(frozen=True)
 class Outcome:

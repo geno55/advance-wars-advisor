@@ -143,6 +143,7 @@ and the only thing separating a measurement from a machine agreeing with itself.
 engine/damage.py          weapon selection, formula variants, damage envelopes
 engine/state.py           Board: terrain, defence, movement cost, units, cargo
 engine/pathing.py         one Dijkstra: reachable, destinations, path
+engine/co.py              CO modifiers, and what it refuses to model
 harness/mgba_state.lua    dump the live board as JSON          <- the state reader
 harness/mgba_ramtool.lua  RAM search/diff, map and army inspection, unit records
                           reset/mark/chg/unc, tag+tagfilter (labelled states),
@@ -267,12 +268,15 @@ None of these block milestone 3.
   at `0x2830C8`, **stride 0x70**, which is outside the 1–40 window that earlier
   search swept. Searching for *references to the name strings* found it at once;
   searching for the values never would have. See `DERIVATION.md` section 12.
-- **CO modifier selection.** The modifier *pool* is found (12-byte structs from
-  `0x28491C`, attack `+5`, defence `+6`, including Max's `150/100`), but the CO
-  record layout is not. The table appears to hold more records than there are
-  COs, apparently because stats differ between VS and Campaign — the name blob
-  lists "Sturm" twice. Calibration used a neutral CO throughout, so no damage
-  data depends on this.
+- ~~**CO modifier selection**~~ — solved. Records are 292 bytes at `0x284A30`,
+  and all twelve are named by writing army `+0x1D` and reading the screen.
+  `engine/co.py` fills `co_attack`/`co_defense` from the per-unit pool. It
+  refuses to quote Kanbei or Sturm, whose strength lives in header fields the
+  damage path has never been shown to read — a prediction would be ~20% low.
+  The "more records than COs" puzzle is answered: **Sturm has two**, records 10
+  and 11, both reporting as Sturm on screen and both using a movement table in
+  which every passable terrain costs 1. That was predicted from the duplicate
+  name in the CO blob before either was named.
 - **CO power scale.** The meter is at army `+0x20` and charges both the dealer
   and receiver of damage, but the activation threshold and gain formula are
   unknown, so it is exposed as a raw number and never as a percentage.

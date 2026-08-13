@@ -205,6 +205,53 @@ class TestEngineBehaviour(unittest.TestCase):
                 resolve(Attack("Tank", "Infantry", terrain_stars=stars))
                 .variants_agree, f"{stars} stars")
 
+    def test_co_modifiers_come_from_the_record(self):
+        """Max's Tank hits at 150%, Andy's at 100%, straight from the pool."""
+        from engine import co as co_mod
+        self.assertEqual(co_mod.modifiers(2, "Tank")[0], 150)     # Max
+        self.assertEqual(co_mod.modifiers(1, "Tank")[0], 100)     # Andy
+        mx = resolve(Attack.between("Tank", "Infantry", 2, 1, terrain_stars=4))
+        an = resolve(Attack.between("Tank", "Infantry", 1, 1, terrain_stars=4))
+        self.assertGreater(mx.min_damage, an.min_damage)
+
+    def test_grit_spares_exactly_the_indirects(self):
+        """The mistake that named him a 'handicap record' was reading which
+        units are reduced instead of which are not."""
+        from engine import co as co_mod
+        for u in ("Artillery", "Rockets", "Missiles", "Battleship"):
+            self.assertEqual(co_mod.modifiers(5, u), (100, 100), u)
+        for u in ("Tank", "Infantry", "BCopter"):
+            self.assertEqual(co_mod.modifiers(5, u)[0], 80, u)
+
+    def test_attacker_and_defender_records_are_not_crossed(self):
+        """co_attack indexes the ATTACKER's record by the ATTACKING unit;
+        co_defense indexes the DEFENDER's by the DEFENDING unit. Sami makes
+        the difference visible: her Infantry is 120/90 and her Tank 90/100, so
+        crossing the two would put 90 where 100 belongs."""
+        a = Attack.between("Infantry", "Tank", attacker_co=4, defender_co=4)
+        self.assertEqual(a.co_attack, 120)     # Sami's Infantry, attacking
+        self.assertEqual(a.co_defense, 100)    # Sami's Tank, defending
+        self.assertNotEqual(a.co_defense, 90)  # would be her Infantry's defence
+
+    def test_cos_whose_strength_is_unmodelled_refuse_to_predict(self):
+        """Kanbei has no per-unit modifiers at all -- his 120/120 lives in the
+        record header, which the damage path has never been shown to read. A
+        prediction would silently omit it, so it raises instead."""
+        from engine import co as co_mod
+        for cid in (6, 10, 11):                     # Kanbei, Sturm, Sturm
+            self.assertTrue(co_mod.unmodelled(cid), cid)
+            with self.assertRaises(co_mod.UnmodelledCO):
+                Attack.between("Tank", "Infantry", attacker_co=cid, defender_co=1)
+        # ...and an explicit override is still allowed, for deliberate work.
+        forced = Attack("Tank", "Infantry", co_attack=120, co_defense=100)
+        self.assertEqual(forced.co_attack, 120)
+
+    def test_cos_that_are_fully_modelled_do_not_refuse(self):
+        from engine import co as co_mod
+        for cid in (0, 1, 2, 3, 4, 5, 7, 8, 9):
+            self.assertFalse(co_mod.unmodelled(cid), cid)
+            Attack.between("Tank", "Infantry", attacker_co=cid, defender_co=cid)
+
     def test_the_envelope_is_now_a_point(self):
         """With one variant, max_damage is the real maximum rather than the
         wider of two guesses -- so 'cannot kill' is finally exact in both

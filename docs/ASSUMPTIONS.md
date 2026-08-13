@@ -190,8 +190,15 @@ of the observations doing the work in "2 of 24 hypotheses survive".
 
 ## Unknown — not modelled
 
-- CO attack/defence modifiers per unit (Andy, Max, Sami, …) and CO powers.
-  The engine takes `co_attack`/`co_defense` as parameters but nothing fills them.
+- **CO powers.** The second 128-byte stat block is selected by army `+0x1E`,
+  and its contents are extracted, but nothing triggers or models activation.
+- **Where Kanbei's and Sturm's strength is applied.** Their per-unit modifiers
+  are all 100/100; their records carry `+08/+09` and `+11/+12` pairs that the
+  damage path has never been shown to read. `engine/co.py` reports these as
+  unmodelled and `Attack.between()` refuses to quote those COs rather than
+  returning a number that would be ~20% low. **Kill it by:** writing army
+  `+0x1D` to Kanbei and to Andy on one fixture, seeding the RNG so luck is
+  fixed, and comparing the damage.
 - The `fighter-secondary` ROM discrepancy (see `DERIVATION.md`).
 - Weather effects, fog of war.
 - Terrain movement costs, capture, supply, repair — all of milestone 1/3.

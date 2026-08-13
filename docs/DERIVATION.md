@@ -802,3 +802,47 @@ depends on this -- but modelling any specific CO does.
 
 `+11/+12` remains unidentified: 100/100 normally and 110/90 under power for most
 records, but Eagle's power reads 80/130 and Sturm 130/120.
+
+## 19. Modelling CO modifiers, and refusing to model what is not known
+
+Record 0 is **Nell**, confirmed on screen -- so all twelve are named by
+measurement. Her luck bytes (10 normally, 50 under power) had predicted it.
+
+`engine/co.py` now fills `co_attack` and `co_defense`, which had been
+parameters with nothing behind them since milestone 2. It fills them from the
+**per-unit modifier pool only**, because that is the source the disassembly
+shows the damage path indexing (section 7): `[co*128 + unit_type*4]`,
+dereferenced, applied as `(value * mod) / 100` twice in sequence.
+
+`Attack.between(attacker, defender, attacker_co, defender_co)` exists so
+callers do not wire the crossing by hand: attack comes from the ATTACKER's
+record indexed by the ATTACKING unit, defence from the DEFENDER's record
+indexed by the DEFENDING unit. Sami makes a crossed implementation visible --
+her Infantry is 120/90 and her Tank 90/100 -- and a test pins it.
+
+### What it refuses to do
+
+Kanbei and Sturm have **no per-unit modifiers at all**. Their strength sits in
+record header fields (`+08/+09` = 120/120 for Kanbei, `+11/+12` = 130/120 for
+one Sturm record) that have never been observed in the damage path. Applying
+the pool alone would predict *no bonus at all* for them, which is certainly
+wrong and would look perfectly reasonable in output.
+
+So `Attack.between()` raises `UnmodelledCO` for those COs instead, naming the
+fields it cannot account for. An explicit `co_attack=`/`co_defense=` still
+works for deliberate experiments. `tools/quote.py --att-co Kanbei` prints the
+reason and exits non-zero.
+
+This is the same shape as the `Unverified` guard on the formula: the tool
+declines to answer rather than answering plausibly and wrongly.
+
+### How to settle it
+
+One sweep. Write army `+0x1D` to Kanbei (6) and to Andy (1) on the same attack
+fixture, seed the RNG so luck is held constant, and compare:
+
+  * identical damage -> the header pairs do not reach the damage path, and
+    Kanbei's strength is applied somewhere else entirely
+  * ~20% apart -> they do, and the ratio names the combination rule
+
+Until then the refusal is the honest answer.
