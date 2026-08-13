@@ -238,6 +238,62 @@ function findmap(w, h, near)
   console:log(string.format("%d candidate flat map array(s)", hits))
 end
 
+-- Match a known row of terrain by its EQUIVALENCE PATTERN rather than by value.
+--
+-- We do not know which index means "river" yet, so matching absolute values is
+-- impossible. But we do know which tiles in a row are the SAME as each other,
+-- and that is enough: canonicalise both the candidate row and the known row to
+-- "first distinct value = A, second = B, ..." and compare. A 15-tile pattern
+-- with several distinct terrains is extremely selective.
+--
+--   matchrow(5, "ABBBBCBBBBBBBBA", 15, 10)
+-- means row 5 is: something, then four of a second thing, then a third thing,
+-- and so on. Same letter = same terrain; the letters themselves are arbitrary.
+local function canon(vals)
+  local seen, out, nid = {}, {}, 0
+  for i = 1, #vals do
+    local v = vals[i]
+    if seen[v] == nil then seen[v] = nid; nid = nid + 1 end
+    out[i] = string.char(65 + (seen[v] % 26))
+  end
+  return table.concat(out)
+end
+
+local function canonstr(s)
+  local vals = {}
+  for i = 1, #s do vals[i] = s:sub(i, i) end
+  return canon(vals)
+end
+
+function matchrow(y, pattern, w, h, unit)
+  w, h, unit = w or 15, h or 10, unit or 0
+  local want = canonstr(pattern:upper())
+  if #want ~= w then
+    console:log(string.format("pattern is %d long but width is %d", #want, w))
+    return
+  end
+  local hits = 0
+  for _, u in ipairs(unit == 0 and { 1, 2 } or { unit }) do
+    local n = w * h
+    for a = 0x02000000, 0x02040000 - n * u, 2 do
+      local vals, ok = {}, true
+      for x = 0, w - 1 do
+        local i = y * w + x
+        local v = (u == 1) and emu:read8(a + i) or emu:read16(a + i * u)
+        if v > 512 then ok = false break end
+        vals[x + 1] = v
+      end
+      if ok and canon(vals) == want then
+        console:log(string.format("  u%d @0x%08X  row %d = %s",
+          u * 8, a, y, table.concat(vals, ",")))
+        hits = hits + 1
+        if hits > 20 then console:log("  (stopping)"); return end
+      end
+    end
+  end
+  console:log(string.format("%d array(s) whose row %d matches that pattern", hits, y))
+end
+
 -- Dump a flat w*h array as a grid. unit is 1 for bytes, 2 for u16.
 function flatgrid(addr, w, h, unit)
   w, h, unit = w or 15, h or 10, unit or 1
