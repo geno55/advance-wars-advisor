@@ -34,13 +34,17 @@
  ],
  "terrain_columns": {
   "1": "Plain",
+  "2": "River",
+  "3": "Mountain",
   "4": "Wood",
+  "5": "Road",
+  "6": "City",
   "7": "Sea",
+  "8": "HQ",
   "11": "Port",
+  "12": "Bridge",
   "13": "Shoal",
-  "19": "Reef",
-  "2": "Mountain|River",
-  "3": "Mountain|River"
+  "19": "Reef"
  },
  "tables": [
   {

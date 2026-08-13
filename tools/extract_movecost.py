@@ -35,9 +35,13 @@ MOVE_TYPES = ["Infantry", "Mech", "Treads", "Tires", "Air", "Ships", "Lander"]
 #     Plain and Wood, +1 each, foot units untouched             -> Rain (mud
 #     slows wheels and tracks on soft ground, not infantry)
 WEATHER = ["Clear", "Snow", "Rain"]
-TERRAIN_COLS = {1: "Plain", 4: "Wood", 7: "Sea", 11: "Port", 13: "Shoal",
-                19: "Reef"}
-AMBIGUOUS = {2: "Mountain|River", 3: "Mountain|River"}
+TERRAIN_COLS = {1: "Plain", 2: "River", 3: "Mountain", 4: "Wood", 5: "Road",
+                6: "City", 7: "Sea", 8: "HQ", 11: "Port", 12: "Bridge",
+                13: "Shoal", 19: "Reef"}
+# Resolved: a live map array read row 5 as river at terrain id 2, and the map
+# ids share this index space. That forces col 2 = River and col 3 = Mountain,
+# which the movement costs alone could never separate (identical for every unit).
+AMBIGUOUS = {}
 
 
 def read_table(rom, base):

@@ -1,0 +1,46 @@
+{
+  "_comment": [
+    "Terrain type ids as stored in the live map array (u8, flat w*h, row-major).",
+    "Located at 0x02016C2A in one session; the address is map/session specific,",
+    "so find it with matchrow() rather than hard-coding it.",
+    "",
+    "Derived from a captured 15x10 map plus the player's reading of row 5. Most",
+    "entries are structural rather than asserted -- see 'evidence' on each.",
+    "",
+    "IMPORTANT: these ids agree with the column indices of the movement-cost",
+    "tables in aw1_movecost.json, which is what resolves the Mountain/River",
+    "ambiguity those tables could not settle on their own."
+  ],
+  "provenance": {
+    "method": "live RAM capture cross-referenced with the movement tables",
+    "map_array_example": "0x02016C2A",
+    "layout": "u8, flat, index = y * width + x",
+    "ownership_encoding": "owned property = type + 32 * owner (owner 1 = P1)"
+  },
+  "ids": {
+    "1": {"name": "Plain", "evidence": "most common value; movement col 1 is Plain (Tires 2, Treads 1)"},
+    "2": {"name": "River", "evidence": "player read row 5 as river; fixes movement col 2"},
+    "3": {"name": "Mountain", "evidence": "two vertical 2-wide ranges; movement col 3 is the other foot-only column, so River at 2 forces Mountain here"},
+    "4": {"name": "Wood", "evidence": "scattered patches; movement col 4 is Wood (Tires 3, Treads 2)"},
+    "5": {"name": "Road", "evidence": "forms connected lines at x=1,7,13 meeting the bridges in row 5"},
+    "6": {"name": "City", "evidence": "PROVISIONAL - small clusters, normal land movement; needs confirming on screen"},
+    "7": {"name": "Sea", "evidence": "movement table: ships and lander only"},
+    "8": {"name": "HQ", "evidence": "seen only as 40 and 72, i.e. 8+32 and 8+64, one per player in opposite corners"},
+    "11": {"name": "Port", "evidence": "movement table: ships, lander and all land units"},
+    "12": {"name": "Bridge", "evidence": "player read row 5; sits exactly where roads cross the river"},
+    "13": {"name": "Shoal", "evidence": "movement table: lander yes, ships no"},
+    "19": {"name": "Reef", "evidence": "movement table: ships and lander at cost 2"}
+  },
+  "unresolved": {
+    "0": "never seen in a live map; likely out-of-bounds",
+    "9": "movement table says air-only, which matches no known AW1 terrain",
+    "10": "normal land movement, unidentified",
+    "14": "normal land movement, unidentified",
+    "15-18": "impassable to everything including air; likely unused slots"
+  },
+  "needs_confirmation": [
+    "id 6 assumed City -- could be Base or Airport, all of which move identically",
+    "the 32-per-owner ownership step is inferred from two HQ tiles only",
+    "no Base or Airport appeared on this map, so their ids are still unknown"
+  ]
+}
