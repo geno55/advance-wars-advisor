@@ -8,7 +8,15 @@
     "a guess: with P1 to move, record 1 held the on-screen funds at +00 while",
     "records 2 and 3 held zero, and only the active player has spendable funds.",
     "It also lines up with the terrain ownership encoding, where owner 0 is",
-    "neutral and 1..4 are the players -- so army record N owns tiles tagged N."
+    "neutral and 1..4 are the players -- so army record N owns tiles tagged N.",
+    "",
+    "SUPERSEDED, and worth reading as a lesson: 'whoever holds funds is the",
+    "active player' was the only route to the current player, and it was an",
+    "INFERENCE from one capture. There is now a real field -- 0x03004424 holds",
+    "32 * player, 1-based -- so the reader uses that and keeps the funds rule",
+    "only as a cross-check. mgba_state.lua reports funds_heuristic_agrees on",
+    "every dump; if it ever goes false, the inference was wrong somewhere and",
+    "we find out at once instead of inheriting it."
   ],
   "provenance": {
     "method": "live RAM capture, offsets pinned by on-screen values",
@@ -26,12 +34,13 @@
     "0x1A": {"type": "u8", "name": "player_number", "note": "1..4, matches the record index"},
     "0x1D": {"type": "u8", "name": "co_related",
              "note": "differs per CO: Andy 1, Max 2, Sami 4. Read by the damage path only when a CO power is active, where it is scaled by 292."},
-    "0x1E": {"type": "u8", "name": "co_modifier_index",
-             "note": "the damage path computes co*128+292 from this to reach the per-unit modifier table. Observed as 0 for Andy, Max and Sami alike."}
+    "0x1E": {"type": "u8", "name": "co_statblock_index",
+             "note": "SOLVED, see DERIVATION.md section 11. Selects which 128-byte stat block within the CO's record applies -- almost certainly 0 = normal and 1 = CO power active. The full index read off 0x0803A734 is [0x08284A40 + weather*4 + [+0x1E]*128 + co*292]. The CO RECORD stride is 292, not 128; 128 is the sub-block stride, which is what the earlier reading got wrong. Observed as 0 for Andy, Max and Sami because no power was active in any of those captures."}
   },
   "open_questions": [
     {
       "id": "co-modifier-selection",
+      "status": "SOLVED -- see tools/extract_co.py and DERIVATION.md section 11. entry = [0x08284A40 + weather*4 + [army+0x1E]*128 + co*292]. The record stride is 292; the 128 assumed below is the SUB-BLOCK stride, and each record holds two sub-blocks (believed normal and CO-power-active). The modifier pointer array is indexed by the 1-BASED RAM unit type, the same off-by-one as the damage matrices, which is why an earlier read of it looked incoherent. Everything below is kept as the record of how it was wrong.",
       "question": "How does the game select a CO's per-unit modifier record?",
       "detail": "COs DO have passive modifiers -- Max's non-infantry direct-combat units have 150% firepower, and the ROM contains a record with exactly (150,100). So the reading below is incomplete, not a discovery that modifiers are absent.",
       "what_we_thought": "The damage path computes its table index as unit_type*4 + [army+0x1E]*128, and +0x1E read 0 for Andy, Max and Sami alike, which would send every CO to record 0 (uniformly 100/100). That cannot be the whole mechanism.",
@@ -52,12 +61,14 @@
     },
     {
       "id": "co-id-mapping",
+      "status": "PARTIAL -- 4 of 12 records bound by measurement: 1 Andy, 2 Max, 3 Olaf, 4 Sami. The gap at 3 that made the ordering look non-contiguous was just an unplayed CO; ids 1..4 run consecutively. The remaining 8 records have fingerprints in data/aw1_co.json but no measured name, and are NOT to be promoted without a +0x1D reading. Records 10 and 11 both use a movement table where every passable terrain costs 1, and are the only pair that does -- which is what the sturm-duplicate question below predicts.",
       "question": "What is the CO id ordering at +0x1D?",
       "detail": "Three data points: Andy 1, Max 2, Sami 4. The gap at 3 rules out a simple select-screen ordering. P4 (Olaf) was not captured. Note also that the CO name blob at 0x2EA384 runs Max, Olaf, Sami, Grit, Kanbei, Sonja, Eagle, Drake, Sturm, Sturm -- an order that does not match these ids either, so the blob is probably a display list rather than an id table.",
       "resolve_by": "armyhex(5) to reach record 4, plus a few more CO choices."
     },
     {
       "id": "sturm-duplicate",
+      "status": "CORROBORATED, not yet measured. The record table holds exactly 12 entries, and exactly two of them -- 10 and 11 -- point their clear and rain movement slots at a table in which every passable terrain costs 1. Two records with a unique terrain-ignoring trait, matching two Sturm entries in the name blob, arrived at independently. Their +11/+12 pairs differ (130/120 vs 80/80), consistent with the mode-dependent stats described below. Still needs a +0x1D reading to become a fact.",
       "question": "Why does the CO name blob contain 'Sturm' twice?",
       "detail": "The blob at 0x2EA384 lists Sturm at both 0x2EA3C0 and 0x2EA3C8. Reported (unverified) behaviour is that Sturm's stats differ by mode -- 80/120 in VS, 130/80 in Campaign -- which two separate records would implement directly.",
       "implication": "The CO table has MORE entries than there are COs, so any attempt to map index to CO by counting names or assuming one record each is unsound. It also means a modifier record is only meaningful together with the mode it belongs to.",

@@ -1,44 +1,320 @@
 {
   "_comment": [
-    "Terrain defence stars. The game DISPLAYS this as 'Def' when you highlight a",
-    "tile, so it is directly observable and never needed to be inferred from",
-    "damage. Every value here was read off that display in-game.",
+    "Terrain definitions, extracted from the ROM struct array at",
+    "0x284170 (20 entries, stride 0x14). Run tools/extract_terrain.py",
+    "to regenerate; it exits non-zero on a ROM whose sha1 differs or if",
+    "any structural assertion fails.",
     "",
-    "Cross-check worth recording: calibration independently derived road=0,",
-    "plains=1 and mountain=4 from damage observations alone, before we knew the",
-    "display existed. All three matched. The two routes share no inputs, so that",
-    "is a genuine confirmation of the damage model rather than a tautology.",
+    "Defence stars are stored in the ROM as stars*10. All 14 real",
+    "terrains match the values previously read off the in-game Def",
+    "display, and calibration had independently derived road=0,",
+    "plains=1 and mountain=4 from damage observations alone. Three",
+    "routes, no shared inputs, same answers.",
     "",
-    "Aliases are included so recordings can use whichever word the player types.",
-    "Missile silo is NOT listed: its Def has not been read yet, and it stays",
-    "absent rather than guessed. Anything absent remains a free parameter in",
-    "calibration."
+    "ID 9 IS THE SKY -- the terrain an air unit occupies. Zero defence,",
+    "reachable by Air alone, and its info-panel text reads 'The sky is",
+    "not considered terrain.' Damage against an air unit must use this,",
+    "NOT the ground tile underneath, or a Fighter over a mountain wrongly",
+    "collects 4 stars.",
+    "",
+    "There is no Missile Silo in AW1: 'Silo' and 'Pipe' appear zero times",
+    "in the ROM and all 20 slots are accounted for. The old 'silo Def not",
+    "yet read' gap was resting on a false premise and is closed."
   ],
+  "game": "Advance Wars (USA) Rev 1",
+  "rom_sha1": "15053499d5b3f49128a941d7f2d84876f5424d0c",
   "provenance": {
-    "method": "read from the in-game Def display",
-    "cross_checked_by_calibration": ["road", "plains", "mountain"],
-    "complete": false,
-    "missing": ["silo"]
+    "method": "extracted from ROM binary",
+    "table_offset": "0x284170",
+    "stride": "0x14",
+    "entries": 20,
+    "fields": {
+      "+0": "u32 pointer to name string",
+      "+4": "u32 income per turn (1000 for capturable, else 0)",
+      "+8": "u8 defence stars x 10",
+      "+9..+11": "always zero",
+      "+12/+16": "u32 asset pointers, not decoded"
+    },
+    "cross_checked_by_display": [
+      "Airport",
+      "Base",
+      "Bridge",
+      "City",
+      "HQ",
+      "Mountain",
+      "Plain",
+      "Port",
+      "Reef",
+      "River",
+      "Road",
+      "Sea",
+      "Shoal",
+      "Wood"
+    ],
+    "cross_checked_by_calibration": [
+      "road",
+      "plains",
+      "mountain"
+    ],
+    "cross_checked_by_movecost": true,
+    "complete": true
+  },
+  "sky_id": 9,
+  "out_of_bounds_id": 0,
+  "dead_slots": [
+    15,
+    16,
+    17,
+    18
+  ],
+  "capturable_ids": [
+    6,
+    8,
+    10,
+    11,
+    14
+  ],
+  "income_per_property": 1000,
+  "terrain": {
+    "0": {
+      "name": "Out",
+      "rom_name": "Out",
+      "stars": 0,
+      "income": 0,
+      "capturable": false,
+      "passable_by": []
+    },
+    "1": {
+      "name": "Plain",
+      "rom_name": "Plain",
+      "stars": 1,
+      "income": 0,
+      "capturable": false,
+      "passable_by": [
+        "Infantry",
+        "Mech",
+        "Treads",
+        "Tires",
+        "Air"
+      ]
+    },
+    "2": {
+      "name": "River",
+      "rom_name": "River",
+      "stars": 0,
+      "income": 0,
+      "capturable": false,
+      "passable_by": [
+        "Infantry",
+        "Mech",
+        "Air"
+      ]
+    },
+    "3": {
+      "name": "Mountain",
+      "rom_name": "Mt",
+      "stars": 4,
+      "income": 0,
+      "capturable": false,
+      "passable_by": [
+        "Infantry",
+        "Mech",
+        "Air"
+      ]
+    },
+    "4": {
+      "name": "Wood",
+      "rom_name": "Wood",
+      "stars": 2,
+      "income": 0,
+      "capturable": false,
+      "passable_by": [
+        "Infantry",
+        "Mech",
+        "Treads",
+        "Tires",
+        "Air"
+      ]
+    },
+    "5": {
+      "name": "Road",
+      "rom_name": "Road",
+      "stars": 0,
+      "income": 0,
+      "capturable": false,
+      "passable_by": [
+        "Infantry",
+        "Mech",
+        "Treads",
+        "Tires",
+        "Air"
+      ]
+    },
+    "6": {
+      "name": "City",
+      "rom_name": "City",
+      "stars": 3,
+      "income": 1000,
+      "capturable": true,
+      "passable_by": [
+        "Infantry",
+        "Mech",
+        "Treads",
+        "Tires",
+        "Air"
+      ]
+    },
+    "7": {
+      "name": "Sea",
+      "rom_name": "Sea",
+      "stars": 0,
+      "income": 0,
+      "capturable": false,
+      "passable_by": [
+        "Air",
+        "Ships",
+        "Lander"
+      ]
+    },
+    "8": {
+      "name": "HQ",
+      "rom_name": "HQ",
+      "stars": 4,
+      "income": 1000,
+      "capturable": true,
+      "passable_by": [
+        "Infantry",
+        "Mech",
+        "Treads",
+        "Tires",
+        "Air"
+      ]
+    },
+    "9": {
+      "name": "Sky",
+      "rom_name": "Sea",
+      "stars": 0,
+      "income": 0,
+      "capturable": false,
+      "passable_by": [
+        "Air"
+      ]
+    },
+    "10": {
+      "name": "Airport",
+      "rom_name": "Arprt",
+      "stars": 3,
+      "income": 1000,
+      "capturable": true,
+      "passable_by": [
+        "Infantry",
+        "Mech",
+        "Treads",
+        "Tires",
+        "Air"
+      ]
+    },
+    "11": {
+      "name": "Port",
+      "rom_name": "Port",
+      "stars": 3,
+      "income": 1000,
+      "capturable": true,
+      "passable_by": [
+        "Infantry",
+        "Mech",
+        "Treads",
+        "Tires",
+        "Air",
+        "Ships",
+        "Lander"
+      ]
+    },
+    "12": {
+      "name": "Bridge",
+      "rom_name": "Brdg",
+      "stars": 0,
+      "income": 0,
+      "capturable": false,
+      "passable_by": [
+        "Infantry",
+        "Mech",
+        "Treads",
+        "Tires",
+        "Air"
+      ]
+    },
+    "13": {
+      "name": "Shoal",
+      "rom_name": "Shoal",
+      "stars": 0,
+      "income": 0,
+      "capturable": false,
+      "passable_by": [
+        "Infantry",
+        "Mech",
+        "Treads",
+        "Tires",
+        "Air",
+        "Lander"
+      ]
+    },
+    "14": {
+      "name": "Base",
+      "rom_name": "Base",
+      "stars": 3,
+      "income": 1000,
+      "capturable": true,
+      "passable_by": [
+        "Infantry",
+        "Mech",
+        "Treads",
+        "Tires",
+        "Air"
+      ]
+    },
+    "19": {
+      "name": "Reef",
+      "rom_name": "Reef",
+      "stars": 1,
+      "income": 0,
+      "capturable": false,
+      "passable_by": [
+        "Air",
+        "Ships",
+        "Lander"
+      ]
+    }
   },
   "stars": {
-    "road": 0,
-    "river": 0,
+    "air": 0,
+    "airfield": 3,
+    "airport": 3,
+    "base": 3,
+    "beach": 0,
     "bridge": 0,
+    "city": 3,
+    "factory": 3,
+    "forest": 2,
+    "harbor": 3,
+    "harbour": 3,
+    "headquarters": 4,
+    "hq": 4,
+    "mountain": 4,
+    "mountains": 4,
+    "mtn": 4,
+    "ocean": 0,
+    "plain": 1,
+    "plains": 1,
+    "port": 3,
+    "reef": 1,
+    "river": 0,
+    "road": 0,
     "sea": 0,
     "shoal": 0,
-    "plains": 1,
-    "plain": 1,
-    "reef": 1,
+    "sky": 0,
+    "water": 0,
     "wood": 2,
-    "woods": 2,
-    "city": 3,
-    "base": 3,
-    "factory": 3,
-    "port": 3,
-    "harbor": 3,
-    "airport": 3,
-    "mountain": 4,
-    "hq": 4,
-    "headquarters": 4
+    "woods": 2
   }
 }

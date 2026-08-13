@@ -1,0 +1,2424 @@
+{
+  "_comment": [
+    "CO records. Regenerate with tools/extract_co.py.",
+    "",
+    "entry = [0x08284A40 + weather*4 + [army+0x1E]*128 + co*292]",
+    "",
+    "'confirmed' holds only CO identities MEASURED in game by reading",
+    "army +0x1D while playing that CO. 'candidates' holds fingerprints",
+    "and the evidence for them, and is NOT a name mapping -- do not",
+    "promote an entry out of it without a +0x1D reading.",
+    "",
+    "Two records (10 and 11) use a movement table where every passable",
+    "terrain costs 1, and they are the only pair that does. That lines up",
+    "with the long-standing observation that the CO name blob lists",
+    "'Sturm' twice -- but it is still a fingerprint, not a measurement.",
+    "",
+    "NOTE FOR THE DAMAGE MODEL: there are now THREE candidate sources of",
+    "CO scaling -- the per-unit modifier pool, the +08/+09 global pair,",
+    "and the +11/+12 pair. DERIVATION.md section 7 established that a",
+    "modifier is applied as (value * mod) / 100 truncating, twice in",
+    "sequence. Which of these three feeds those two multiplications is",
+    "UNKNOWN. Calibration used a neutral CO throughout, so no existing",
+    "damage data depends on the answer, but any attempt to model a",
+    "specific CO does."
+  ],
+  "game": "Advance Wars (USA) Rev 1",
+  "rom_sha1": "15053499d5b3f49128a941d7f2d84876f5424d0c",
+  "provenance": {
+    "method": "extracted from ROM binary",
+    "record_base": "0x284a30",
+    "record_stride": 292,
+    "subblock_stride": 128,
+    "record_count": 12,
+    "modifier_pool": "0x28491c",
+    "modifier_index": "1-based RAM unit type; entry i is unit id i-1",
+    "index_formula_site": "0x0803A734",
+    "subblock_meaning": "selected by army +0x1E; believed (normal, power)"
+  },
+  "header_fields": {
+    "+06": "luck. 0 for nearly every record; co=0 reads 10 normal and 50 under power, co=7 reads 15. NOT confirmed -- named on the strength of the 0..9 default luck roll being 10 wide.",
+    "+07": "second luck-shaped byte, only nonzero on co=7 (15). Unidentified.",
+    "+08/+09": "a GLOBAL attack/defence pair, distinct from the per-unit modifiers. 100/100 everywhere except co=6, which reads 120/120 while all 24 of its per-unit entries are 100/100.",
+    "+11/+12": "a second pair, 100/100 normal and 110/90 under power for most records, but varying widely (co=8 power 80/130, co=10 130/120). How this composes with +08/+09 and the per-unit modifiers is UNKNOWN, and it matters -- see the warning printed by this tool."
+  },
+  "confirmed": {
+    "1": "Andy",
+    "2": "Max",
+    "3": "Olaf",
+    "4": "Sami"
+  },
+  "confirmed_method": "read army record +0x1D while playing that CO",
+  "candidates": {
+    "0": [
+      "luck-shaped bytes +06/+07 = 10/0 (50 under power)"
+    ],
+    "5": [
+      "80/100 on APC, AntiAir, BCopter, Bomber, Cruiser, Fighter, Infantry, Lander, MdTank, Mech, Recon, TCopter, Tank"
+    ],
+    "6": [
+      "global attack/defence 120/120 at +08/+09"
+    ],
+    "7": [
+      "luck-shaped bytes +06/+07 = 15/15 (15 under power)"
+    ],
+    "8": [
+      "80/100 on Battleship, Cruiser, Lander",
+      "115/90 on BCopter, Bomber, Fighter, TCopter"
+    ],
+    "9": [
+      "weather substitution [0, 1, 0]: uses table 0 in clear, 1 in snow, 0 in rain",
+      "80/100 on BCopter, Bomber, Fighter, TCopter"
+    ],
+    "10": [
+      "weather substitution [6, 1, 6]: uses table 6 in clear, 1 in snow, 6 in rain",
+      "clear and rain both use movement table 6, in which every passable terrain costs 1 -- terrain-ignoring movement"
+    ],
+    "11": [
+      "weather substitution [6, 1, 6]: uses table 6 in clear, 1 in snow, 6 in rain",
+      "clear and rain both use movement table 6, in which every passable terrain costs 1 -- terrain-ignoring movement"
+    ]
+  },
+  "records": [
+    {
+      "co": 0,
+      "normal": {
+        "addr": "0x284a30",
+        "weather_tables": [
+          0,
+          1,
+          2
+        ],
+        "modifiers": {
+          "Infantry": [
+            100,
+            100
+          ],
+          "Mech": [
+            100,
+            100
+          ],
+          "MdTank": [
+            100,
+            100
+          ],
+          "Tank": [
+            100,
+            100
+          ],
+          "Recon": [
+            100,
+            100
+          ],
+          "APC": [
+            100,
+            100
+          ],
+          "Artillery": [
+            100,
+            100
+          ],
+          "Rockets": [
+            100,
+            100
+          ],
+          "AntiAir": [
+            100,
+            100
+          ],
+          "Missiles": [
+            100,
+            100
+          ],
+          "Fighter": [
+            100,
+            100
+          ],
+          "Bomber": [
+            100,
+            100
+          ],
+          "BCopter": [
+            100,
+            100
+          ],
+          "TCopter": [
+            100,
+            100
+          ],
+          "Battleship": [
+            100,
+            100
+          ],
+          "Cruiser": [
+            100,
+            100
+          ],
+          "Lander": [
+            100,
+            100
+          ]
+        },
+        "header": [
+          1,
+          0,
+          0,
+          0,
+          0,
+          0,
+          10,
+          0,
+          100,
+          100,
+          0,
+          100,
+          100,
+          0,
+          0,
+          0
+        ]
+      },
+      "power": {
+        "addr": "0x284ab0",
+        "weather_tables": [
+          0,
+          1,
+          2
+        ],
+        "modifiers": {
+          "Infantry": [
+            100,
+            100
+          ],
+          "Mech": [
+            100,
+            100
+          ],
+          "MdTank": [
+            100,
+            100
+          ],
+          "Tank": [
+            100,
+            100
+          ],
+          "Recon": [
+            100,
+            100
+          ],
+          "APC": [
+            100,
+            100
+          ],
+          "Artillery": [
+            100,
+            100
+          ],
+          "Rockets": [
+            100,
+            100
+          ],
+          "AntiAir": [
+            100,
+            100
+          ],
+          "Missiles": [
+            100,
+            100
+          ],
+          "Fighter": [
+            100,
+            100
+          ],
+          "Bomber": [
+            100,
+            100
+          ],
+          "BCopter": [
+            100,
+            100
+          ],
+          "TCopter": [
+            100,
+            100
+          ],
+          "Battleship": [
+            100,
+            100
+          ],
+          "Cruiser": [
+            100,
+            100
+          ],
+          "Lander": [
+            100,
+            100
+          ]
+        },
+        "header": [
+          1,
+          0,
+          0,
+          0,
+          0,
+          0,
+          50,
+          0,
+          100,
+          100,
+          0,
+          110,
+          90,
+          0,
+          0,
+          0
+        ]
+      }
+    },
+    {
+      "co": 1,
+      "normal": {
+        "addr": "0x284b54",
+        "weather_tables": [
+          0,
+          1,
+          2
+        ],
+        "modifiers": {
+          "Infantry": [
+            100,
+            100
+          ],
+          "Mech": [
+            100,
+            100
+          ],
+          "MdTank": [
+            100,
+            100
+          ],
+          "Tank": [
+            100,
+            100
+          ],
+          "Recon": [
+            100,
+            100
+          ],
+          "APC": [
+            100,
+            100
+          ],
+          "Artillery": [
+            100,
+            100
+          ],
+          "Rockets": [
+            100,
+            100
+          ],
+          "AntiAir": [
+            100,
+            100
+          ],
+          "Missiles": [
+            100,
+            100
+          ],
+          "Fighter": [
+            100,
+            100
+          ],
+          "Bomber": [
+            100,
+            100
+          ],
+          "BCopter": [
+            100,
+            100
+          ],
+          "TCopter": [
+            100,
+            100
+          ],
+          "Battleship": [
+            100,
+            100
+          ],
+          "Cruiser": [
+            100,
+            100
+          ],
+          "Lander": [
+            100,
+            100
+          ]
+        },
+        "header": [
+          1,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          100,
+          100,
+          0,
+          100,
+          100,
+          0,
+          0,
+          0
+        ]
+      },
+      "power": {
+        "addr": "0x284bd4",
+        "weather_tables": [
+          0,
+          1,
+          2
+        ],
+        "modifiers": {
+          "Infantry": [
+            100,
+            100
+          ],
+          "Mech": [
+            100,
+            100
+          ],
+          "MdTank": [
+            100,
+            100
+          ],
+          "Tank": [
+            100,
+            100
+          ],
+          "Recon": [
+            100,
+            100
+          ],
+          "APC": [
+            100,
+            100
+          ],
+          "Artillery": [
+            100,
+            100
+          ],
+          "Rockets": [
+            100,
+            100
+          ],
+          "AntiAir": [
+            100,
+            100
+          ],
+          "Missiles": [
+            100,
+            100
+          ],
+          "Fighter": [
+            100,
+            100
+          ],
+          "Bomber": [
+            100,
+            100
+          ],
+          "BCopter": [
+            100,
+            100
+          ],
+          "TCopter": [
+            100,
+            100
+          ],
+          "Battleship": [
+            100,
+            100
+          ],
+          "Cruiser": [
+            100,
+            100
+          ],
+          "Lander": [
+            100,
+            100
+          ]
+        },
+        "header": [
+          1,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          100,
+          100,
+          0,
+          110,
+          90,
+          0,
+          0,
+          0
+        ]
+      }
+    },
+    {
+      "co": 2,
+      "normal": {
+        "addr": "0x284c78",
+        "weather_tables": [
+          0,
+          1,
+          2
+        ],
+        "modifiers": {
+          "Infantry": [
+            100,
+            100
+          ],
+          "Mech": [
+            100,
+            100
+          ],
+          "MdTank": [
+            150,
+            100
+          ],
+          "Tank": [
+            150,
+            100
+          ],
+          "Recon": [
+            150,
+            100
+          ],
+          "APC": [
+            150,
+            100
+          ],
+          "Artillery": [
+            90,
+            110
+          ],
+          "Rockets": [
+            90,
+            110
+          ],
+          "AntiAir": [
+            150,
+            100
+          ],
+          "Missiles": [
+            90,
+            110
+          ],
+          "Fighter": [
+            150,
+            100
+          ],
+          "Bomber": [
+            150,
+            100
+          ],
+          "BCopter": [
+            150,
+            100
+          ],
+          "TCopter": [
+            150,
+            100
+          ],
+          "Battleship": [
+            90,
+            110
+          ],
+          "Cruiser": [
+            150,
+            100
+          ],
+          "Lander": [
+            150,
+            100
+          ]
+        },
+        "header": [
+          1,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          100,
+          100,
+          0,
+          100,
+          100,
+          0,
+          0,
+          0
+        ]
+      },
+      "power": {
+        "addr": "0x284cf8",
+        "weather_tables": [
+          0,
+          1,
+          2
+        ],
+        "modifiers": {
+          "Infantry": [
+            100,
+            100
+          ],
+          "Mech": [
+            100,
+            100
+          ],
+          "MdTank": [
+            170,
+            100
+          ],
+          "Tank": [
+            170,
+            100
+          ],
+          "Recon": [
+            170,
+            100
+          ],
+          "APC": [
+            170,
+            100
+          ],
+          "Artillery": [
+            90,
+            110
+          ],
+          "Rockets": [
+            90,
+            110
+          ],
+          "AntiAir": [
+            170,
+            100
+          ],
+          "Missiles": [
+            90,
+            110
+          ],
+          "Fighter": [
+            170,
+            100
+          ],
+          "Bomber": [
+            170,
+            100
+          ],
+          "BCopter": [
+            170,
+            100
+          ],
+          "TCopter": [
+            170,
+            100
+          ],
+          "Battleship": [
+            90,
+            110
+          ],
+          "Cruiser": [
+            170,
+            100
+          ],
+          "Lander": [
+            170,
+            100
+          ]
+        },
+        "header": [
+          1,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          100,
+          100,
+          0,
+          110,
+          90,
+          0,
+          0,
+          0
+        ]
+      }
+    },
+    {
+      "co": 3,
+      "normal": {
+        "addr": "0x284d9c",
+        "weather_tables": [
+          0,
+          0,
+          1
+        ],
+        "modifiers": {
+          "Infantry": [
+            100,
+            100
+          ],
+          "Mech": [
+            100,
+            100
+          ],
+          "MdTank": [
+            100,
+            100
+          ],
+          "Tank": [
+            100,
+            100
+          ],
+          "Recon": [
+            100,
+            100
+          ],
+          "APC": [
+            100,
+            100
+          ],
+          "Artillery": [
+            100,
+            100
+          ],
+          "Rockets": [
+            100,
+            100
+          ],
+          "AntiAir": [
+            100,
+            100
+          ],
+          "Missiles": [
+            100,
+            100
+          ],
+          "Fighter": [
+            100,
+            100
+          ],
+          "Bomber": [
+            100,
+            100
+          ],
+          "BCopter": [
+            100,
+            100
+          ],
+          "TCopter": [
+            100,
+            100
+          ],
+          "Battleship": [
+            100,
+            100
+          ],
+          "Cruiser": [
+            100,
+            100
+          ],
+          "Lander": [
+            100,
+            100
+          ]
+        },
+        "header": [
+          1,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          100,
+          100,
+          0,
+          100,
+          100,
+          0,
+          0,
+          0
+        ]
+      },
+      "power": {
+        "addr": "0x284e1c",
+        "weather_tables": [
+          0,
+          0,
+          1
+        ],
+        "modifiers": {
+          "Infantry": [
+            100,
+            100
+          ],
+          "Mech": [
+            100,
+            100
+          ],
+          "MdTank": [
+            100,
+            100
+          ],
+          "Tank": [
+            100,
+            100
+          ],
+          "Recon": [
+            100,
+            100
+          ],
+          "APC": [
+            100,
+            100
+          ],
+          "Artillery": [
+            100,
+            100
+          ],
+          "Rockets": [
+            100,
+            100
+          ],
+          "AntiAir": [
+            100,
+            100
+          ],
+          "Missiles": [
+            100,
+            100
+          ],
+          "Fighter": [
+            100,
+            100
+          ],
+          "Bomber": [
+            100,
+            100
+          ],
+          "BCopter": [
+            100,
+            100
+          ],
+          "TCopter": [
+            100,
+            100
+          ],
+          "Battleship": [
+            100,
+            100
+          ],
+          "Cruiser": [
+            100,
+            100
+          ],
+          "Lander": [
+            100,
+            100
+          ]
+        },
+        "header": [
+          1,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          100,
+          100,
+          0,
+          110,
+          90,
+          0,
+          0,
+          0
+        ]
+      }
+    },
+    {
+      "co": 4,
+      "normal": {
+        "addr": "0x284ec0",
+        "weather_tables": [
+          0,
+          1,
+          2
+        ],
+        "modifiers": {
+          "Infantry": [
+            120,
+            90
+          ],
+          "Mech": [
+            120,
+            90
+          ],
+          "MdTank": [
+            90,
+            100
+          ],
+          "Tank": [
+            90,
+            100
+          ],
+          "Recon": [
+            90,
+            100
+          ],
+          "APC": [
+            100,
+            100
+          ],
+          "Artillery": [
+            100,
+            100
+          ],
+          "Rockets": [
+            100,
+            100
+          ],
+          "AntiAir": [
+            90,
+            100
+          ],
+          "Missiles": [
+            100,
+            100
+          ],
+          "Fighter": [
+            90,
+            100
+          ],
+          "Bomber": [
+            90,
+            100
+          ],
+          "BCopter": [
+            90,
+            100
+          ],
+          "TCopter": [
+            100,
+            100
+          ],
+          "Battleship": [
+            100,
+            100
+          ],
+          "Cruiser": [
+            90,
+            100
+          ],
+          "Lander": [
+            100,
+            100
+          ]
+        },
+        "header": [
+          1,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          100,
+          100,
+          0,
+          100,
+          100,
+          7,
+          0,
+          0
+        ]
+      },
+      "power": {
+        "addr": "0x284f40",
+        "weather_tables": [
+          3,
+          4,
+          5
+        ],
+        "modifiers": {
+          "Infantry": [
+            140,
+            80
+          ],
+          "Mech": [
+            140,
+            80
+          ],
+          "MdTank": [
+            90,
+            100
+          ],
+          "Tank": [
+            90,
+            100
+          ],
+          "Recon": [
+            90,
+            100
+          ],
+          "APC": [
+            100,
+            100
+          ],
+          "Artillery": [
+            100,
+            100
+          ],
+          "Rockets": [
+            100,
+            100
+          ],
+          "AntiAir": [
+            90,
+            100
+          ],
+          "Missiles": [
+            100,
+            100
+          ],
+          "Fighter": [
+            90,
+            100
+          ],
+          "Bomber": [
+            90,
+            100
+          ],
+          "BCopter": [
+            90,
+            100
+          ],
+          "TCopter": [
+            100,
+            100
+          ],
+          "Battleship": [
+            100,
+            100
+          ],
+          "Cruiser": [
+            90,
+            100
+          ],
+          "Lander": [
+            100,
+            100
+          ]
+        },
+        "header": [
+          1,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          100,
+          100,
+          0,
+          110,
+          90,
+          7,
+          0,
+          0
+        ]
+      }
+    },
+    {
+      "co": 5,
+      "normal": {
+        "addr": "0x284fe4",
+        "weather_tables": [
+          0,
+          1,
+          2
+        ],
+        "modifiers": {
+          "Infantry": [
+            80,
+            100
+          ],
+          "Mech": [
+            80,
+            100
+          ],
+          "MdTank": [
+            80,
+            100
+          ],
+          "Tank": [
+            80,
+            100
+          ],
+          "Recon": [
+            80,
+            100
+          ],
+          "APC": [
+            80,
+            100
+          ],
+          "Artillery": [
+            100,
+            100
+          ],
+          "Rockets": [
+            100,
+            100
+          ],
+          "AntiAir": [
+            80,
+            100
+          ],
+          "Missiles": [
+            100,
+            100
+          ],
+          "Fighter": [
+            80,
+            100
+          ],
+          "Bomber": [
+            80,
+            100
+          ],
+          "BCopter": [
+            80,
+            100
+          ],
+          "TCopter": [
+            80,
+            100
+          ],
+          "Battleship": [
+            100,
+            100
+          ],
+          "Cruiser": [
+            80,
+            100
+          ],
+          "Lander": [
+            80,
+            100
+          ]
+        },
+        "header": [
+          1,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          100,
+          100,
+          0,
+          100,
+          100,
+          0,
+          0,
+          0
+        ]
+      },
+      "power": {
+        "addr": "0x285064",
+        "weather_tables": [
+          0,
+          1,
+          2
+        ],
+        "modifiers": {
+          "Infantry": [
+            80,
+            100
+          ],
+          "Mech": [
+            80,
+            100
+          ],
+          "MdTank": [
+            80,
+            100
+          ],
+          "Tank": [
+            80,
+            100
+          ],
+          "Recon": [
+            80,
+            100
+          ],
+          "APC": [
+            80,
+            100
+          ],
+          "Artillery": [
+            150,
+            100
+          ],
+          "Rockets": [
+            150,
+            100
+          ],
+          "AntiAir": [
+            80,
+            100
+          ],
+          "Missiles": [
+            150,
+            100
+          ],
+          "Fighter": [
+            80,
+            100
+          ],
+          "Bomber": [
+            80,
+            100
+          ],
+          "BCopter": [
+            80,
+            100
+          ],
+          "TCopter": [
+            80,
+            100
+          ],
+          "Battleship": [
+            150,
+            100
+          ],
+          "Cruiser": [
+            80,
+            100
+          ],
+          "Lander": [
+            80,
+            100
+          ]
+        },
+        "header": [
+          1,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          100,
+          100,
+          0,
+          110,
+          90,
+          0,
+          0,
+          0
+        ]
+      }
+    },
+    {
+      "co": 6,
+      "normal": {
+        "addr": "0x285108",
+        "weather_tables": [
+          0,
+          1,
+          2
+        ],
+        "modifiers": {
+          "Infantry": [
+            100,
+            100
+          ],
+          "Mech": [
+            100,
+            100
+          ],
+          "MdTank": [
+            100,
+            100
+          ],
+          "Tank": [
+            100,
+            100
+          ],
+          "Recon": [
+            100,
+            100
+          ],
+          "APC": [
+            100,
+            100
+          ],
+          "Artillery": [
+            100,
+            100
+          ],
+          "Rockets": [
+            100,
+            100
+          ],
+          "AntiAir": [
+            100,
+            100
+          ],
+          "Missiles": [
+            100,
+            100
+          ],
+          "Fighter": [
+            100,
+            100
+          ],
+          "Bomber": [
+            100,
+            100
+          ],
+          "BCopter": [
+            100,
+            100
+          ],
+          "TCopter": [
+            100,
+            100
+          ],
+          "Battleship": [
+            100,
+            100
+          ],
+          "Cruiser": [
+            100,
+            100
+          ],
+          "Lander": [
+            100,
+            100
+          ]
+        },
+        "header": [
+          1,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          120,
+          120,
+          0,
+          120,
+          80,
+          0,
+          0,
+          0
+        ]
+      },
+      "power": {
+        "addr": "0x285188",
+        "weather_tables": [
+          0,
+          1,
+          2
+        ],
+        "modifiers": {
+          "Infantry": [
+            100,
+            100
+          ],
+          "Mech": [
+            100,
+            100
+          ],
+          "MdTank": [
+            100,
+            100
+          ],
+          "Tank": [
+            100,
+            100
+          ],
+          "Recon": [
+            100,
+            100
+          ],
+          "APC": [
+            100,
+            100
+          ],
+          "Artillery": [
+            100,
+            100
+          ],
+          "Rockets": [
+            100,
+            100
+          ],
+          "AntiAir": [
+            100,
+            100
+          ],
+          "Missiles": [
+            100,
+            100
+          ],
+          "Fighter": [
+            100,
+            100
+          ],
+          "Bomber": [
+            100,
+            100
+          ],
+          "BCopter": [
+            100,
+            100
+          ],
+          "TCopter": [
+            100,
+            100
+          ],
+          "Battleship": [
+            100,
+            100
+          ],
+          "Cruiser": [
+            100,
+            100
+          ],
+          "Lander": [
+            100,
+            100
+          ]
+        },
+        "header": [
+          1,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          120,
+          120,
+          0,
+          140,
+          70,
+          0,
+          0,
+          0
+        ]
+      }
+    },
+    {
+      "co": 7,
+      "normal": {
+        "addr": "0x28522c",
+        "weather_tables": [
+          0,
+          1,
+          2
+        ],
+        "modifiers": {
+          "Infantry": [
+            100,
+            100
+          ],
+          "Mech": [
+            100,
+            100
+          ],
+          "MdTank": [
+            100,
+            100
+          ],
+          "Tank": [
+            100,
+            100
+          ],
+          "Recon": [
+            100,
+            100
+          ],
+          "APC": [
+            100,
+            100
+          ],
+          "Artillery": [
+            100,
+            100
+          ],
+          "Rockets": [
+            100,
+            100
+          ],
+          "AntiAir": [
+            100,
+            100
+          ],
+          "Missiles": [
+            100,
+            100
+          ],
+          "Fighter": [
+            100,
+            100
+          ],
+          "Bomber": [
+            100,
+            100
+          ],
+          "BCopter": [
+            100,
+            100
+          ],
+          "TCopter": [
+            100,
+            100
+          ],
+          "Battleship": [
+            100,
+            100
+          ],
+          "Cruiser": [
+            100,
+            100
+          ],
+          "Lander": [
+            100,
+            100
+          ]
+        },
+        "header": [
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          15,
+          15,
+          100,
+          100,
+          0,
+          100,
+          100,
+          0,
+          0,
+          0
+        ]
+      },
+      "power": {
+        "addr": "0x2852ac",
+        "weather_tables": [
+          0,
+          1,
+          2
+        ],
+        "modifiers": {
+          "Infantry": [
+            100,
+            100
+          ],
+          "Mech": [
+            100,
+            100
+          ],
+          "MdTank": [
+            100,
+            100
+          ],
+          "Tank": [
+            100,
+            100
+          ],
+          "Recon": [
+            100,
+            100
+          ],
+          "APC": [
+            100,
+            100
+          ],
+          "Artillery": [
+            100,
+            100
+          ],
+          "Rockets": [
+            100,
+            100
+          ],
+          "AntiAir": [
+            100,
+            100
+          ],
+          "Missiles": [
+            100,
+            100
+          ],
+          "Fighter": [
+            100,
+            100
+          ],
+          "Bomber": [
+            100,
+            100
+          ],
+          "BCopter": [
+            100,
+            100
+          ],
+          "TCopter": [
+            100,
+            100
+          ],
+          "Battleship": [
+            100,
+            100
+          ],
+          "Cruiser": [
+            100,
+            100
+          ],
+          "Lander": [
+            100,
+            100
+          ]
+        },
+        "header": [
+          0,
+          1,
+          0,
+          0,
+          0,
+          0,
+          15,
+          15,
+          100,
+          100,
+          0,
+          110,
+          90,
+          0,
+          0,
+          0
+        ]
+      }
+    },
+    {
+      "co": 8,
+      "normal": {
+        "addr": "0x285350",
+        "weather_tables": [
+          0,
+          1,
+          2
+        ],
+        "modifiers": {
+          "Infantry": [
+            100,
+            100
+          ],
+          "Mech": [
+            100,
+            100
+          ],
+          "MdTank": [
+            100,
+            100
+          ],
+          "Tank": [
+            100,
+            100
+          ],
+          "Recon": [
+            100,
+            100
+          ],
+          "APC": [
+            100,
+            100
+          ],
+          "Artillery": [
+            100,
+            100
+          ],
+          "Rockets": [
+            100,
+            100
+          ],
+          "AntiAir": [
+            100,
+            100
+          ],
+          "Missiles": [
+            100,
+            100
+          ],
+          "Fighter": [
+            115,
+            90
+          ],
+          "Bomber": [
+            115,
+            90
+          ],
+          "BCopter": [
+            115,
+            90
+          ],
+          "TCopter": [
+            115,
+            90
+          ],
+          "Battleship": [
+            80,
+            100
+          ],
+          "Cruiser": [
+            80,
+            100
+          ],
+          "Lander": [
+            80,
+            100
+          ]
+        },
+        "header": [
+          1,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          100,
+          100,
+          0,
+          100,
+          100,
+          0,
+          0,
+          0
+        ]
+      },
+      "power": {
+        "addr": "0x2853d0",
+        "weather_tables": [
+          0,
+          1,
+          2
+        ],
+        "modifiers": {
+          "Infantry": [
+            100,
+            100
+          ],
+          "Mech": [
+            100,
+            100
+          ],
+          "MdTank": [
+            100,
+            100
+          ],
+          "Tank": [
+            100,
+            100
+          ],
+          "Recon": [
+            100,
+            100
+          ],
+          "APC": [
+            100,
+            100
+          ],
+          "Artillery": [
+            100,
+            100
+          ],
+          "Rockets": [
+            100,
+            100
+          ],
+          "AntiAir": [
+            100,
+            100
+          ],
+          "Missiles": [
+            100,
+            100
+          ],
+          "Fighter": [
+            115,
+            90
+          ],
+          "Bomber": [
+            115,
+            90
+          ],
+          "BCopter": [
+            115,
+            90
+          ],
+          "TCopter": [
+            115,
+            90
+          ],
+          "Battleship": [
+            80,
+            100
+          ],
+          "Cruiser": [
+            80,
+            100
+          ],
+          "Lander": [
+            80,
+            100
+          ]
+        },
+        "header": [
+          1,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          100,
+          100,
+          0,
+          80,
+          130,
+          0,
+          0,
+          0
+        ]
+      }
+    },
+    {
+      "co": 9,
+      "normal": {
+        "addr": "0x285474",
+        "weather_tables": [
+          0,
+          1,
+          0
+        ],
+        "modifiers": {
+          "Infantry": [
+            100,
+            100
+          ],
+          "Mech": [
+            100,
+            100
+          ],
+          "MdTank": [
+            100,
+            100
+          ],
+          "Tank": [
+            100,
+            100
+          ],
+          "Recon": [
+            100,
+            100
+          ],
+          "APC": [
+            100,
+            100
+          ],
+          "Artillery": [
+            100,
+            100
+          ],
+          "Rockets": [
+            100,
+            100
+          ],
+          "AntiAir": [
+            100,
+            100
+          ],
+          "Missiles": [
+            100,
+            100
+          ],
+          "Fighter": [
+            80,
+            100
+          ],
+          "Bomber": [
+            80,
+            100
+          ],
+          "BCopter": [
+            80,
+            100
+          ],
+          "TCopter": [
+            80,
+            100
+          ],
+          "Battleship": [
+            100,
+            100
+          ],
+          "Cruiser": [
+            100,
+            100
+          ],
+          "Lander": [
+            100,
+            100
+          ]
+        },
+        "header": [
+          1,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          100,
+          100,
+          0,
+          100,
+          100,
+          0,
+          0,
+          0
+        ]
+      },
+      "power": {
+        "addr": "0x2854f4",
+        "weather_tables": [
+          0,
+          1,
+          0
+        ],
+        "modifiers": {
+          "Infantry": [
+            100,
+            100
+          ],
+          "Mech": [
+            100,
+            100
+          ],
+          "MdTank": [
+            100,
+            100
+          ],
+          "Tank": [
+            100,
+            100
+          ],
+          "Recon": [
+            100,
+            100
+          ],
+          "APC": [
+            100,
+            100
+          ],
+          "Artillery": [
+            100,
+            100
+          ],
+          "Rockets": [
+            100,
+            100
+          ],
+          "AntiAir": [
+            100,
+            100
+          ],
+          "Missiles": [
+            100,
+            100
+          ],
+          "Fighter": [
+            80,
+            100
+          ],
+          "Bomber": [
+            80,
+            100
+          ],
+          "BCopter": [
+            80,
+            100
+          ],
+          "TCopter": [
+            80,
+            100
+          ],
+          "Battleship": [
+            100,
+            100
+          ],
+          "Cruiser": [
+            100,
+            100
+          ],
+          "Lander": [
+            100,
+            100
+          ]
+        },
+        "header": [
+          1,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          100,
+          100,
+          0,
+          110,
+          90,
+          0,
+          0,
+          0
+        ]
+      }
+    },
+    {
+      "co": 10,
+      "normal": {
+        "addr": "0x285598",
+        "weather_tables": [
+          6,
+          1,
+          6
+        ],
+        "modifiers": {
+          "Infantry": [
+            100,
+            100
+          ],
+          "Mech": [
+            100,
+            100
+          ],
+          "MdTank": [
+            100,
+            100
+          ],
+          "Tank": [
+            100,
+            100
+          ],
+          "Recon": [
+            100,
+            100
+          ],
+          "APC": [
+            100,
+            100
+          ],
+          "Artillery": [
+            100,
+            100
+          ],
+          "Rockets": [
+            100,
+            100
+          ],
+          "AntiAir": [
+            100,
+            100
+          ],
+          "Missiles": [
+            100,
+            100
+          ],
+          "Fighter": [
+            100,
+            100
+          ],
+          "Bomber": [
+            100,
+            100
+          ],
+          "BCopter": [
+            100,
+            100
+          ],
+          "TCopter": [
+            100,
+            100
+          ],
+          "Battleship": [
+            100,
+            100
+          ],
+          "Cruiser": [
+            100,
+            100
+          ],
+          "Lander": [
+            100,
+            100
+          ]
+        },
+        "header": [
+          1,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          100,
+          100,
+          0,
+          130,
+          120,
+          0,
+          0,
+          0
+        ]
+      },
+      "power": {
+        "addr": "0x285618",
+        "weather_tables": [
+          6,
+          1,
+          6
+        ],
+        "modifiers": {
+          "Infantry": [
+            100,
+            100
+          ],
+          "Mech": [
+            100,
+            100
+          ],
+          "MdTank": [
+            100,
+            100
+          ],
+          "Tank": [
+            100,
+            100
+          ],
+          "Recon": [
+            100,
+            100
+          ],
+          "APC": [
+            100,
+            100
+          ],
+          "Artillery": [
+            100,
+            100
+          ],
+          "Rockets": [
+            100,
+            100
+          ],
+          "AntiAir": [
+            100,
+            100
+          ],
+          "Missiles": [
+            100,
+            100
+          ],
+          "Fighter": [
+            100,
+            100
+          ],
+          "Bomber": [
+            100,
+            100
+          ],
+          "BCopter": [
+            100,
+            100
+          ],
+          "TCopter": [
+            100,
+            100
+          ],
+          "Battleship": [
+            100,
+            100
+          ],
+          "Cruiser": [
+            100,
+            100
+          ],
+          "Lander": [
+            100,
+            100
+          ]
+        },
+        "header": [
+          1,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          100,
+          100,
+          0,
+          150,
+          110,
+          0,
+          0,
+          0
+        ]
+      }
+    },
+    {
+      "co": 11,
+      "normal": {
+        "addr": "0x2856bc",
+        "weather_tables": [
+          6,
+          1,
+          6
+        ],
+        "modifiers": {
+          "Infantry": [
+            100,
+            100
+          ],
+          "Mech": [
+            100,
+            100
+          ],
+          "MdTank": [
+            100,
+            100
+          ],
+          "Tank": [
+            100,
+            100
+          ],
+          "Recon": [
+            100,
+            100
+          ],
+          "APC": [
+            100,
+            100
+          ],
+          "Artillery": [
+            100,
+            100
+          ],
+          "Rockets": [
+            100,
+            100
+          ],
+          "AntiAir": [
+            100,
+            100
+          ],
+          "Missiles": [
+            100,
+            100
+          ],
+          "Fighter": [
+            100,
+            100
+          ],
+          "Bomber": [
+            100,
+            100
+          ],
+          "BCopter": [
+            100,
+            100
+          ],
+          "TCopter": [
+            100,
+            100
+          ],
+          "Battleship": [
+            100,
+            100
+          ],
+          "Cruiser": [
+            100,
+            100
+          ],
+          "Lander": [
+            100,
+            100
+          ]
+        },
+        "header": [
+          1,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          100,
+          100,
+          0,
+          80,
+          80,
+          0,
+          0,
+          0
+        ]
+      },
+      "power": {
+        "addr": "0x28573c",
+        "weather_tables": [
+          6,
+          1,
+          6
+        ],
+        "modifiers": {
+          "Infantry": [
+            100,
+            100
+          ],
+          "Mech": [
+            100,
+            100
+          ],
+          "MdTank": [
+            100,
+            100
+          ],
+          "Tank": [
+            100,
+            100
+          ],
+          "Recon": [
+            100,
+            100
+          ],
+          "APC": [
+            100,
+            100
+          ],
+          "Artillery": [
+            100,
+            100
+          ],
+          "Rockets": [
+            100,
+            100
+          ],
+          "AntiAir": [
+            100,
+            100
+          ],
+          "Missiles": [
+            100,
+            100
+          ],
+          "Fighter": [
+            100,
+            100
+          ],
+          "Bomber": [
+            100,
+            100
+          ],
+          "BCopter": [
+            100,
+            100
+          ],
+          "TCopter": [
+            100,
+            100
+          ],
+          "Battleship": [
+            100,
+            100
+          ],
+          "Cruiser": [
+            100,
+            100
+          ],
+          "Lander": [
+            100,
+            100
+          ]
+        },
+        "header": [
+          1,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          100,
+          100,
+          0,
+          90,
+          70,
+          0,
+          0,
+          0
+        ]
+      }
+    }
+  ]
+}
