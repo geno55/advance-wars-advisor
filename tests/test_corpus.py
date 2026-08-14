@@ -28,12 +28,13 @@ sys.path.insert(0, str(pathlib.Path(__file__).resolve().parent.parent))
 from engine.damage import (Attack, counter_damage, damage_for_luck,  # noqa: E402
                            LUCK_MAX, LUCK_MIN, resolve, select_weapon)
 
-# Sweeps whose attacker terrain is in doubt. A fixture sits at
-# target-select, and the city fixtures record the Tank on Road (0 stars)
-# while their counters fit only 1 star -- so the record is probably the
-# PRE-MOVE tile. Their openings are unaffected and still tested; only the
-# counter needs the tile the unit actually fired from. Re-sweep with a
-# harness that emits attacker_terrain_after, then delete this list.
+# Sweeps written before the harness recorded the tile the attacker FOUGHT from.
+# A fixture sits at target-select and the unit record still holds the PRE-move
+# tile -- settled, see A10 and test_the_fixture_tile_is_the_PRE_MOVE_tile below.
+# These two record the Tank on Road while it fired from Plains, so their
+# counters cannot be scored without assuming the answer. Their openings are
+# unaffected and are still tested. city81b.json is the same board re-swept with
+# both tiles recorded.
 UNRESOLVED_ATTACKER_TERRAIN = ("city100.json", "city81.json")
 
 SWEEPS = ("counter.json", "att57.json", "def81.json", "def85.json",
@@ -211,6 +212,46 @@ class TestSeededSweeps(unittest.TestCase):
             observed = {c["damage"] for c in sweep["cases"]
                         if not c["destroyed"]}
             self.assertEqual((min(observed), max(observed)), rng, name)
+
+
+    def test_the_fixture_tile_is_the_PRE_MOVE_tile(self):
+        """A fixture sits at target-select -- after the move is chosen, before
+        it is confirmed -- and the attacker's record still holds the tile it
+        started on. Measured directly rather than inferred: the City fixture
+        reads terrain 5 (Road, 0 stars) before confirming and terrain 1 (Plain,
+        1 star) after, on every seed.
+
+        This is why the City counters missed on both hypotheses. The formula
+        was right; the tile was wrong. See A10.
+        """
+        sweep = self._load("city81b.json")
+        self.assertEqual(sweep["attacker_terrain"], 5)          # Road, 0 stars
+        self.assertEqual(sweep["attacker_terrain_after"], 1)    # Plain, 1 star
+        self.assertTrue(sweep["attacker_moved_on_confirm"])
+        self.assertTrue(all(c["attacker_moved_on_confirm"]
+                            for c in sweep["cases"]))
+
+        # And the counter reproduces ONLY with the tile it fought from. This is
+        # the assertion that makes the finding load-bearing rather than a note.
+        w = select_weapon("Infantry", "Tank")
+        fought, recorded = 0, 0
+        for c in sweep["cases"]:
+            survivor = sweep["defender_hp"] - c["damage"]
+            fought += counter_damage(w.base, survivor, 100, 1, 100) == c["counter"]
+            recorded += counter_damage(w.base, survivor, 100, 0, 100) == c["counter"]
+        n = len(sweep["cases"])
+        self.assertEqual(fought, n, "the tile it fought from must reproduce")
+        self.assertEqual(recorded, 0, "the recorded tile must not")
+
+    def test_the_short_sweep_is_a_subset_of_the_model(self):
+        """city81b is 8 seeds, not 64, so it cannot hit every damage value --
+        it was run to read one line of diagnostics. Assert containment, not
+        equality, or this passes for the wrong reason."""
+        sweep = self._load("city81b.json")
+        model, observed = self._replay(sweep)
+        self.assertTrue(set(observed) <= model,
+                        f"observed {sorted(observed)} not within {sorted(model)}")
+        self.assertTrue(sweep["controls"]["passed"])
 
     def test_the_counter_is_a_function_of_the_survivor(self):
         """The no-luck claim, stated correctly.

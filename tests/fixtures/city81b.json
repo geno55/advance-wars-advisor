@@ -1,0 +1,23 @@
+{
+  "mode": "seed",
+  "rng_state_addr": 50339120, "rng_mul": 20077, "rng_add": 12345,
+  "co_written": null, "co_player": 1, "co_in_fixture": 1,
+  "attacker_slot": 7, "defender_slot": 66,
+  "attacker_type": 5, "attacker_hp": 100, "attacker_ammo": 9,
+  "defender_type": 1, "defender_hp": 81,
+  "hp_written": {"attacker": null, "defender": 81},
+  "hp_in_fixture": {"attacker": 100, "defender": 100},
+  "controls": {"none": {"damage": 58, "counter": 1}, "seed": {"damage": 53, "counter": 1}, "identity": {"damage": 53, "counter": 1}, "passed": true},
+  "attacker_terrain": 5, "defender_terrain": 6,
+  "attacker_terrain_after": 1, "attacker_moved_on_confirm": true,
+  "cases": [
+    {"seed": 0, "damage": 55, "destroyed": false, "attacker_hp_before": 100, "counter": 0, "attacker_ammo_after": 9, "attacker_destroyed": false, "attacker_terrain_before": 5, "attacker_terrain_after": 1, "attacker_moved_on_confirm": true},
+    {"seed": 2654435761, "damage": 60, "destroyed": false, "attacker_hp_before": 100, "counter": 0, "attacker_ammo_after": 9, "attacker_destroyed": false, "attacker_terrain_before": 5, "attacker_terrain_after": 1, "attacker_moved_on_confirm": true},
+    {"seed": 1013904226, "damage": 58, "destroyed": false, "attacker_hp_before": 100, "counter": 0, "attacker_ammo_after": 9, "attacker_destroyed": false, "attacker_terrain_before": 5, "attacker_terrain_after": 1, "attacker_moved_on_confirm": true},
+    {"seed": 3668339987, "damage": 60, "destroyed": false, "attacker_hp_before": 100, "counter": 0, "attacker_ammo_after": 9, "attacker_destroyed": false, "attacker_terrain_before": 5, "attacker_terrain_after": 1, "attacker_moved_on_confirm": true},
+    {"seed": 2027808452, "damage": 58, "destroyed": false, "attacker_hp_before": 100, "counter": 0, "attacker_ammo_after": 9, "attacker_destroyed": false, "attacker_terrain_before": 5, "attacker_terrain_after": 1, "attacker_moved_on_confirm": true},
+    {"seed": 387276917, "damage": 56, "destroyed": false, "attacker_hp_before": 100, "counter": 0, "attacker_ammo_after": 9, "attacker_destroyed": false, "attacker_terrain_before": 5, "attacker_terrain_after": 1, "attacker_moved_on_confirm": true},
+    {"seed": 3041712678, "damage": 61, "destroyed": false, "attacker_hp_before": 100, "counter": 0, "attacker_ammo_after": 9, "attacker_destroyed": false, "attacker_terrain_before": 5, "attacker_terrain_after": 1, "attacker_moved_on_confirm": true},
+    {"seed": 1401181143, "damage": 56, "destroyed": false, "attacker_hp_before": 100, "counter": 0, "attacker_ammo_after": 9, "attacker_destroyed": false, "attacker_terrain_before": 5, "attacker_terrain_after": 1, "attacker_moved_on_confirm": true}
+  ]
+}

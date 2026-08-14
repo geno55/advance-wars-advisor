@@ -476,37 +476,45 @@ for it. The target's display rule, because the target was at 100 HP in every
 observation, where all four rules agree. And whether the counter's weapon
 selection follows the same max-base rule as a strike (A1).
 
-### A10. The attacker's recorded tile at target-select may be its PRE-MOVE tile
+### A10. A fixture's attacker tile IS the pre-move tile — **CLOSED, MEASURED**
 
 A damage fixture sits at target-select: the move has been chosen, the target
-cursor is on the defender, and A has not been pressed. The question is what the
-attacker's unit record holds at that moment -- the tile it started on, or the
-tile it will fire from.
+cursor is on the defender, A has not been pressed. The attacker's unit record at
+that moment holds **the tile it started on**, not the tile it will fire from.
 
-**It looks like the former, and it was caught by arithmetic rather than by
-looking.** The City fixtures record the attacker on terrain 5 (Road, 0 stars);
-the player who built them put it on Plains. The counterattacks decide it: across
-both City sweeps, all fifteen distinct survivor values reproduce exactly at
-1 star and **none** at 0 stars. The same check on Wood (recorded Plain, 1 star)
-fits at 1 star, and on the original mountain fixture (recorded Bridge, 0 stars)
-fits at 0 stars -- so the reader is not simply wrong everywhere. It is wrong
-where the unit moved onto different terrain before attacking.
+Measured directly. Re-swept with the position read again after the exchange, the
+City fixture reports the same thing on every seed:
 
-That is a reader fault, not a formula fault, and it is worth stating separately
-because the formula came out of it confirmed: the counter model predicted every
-City survivor correctly once given the tile the unit actually fought from.
+    record read (9,7) terrain 5 before confirming, (10,8) terrain 1 after
 
-**What it affects:** `attacker_terrain` in every sweep header this harness has
-ever written, and anything that reads an attacker's position mid-move. Not
-`engine/damage.py`, which takes `attacker_stars` from its caller, and not
-`engine/threat.py`, which places units itself.
+Road to Plain — 0 stars to 1. Found by arithmetic before anyone looked: the City
+counters reproduced at 1 star on all fifteen distinct survivors and at 0 stars on
+none, which is what prompted reading the position twice. The formula came out
+confirmed and the reader came out wrong, which is the opposite of the way that
+usually goes and worth recording as such.
 
-**Kill it by:** `dmg_seedsweep` now reads the attacker's position again after
-the exchange and records `attacker_terrain_before`, `attacker_terrain_after` and
-`attacker_moved_on_confirm`, erroring loudly when they differ. One re-sweep of
-either City fixture settles it. Until then `tests/test_corpus.py` lists those
-two sweeps in `UNRESOLVED_ATTACKER_TERRAIN` and declines to score their
-counters, rather than scoring them against a tile chosen because it fit.
+**What it affects.** `attacker_terrain` in every sweep header this harness has
+written. Nothing in `engine/`: `damage.counterattack()` takes `attacker_stars`
+from its caller, and `threat.py` places units itself.
+
+**Why seven earlier sweeps still scored correctly.** Not because the header was
+right — because their pre-move and post-move tiles happened to carry the same
+defence. The mountain fixture records Bridge (0 stars) and its counters fit at 0;
+Wood records Plain (1 star) and fits at 1. Either those units did not move, or
+they moved between tiles of equal defence. That is luck, and it held until a
+fixture crossed a star boundary.
+
+**Now recorded rather than inferred.** `dmg_seedsweep` emits
+`attacker_terrain_before`, `attacker_terrain_after` and
+`attacker_moved_on_confirm`, and errors loudly when they differ.
+`tools/counter_check.py` scores against the post-confirm tile and says so.
+`tests/test_corpus.py` asserts the finding both ways: the tile it fought from
+reproduces every counter, and the recorded tile reproduces none.
+
+**Still open:** whether the record updates at the moment of confirmation or
+somewhere later in the animation. Nothing here depends on it -- the reads are
+taken after the exchange has settled -- but a live reader polling mid-move would
+need to know.
 
 ## Unknown — not modelled
 
