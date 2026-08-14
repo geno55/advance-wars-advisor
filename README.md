@@ -1,8 +1,13 @@
 # Advance Wars advisor
 
 Reverse-engineered game model for **Advance Wars (USA) Rev 1** on GBA: a
-ROM-exact damage engine, a live board reader, and the harness that proved both
-against a running emulator.
+ROM-exact damage engine, a live board reader, movement, threat projection and
+fog of war — with the harness that proved each of them against a running
+emulator.
+
+Milestones below are numbered in the order they were built, not the order they
+are listed; 2 came before 1 because the damage tables could be read out of the
+ROM alone, while the board reader needed an emulator.
 
 > **You supply the ROM.** No ROM is included or redistributed here, and none ever
 > should be. The tools take a path to your own legally obtained copy and verify
@@ -26,9 +31,9 @@ paid off — see "What got caught" below.
 - Internal unit ID map recovered structurally, not guessed.
 - Weapon selection reproducing known behaviour (Md Tank hits Infantry for 105
   with its MG but Tank for 85 with its cannon; out-of-ammo fallback).
-- Calibrated against 14 exact-HP observations from a live game. Display rule
-  determined as `floor_min1`; terrain stars confirmed; four of six formula
-  variants refuted.
+- Calibrated against 75 exact-HP observations from a live game — 14
+  hand-recorded, 61 from the automated sweep. Display rule determined as
+  `floor_min1`; terrain stars confirmed; five of six formula variants refuted.
 - CO modifiers filled from the ROM record, and refused where a CO's strength
   lives in header fields the damage path has never been shown to read.
 - **The formula is determined: `luck_after_hp`.** `resolve()` returns an exact
@@ -47,7 +52,9 @@ it and joins it to the ROM-derived tables.
 | Unit array | `[0x08282CB8]` | ROM pointer — correct on any map |
 | Army records | `[0x08282CBC]`, 1-indexed | ROM pointer |
 | Map dimensions | `0x030036E0` | `{u8 w, u8 h}`; width cross-checked against the `0x03003600` row stride |
-| Property list | `0x03004500` | `[0x08282CC4]`; used to validate the map extent |
+| Property list | `0x03004500` | static IWRAM address; the ROM pointer `[0x08282CC4]` is its provenance but the reader does not dereference it. Validates the map extent |
+| Fog flag | `0x0300431D` | battle settings `+0x0D`; confirmed by writing it mid-match |
+| Vision counts | `0x0201763A` | static, byte per tile, the **active player's** view |
 | Terrain map | `0x02016C2A` | **static address, no pointer exists** |
 | Turn block | `0x03004420` | **static address**, sanity-checked every read |
 | Weather | `0x0300433C` | static address, confirmed against the disassembly |
@@ -88,8 +95,8 @@ board a Lander sitting at sea — not because loading checks terrain, but becaus
 the Tank cannot enter a Sea tile at all, so the question never arises. That has
 its own test, since it is exactly the case someone would otherwise hand-code.
 
-**Verified against the game across every movement class.** Each is one live
-dump compared tile-for-tile against the game's own flood fill:
+**Verified against the game on four of the seven movement classes.** Each is
+one live dump compared tile-for-tile against the game's own flood fill:
 
 | move class | conditions | result |
 |---|---|---|
@@ -98,9 +105,9 @@ dump compared tile-for-tile against the game's own flood fill:
 | Air | clear | exact |
 | Naval | clear | exact |
 
-Treads is the one class not separately dumped; it shares its table row shape
-with the others and is exercised throughout the unit tests, but it has not been
-put in front of the oracle.
+Treads, Mech and Lander are the three not separately dumped. They share their
+table row shape with the others and are exercised throughout the unit tests,
+but none has been put in front of the oracle.
 
 That dump also settled what the grid *is*. It is the **pass-through** set, not
 the stoppable set: all six tiles where it differed from `destinations()` are
@@ -116,10 +123,12 @@ unit may *end*, so `destinations()` — the set the advisor will actually consum
 occupied tile. `path_diff` reports it unscored, with the blocking unit named on
 each excluded tile, rather than letting it look confirmed.
 
-Still not modelled, and stated in the module docstring rather than discovered
-later: fog of war, joining two damaged units, and a transport's second
-passenger (the unit record exposes one cargo slot, so a half-full Lander reads
-as full — under-reporting destinations, which is the safe direction).
+Still not modelled by pathing, and stated in the module docstring rather than
+discovered later: movement being interrupted by walking into a hidden unit,
+joining two damaged units, and a transport's second passenger (the unit record
+exposes one cargo slot, so a half-full Lander reads as full — under-reporting
+destinations, which is the safe direction). Fog itself *is* modelled; see
+below.
 
 **Automated case generation — proven.** Cases no longer cost a human an
 emulator session each. `harness/mgba_spike.lua` restores a save state, writes a
@@ -183,9 +192,10 @@ Four things turned out to matter more than the damage arithmetic:
   their units has refreshed.
 
 **The state reader now carries CO identity.** `co_id` at army `+0x1D` was
-documented and confirmed — it is the field that named eleven of the twelve
-records — but `mgba_state.lua` was not dumping it, so every prediction off a
-live board was quietly assuming a neutral CO. Against Max that is wrong by half:
+documented and confirmed — it is the field that named all twelve records, by
+being written and read back off the screen — but `mgba_state.lua` was not
+dumping it, so every prediction off a live board was quietly assuming a neutral
+CO. Against Max that is wrong by half:
 on the fixture, a Tank quote moves from 15–24 to 22–31. Dumps that predate the
 field still load, and say so rather than defaulting silently.
 
@@ -205,33 +215,22 @@ So the numbers are stated as composition, not as measurement, and
 by the counterattacks they would eat. That fails safe for "can I die here" and
 is a real overstatement when your unit hits back hard.
 
-**Fog of war — modelled, detection outstanding.**
+**Milestone 5 — fog of war. Done, detection and rules both measured.**
 
-Under fog the reader is holding more than the player is allowed to know, so an
-advisor built straight on it answers questions using units you cannot see. That
-is not a missing feature, it is the confidently-wrong failure this project is
-organised against, so `engine/fog.py` models it.
+Under fog the reader holds more than the player is allowed to know, so an
+advisor built straight on it answers using units you cannot see — not a missing
+feature but the confidently-wrong failure this project exists to avoid.
 
-The two ways to be wrong pull opposite ways: see too much and the advisor
-cheats, warning you about an ambush you had no way of spotting; see too little
-and it calls a tile safe with a tank parked beside it. No single dial is safe
-in both directions, so a fogged answer is split — what is **known** from visible
-units, and a count of the **unlit tiles** an unseen attacker could be sitting
-in. The same board that reads `DIES` in the clear reads:
+**Detection.** Fog is the **u8 at `0x0300431D`**, battle settings `+0x0D`, 0
+clear and 1 fogged. Found by diffing labelled RAM probes across a VS fog toggle
+and confirmed by *writing* it mid-match, which is what separates cause from the
+57 bytes that merely correlated. `Board.fog` is real; dumps predating the field
+read `None`, carried as UNKNOWN rather than collapsed to off.
 
-```
-Infantry #10 ( 7, 6) 10 bars on Road   nothing VISIBLE can reach it  [131 unlit tiles in reach]
-```
-
-which is "you are blind here", not "you are safe". A fogged report without that
-second half would be lying by omission.
-
-**The visibility rules are measured, not assumed.** The game keeps its own
-answer in EWRAM: a byte per tile holding *how many of your units can see it*, a
-count and not a flag. `engine/fog.py` reproduces it exactly — 150 tiles of 150 —
-and the board plus the game's array are checked in as a regression oracle.
-
-Three of the four rules were wrong before that:
+**The rules are measured, not assumed.** The game keeps its own answer in
+EWRAM: a byte per tile holding *how many of the active player's units can see
+it* — a count, not a flag. `engine/fog.py` reproduces it exactly, and three of
+its four rules were wrong until it did:
 
 | rule | measured | previously assumed |
 |---|---|---|
@@ -240,80 +239,72 @@ Three of the four rules were wrong before that:
 | property vision | own tile only | switched off |
 | concealing terrain | Wood/Reef dark beyond 1 step, **on the tile** | applied to the unit, tile left lit |
 
-The concealment one is the one that mattered: treating it as "the unit is
-hidden but the tile is lit" meant the model lit ground the game keeps dark and
-would have called a wood tile visible when nothing could see into it. Erring
-toward seeing less was the right instinct and still left the model disagreeing
-with the game on 13 tiles — conservative is not the same as correct.
+The concealment one mattered most: treating it as "the unit is hidden but the
+tile is lit" lit ground the game keeps dark, and would have called a wood tile
+visible when nothing could see into it. Erring toward seeing *less* was the
+right instinct and still left the model disagreeing on 13 tiles — conservative
+is not the same as correct.
 
-Each rule was then re-confirmed on a capture built to isolate it: adjacency
-does reveal wood and reef; +3 holds for Infantry as well as Mech, with a unique
-minimum at 3 (+2 and +4 each miss 29 tiles); and a 19×16 board carrying **no
-units at all** lights exactly its eight properties — property vision measured
-on its own, with nothing else in frame.
+Each rule was then re-confirmed on a capture built to isolate it: adjacency does
+reveal wood and reef; +3 holds for Infantry as well as Mech, with a unique
+minimum at 3 (+2 and +4 each miss 29 tiles); and a 19×16 board with **no units
+at all** lights exactly its eight properties, measuring property vision alone.
 
-**The reader now reads the array rather than reproducing it.** The address is
+**The reader reads the array rather than reproducing it.** The address is
 static — same `0x0201763A` on both map sizes, stride following the map width —
-so `Board.vision` carries the game's own numbers and `viewer_count()` prefers
-them. It holds the **active player's** view: on a three-player board where
-P1/P2/P3 own 8/7/9 properties and nobody has units, the array reads 8, 7 or 9
-lit tiles purely according to whose turn it is, matching that player exactly
-and the other two not at all. There is no second array, so an opponent's sight
-lines are always modelled. The rules stay load-bearing for the advisor's central question, *what
-could I see from a tile I have not moved to yet*, which is about a board that
-does not exist; `threat` drops the observed array when it relocates a unit, or
-every candidate placement would be scored with the sight lines of where the
-unit actually is. Every dump that carries the array is then a free re-test of
-all four rules.
+so `Board.vision` carries the game's numbers and `viewer_count()` prefers them.
+It is the **active player's** view: on a three-player board where P1/P2/P3 own
+8/7/9 properties and nobody has units, it reads 8, 7 or 9 lit tiles purely
+according to whose turn it is, matching that player exactly and the other two
+not at all.
 
-**Detection is done.** Fog is the **u8 at `0x0300431D`** — battle settings
-`+0x0D`, 0 clear and 1 fogged — so `Board.fog` is real and the reader reports
-it. Dumps predating the field still read `None`, carried as UNKNOWN rather than
-collapsed to off.
+The rules stay load-bearing for two things the array cannot answer. An
+opponent's sight lines — there is no second array — and *what could I see from
+a tile I have not moved to yet*, which is about a board that does not exist.
+`threat` drops the observed array whenever it relocates a unit, or every
+candidate placement would be scored with the sight lines of where the unit
+actually is. Every dump carrying the array is then a free re-test of all four
+rules.
 
-Finding it was a controlled experiment rather than a search, because VS mode
-toggles fog per map: build the same map twice, dump each with
-`state(path, true)` for the IWRAM probe, and diff.
+**What it does to the advice.** The two ways to be wrong pull opposite ways:
+see too much and the advisor cheats, warning about an ambush you had no way of
+spotting; see too little and it calls a tile safe with a tank beside it. So a
+fogged answer is split — what is **known** from visible units, and a count of
+the **unlit tiles** an unseen attacker could occupy. The board that reads `DIES`
+in the clear reads:
+
+```
+Infantry #10 ( 7, 6) 10 bars on Road   nothing VISIBLE can reach it  [131 unlit tiles in reach]
+```
+
+"You are blind here", not "you are safe". A fogged report without that second
+half lies by omission.
+
+**How both were found**, in one line each, with the full account in
+`DERIVATION.md` 20–23. Build the same map twice with the fog toggle flipped,
+dump each with `state(path, true)` for the full IWRAM+EWRAM probe, and diff:
 
 ```bash
 python tools/fog_hunt.py --off off1.json off2.json --on on1.json on2.json
-```
-
-Two captures per side, because 3,735 bytes differed between the labels and
-3,678 of those also varied *within* a label. One capture per side cannot tell a
-frame counter from the flag. That left 57 candidates, exactly one of them a
-clean `0 → 1` inside a known structure — and writing it mid-match turned fog
-on, which is the step that makes it causal rather than correlated.
-
-Static analysis had predicted `+0x32` and `+0x08` on their overwhelmingly
-boolean read patterns. **Both were refuted** — neither byte moved. The tally
-did put the answer in the top three of a 32K space, but it was not evidence,
-and `fog_hunt` now prints failed priors as REFUTED rather than dropping them.
-
-**Finding the oracle took two wrong turns**, both worth keeping.
-
-The first candidate, `0x03007910`, looked bitmask-shaped in a hex dump. Read as
-words it is `0x030053C0`, `0x0823066C`, `0x080780FD` — IWRAM and ROM pointers,
-one odd and therefore a THUMB function pointer. A handler table the game fills
-in when fog switches on. A bitmask and a pointer are the same bytes; only
-alignment separates them, and a hex dump hides alignment.
-
-The second was the search itself. It assumed the array would be **zero** with
-fog off and would be a **bitmap** — and it is `01` everywhere (of course: every
-tile seen) and a **byte per tile**. Both assumptions were hard filters, so the
-search confidently returned nothing. Relaxing them found it immediately.
-
-```bash
 python tools/fog_diff.py fog_on.json fog_on2.json --off fog_off.json
 ```
 
-It sweeps both work RAMs for both shapes and pins a layout **before**
+Two captures per side, because 3,735 bytes differed between the labels and
+3,678 also varied *within* one — a single capture per side cannot tell a frame
+counter from a flag. `fog_diff` then pins the array's layout **before**
 consulting `fog.py`, since pinning it with our own rules would launder the
-assumptions into their own test. The constraints are rule-independent: own
-units must read as visible; a second fogged capture drops everything that
-moved between them; the span must contain bytes fog changed; and every lit tile
-must be near a unit or property, because fog means sight is local. Together
-those cut 262,144 bytes to seven candidate layouts.
+assumptions into their own test.
+
+Three wrong turns are worth keeping. Static analysis predicted the flag at
+`+0x32` and `+0x08` and **both were refuted** — the tally put the answer in the
+top three of a 32K space, but a prior is not evidence, so `fog_hunt` now prints
+failed predictions as REFUTED rather than dropping them. Then `0x03007910`
+looked bitmask-shaped in a hex dump and is a table of pointers, one of them odd
+and therefore a THUMB function pointer; a bitmask and a pointer are the same
+bytes, and only alignment tells them apart. Finally the search itself assumed
+the array would be zero with fog off and would be a bitmap — it is `01`
+everywhere and a byte per tile — and both assumptions were hard filters, so it
+confidently found nothing.
 
 ## Layout
 
@@ -329,34 +320,40 @@ harness/mgba_ramtool.lua  RAM search/diff, map and army inspection, unit records
                           reset/mark/chg/unc, tag+tagfilter (labelled states),
                           clusters (group survivors into runs)
 harness/record.py         interactive battle recorder with live convergence
-harness/observations.csv  14 recorded battles
+harness/mgba_dmg.lua      damage sweeps: frame-delay and written-seed, plus
+                          RNG read/write/trace
+harness/observations.csv  75 recorded battles (14 by hand, 61 swept)
 
 data/aw1_damage.json      damage matrices + provenance + resolved questions
 data/aw1_terrain.json     terrain defs: stars, income, the sky, dead slots
 data/aw1_terrain_ids.json terrain ids and the ownership bitfield
 data/aw1_movecost.json    movement costs, 7 move types x 20 terrains x 3 weathers
 data/aw1_army_struct.json army record layout + open CO questions
-data/aw1_co.json          12 CO records; 4 names measured, 8 fingerprints only
+data/aw1_co.json          12 CO records, all 12 names measured (Sturm has two)
 data/aw1_unit_stats.json  cost, move, move type, range, vision, fuel, ammo
 
 tests/test_damage.py      39 regression tests
 tests/test_pathing.py     22 regression tests, incl. "no unit-type branches"
 tests/test_threat.py      23 regression tests, incl. the same branch ban
 tests/test_fog.py         32 tests, incl. five real-board oracles and branch ban
+tests/fixtures/           five captured boards + the game's own vision array
 tools/threat_report.py    exposure, per-unit safety, and the coverage grid
 tools/fog_hunt.py         pin the fog flag by diffing labelled RAM probes
 tools/fog_diff.py         our predicted visibility vs the game's own count array
 tools/path_diff.py        our reachable set vs the game's own flood fill
 harness/mgba_spike.lua    write state, drive input, sweep cases unattended
 tools/spike_check.py      sweep vs engine, and the write-vs-play control
-tests/calibrate.py        hypothesis elimination, --suggest, --diagnose, --explain
+tools/dmg_ingest.py       damage sweep -> observations.csv, with survival report
+tools/rng_fit.py          seed sweep -> the luck distribution it implies
+tests/calibrate.py        hypothesis elimination: --suggest, --explain,
+                          --shared-luck, --selftest. Diagnosis is automatic
+                          when nothing survives; there is no --diagnose.
 
 tools/extract_tables.py   ROM -> damage JSON, 17 structural assertions
 tools/extract_movecost.py ROM -> movement cost JSON
 tools/extract_terrain.py  ROM -> terrain JSON, 121 structural assertions
-tools/extract_co.py       ROM -> CO records, 655 assertions; confirmed names
-                          and unmeasured fingerprints kept strictly apart
-tools/extract_units.py    ROM -> unit stats, 152 structural assertions
+tools/extract_co.py       ROM -> CO records, 667 structural assertions
+tools/extract_units.py    ROM -> unit stats, 179 structural assertions
 tools/quote.py            CLI: quote a single matchup
 tools/battle_plan.py      which battles to record, by expected information
 tools/plan_sim.py         simulate recording strategies before spending time
@@ -387,12 +384,19 @@ python engine/state.py C:/tmp/state.json
 ```
 
 ```
-19x26 board
-  P1: 2000 funds (+1000), power 2900, 8 units, 3 properties
-      Infantry   ( 5, 0) 10 bars ammo 0 fuel 99 on City  acted  capturing 10/20 (1 more turn(s))
-      APC        ( 1, 1) 10 bars ammo 0 fuel 70 on Bridge
-        carrying Infantry (10 bars, fuel 97)
+15x10 board, day 10, P1 to move, weather Clear (index 0), FOG
+  !! the active-player field disagrees with which army holds funds -- one of the two is wrong
+  P1: 16000 funds (+2000), power 0, 8 units, 2 properties
+      Artillery  ( 0, 6) 10 bars ammo 9 fuel 50 on Plain
+      APC        ( 1, 7) 10 bars ammo 0 fuel 43 on Road
+        carrying Mech (10 bars, fuel 69)
 ```
+
+The header carries day, active player, weather and fog; `fog unknown` appears
+instead of `FOG` on a dump that predates the flag. Cross-checks that fail are
+printed as `!!` lines rather than swallowed — the one above is real, and it is
+the funds heuristic disagreeing with the turn field on a VS board where both
+players hold funds.
 
 `Board` exposes `terrain_name`, `defence`, `move_cost(x, y, type, weather)`,
 `unit_at`, `cargo_of`, `properties_of`. It raises on unknown terrain rather than
@@ -404,9 +408,9 @@ substituting a default.
 python tools/quote.py Tank Infantry --stars 4
 ```
 
-Prints the damage envelope, whether the kill is guaranteed, and the counterattack.
-Where the two surviving formula variants disagree at the top of the range, it
-says so explicitly rather than picking one.
+Prints the damage envelope, whether the kill is guaranteed, and the
+counterattack. Only `luck_after_hp` survives calibration, so the range is exact
+rather than an envelope over competing variants.
 
 ## Reading the threat
 
@@ -432,8 +436,9 @@ that infantry and only one of them can find a tile to shoot from.
 python tools/threat_report.py state.json --unit 12
 ```
 
-Ranks every tile that unit can move to, safest first, re-running the enemy
-searches against each placement so blocking is real. Then:
+Ranks the tiles that unit can move to, safest first, re-running the enemy
+searches against each placement so blocking is real. Six are printed; pass
+`--limit N` for more. Then:
 
 ```bash
 python tools/threat_report.py state.json --map --for Infantry
@@ -553,7 +558,32 @@ confident inference overturned by a measurement:
   had a movement profile no real terrain could have — air-passable, everything
   else impassable.
 
+- **Three of the four fog visibility rules**, held for weeks with a green test
+  suite. The mountain bonus was switched off *and* set to a third of its real
+  value; property vision was off; concealment was applied to the unit while
+  leaving its tile lit. Nothing caught them because every test asserted what
+  the model does, and only a measurement can say what the game does. The rules
+  had been written deliberately conservative — biased toward seeing less — and
+  were still wrong on 13 tiles. Being careful is not the same as being right.
+- **A bitmask that was a pointer table.** `0x03007910` reads `c0 53 00 03 ...`
+  with fog on and zero with it off, which is exactly what a per-tile mask looks
+  like in a hex dump. As words it is `0x030053C0`, `0x0823066C`, `0x080780FD` —
+  the last odd, so a THUMB function pointer. Only alignment distinguishes the
+  two, and a byte dump hides alignment.
+- **"The mask will be zero when fog is off."** It is `01` everywhere: with fog
+  off every tile is seen, and the natural encoding of that is a count of one,
+  not a blank. Baked in as a search filter, it rejected the real array at every
+  offset and the search reported, confidently, that nothing was there. The
+  companion assumption — that a mask is a *bitmap* — was equally wrong; it is a
+  byte per tile, like the terrain map it sits beside.
+
 The pattern: the tell was almost always a value that was *impossible for the
 domain* — ammo 160 on an infantryman, fuel 189 on a tank, 23 HP bars — rather
 than anything a type check or unit test would flag. Hence the readers assert
 domain invariants and surface unrecognised values instead of swallowing them.
+
+The second pattern, from the fog work: **a search is only as good as its
+filters, and a filter encodes an assumption.** Twice a hunt returned "nothing
+found" when the thing was there and the premise was wrong. So `fog_hunt` and
+`fog_diff` now state their assumptions as switches, print refuted predictions
+rather than dropping them, and say what shape they would have missed.
