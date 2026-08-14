@@ -188,6 +188,40 @@ of the observations doing the work in "2 of 24 hypotheses survive".
 `calibrate.py` reports `display rule (1): floor_min1 (determined)` and
 `engine/damage.py` sets `DEFAULT_DISPLAY = "floor_min1"`.
 
+### A6. The fog-of-war visibility rules — **modelled, none of it measured**
+
+`vision` is a real ROM field (stats record `+0x0E`, extracted with 152
+structural assertions), and its values are strongly consistent with a sight
+radius: Recon, Missiles and Sub at 5, the artillery family at 1. That much is
+established. Everything `engine/fog.py` builds on top of it is assumption, and
+each one is a named switch in `fog.RULES` so a disagreement points at a single
+rule rather than at "the fog model".
+
+The defaults lean toward seeing *less*. Between an advisor that cheats — warning
+you about an ambush you had no way of spotting — and one that is blind, the
+first is worse, because it teaches you to trust a number that will not exist in
+a real game.
+
+| rule | default | kill it by |
+|---|---|---|
+| `radius` — lit within `vision` Manhattan steps | on | standing a Recon alone on empty ground and counting the lit ring: 5 steps means Manhattan, a 5×5 box means Chebyshev |
+| `hiding_terrain` — Wood and Reef conceal their occupant unless a viewer is adjacent | on | parking an infantry in woods three tiles from a Recon and seeing whether it renders |
+| `property_vision` — an owned property lights its own tile | off | owning a city far from any unit and checking whether it is lit |
+| `mountain_bonus` — units on mountains see further | off | the same Recon, on a mountain, counting the ring. Documented in later games in the series; may not be in this one |
+
+Also unmodelled and not currently switchable: Sonja's vision trait, and CO
+powers that reveal the map.
+
+**The bigger gap is upstream.** None of this can fire automatically, because
+the reader cannot yet tell a fogged board from a clear one — `Board.fog` is
+`None` until the flag is located. `None` is carried as UNKNOWN rather than
+collapsed to off, and `threat` warns on it, so the failure is loud. **Kill it
+by:** building the same VS map twice with the fog toggle flipped, dumping each
+with `state(path, true)`, and running `tools/fog_hunt.py`. Static analysis of
+the settings struct at `0x03004310` predicts `+0x32` (`0x03004342`), whose reads
+are 80-of-81 compare-against-zero; that prediction is a prior for the hunt to
+confirm or bury, not a substitute for it.
+
 ## Unknown — not modelled
 
 - **CO powers.** The second 128-byte stat block is selected by army `+0x1E`,
@@ -200,7 +234,9 @@ of the observations doing the work in "2 of 24 hypotheses survive".
   `+0x1D` to Kanbei and to Andy on one fixture, seeding the RNG so luck is
   fixed, and comparing the damage.
 - The `fighter-secondary` ROM discrepancy (see `DERIVATION.md`).
-- Weather effects, fog of war.
+- ~~Weather effects, fog of war.~~ Weather is read from `0x0300433C` and drives
+  movement cost. Fog is modelled but unverified and cannot yet be detected —
+  see A6.
 - Terrain movement costs, capture, supply, repair — all of milestone 1/3.
 - Whether the RNG can be read and predicted. Explicitly out of scope for now;
   the model deals in damage *ranges*.

@@ -120,7 +120,35 @@ end
 
 local function q(s) return '"' .. s .. '"' end
 
-function state(path)
+-- ---------------------------------------------------------------------------
+-- RAM PROBE -- a labelled snapshot, for pinning a setting whose address is not
+-- known yet.
+--
+-- The method that found the weather byte: capture the same situation twice
+-- with one thing deliberately changed, and diff. Doing it from a dump rather
+-- than from the interactive search means the comparison happens offline, in
+-- tools/fog_hunt.py, where a THIRD capture can separate the byte that tracks
+-- the setting from the dozens that are merely noisy.
+--
+-- Off by default: it makes the dump about fifty times bigger.
+--     state("C:/tmp/fog_off.json", true)
+--
+-- IWRAM is the whole 32K because that is where every battle-state address
+-- found so far lives -- the settings struct, the turn block and the weather
+-- byte are all in it. Casting narrowly is how you miss the thing you are
+-- looking for and conclude it is not there.
+local PROBE_REGIONS = {
+  { 0x03000000, 0x8000, "iwram" },
+}
+
+local function hexdump(base, len)
+  local data = emu:readRange(base, len)
+  return (data:gsub(".", function(c)
+    return string.format("%02x", string.byte(c))
+  end))
+end
+
+function state(path, probe)
   local w, h, pinned, stride_w, walked_h = dims()
   local ubase, abase = emu:read32(UNIT_BASE_PTR), emu:read32(ARMY_BASE_PTR)
   local out = {}
@@ -283,14 +311,39 @@ function state(path)
 
   w_(string.format('  "check": {"units_on_impossible_terrain": %d, '
     .. '"unknown_terrain_ids": [%s], "turn_block_sane": %s, '
-    .. '"funds_heuristic_agrees": %s}',
+    .. '"funds_heuristic_agrees": %s}%s',
     bad, table.concat(u, ","),
     turn_ok and "true" or "false",
-    funds_agree and "true" or "false"))
+    funds_agree and "true" or "false",
+    probe and "," or ""))
+
+  if probe then
+    local parts = {}
+    for _, r in ipairs(PROBE_REGIONS) do
+      parts[#parts + 1] = string.format(
+        '    %s: {"base": "0x%08X", "len": %d, "hex": "%s"}',
+        q(r[3]), r[1], r[2], hexdump(r[1], r[2]))
+    end
+    w_('  "probe": {')
+    w_(table.concat(parts, ",\n"))
+    w_("  }")
+  end
   w_("}")
 
   local json = table.concat(out, "\n")
-  console:log(json)
+  -- A probe dump is ~64K of hex on one line. Echoing that to the console is at
+  -- best very slow, so with the probe on the console gets a receipt and the
+  -- file gets the data -- which also means a probe run without a path is a
+  -- mistake worth naming rather than a wall of hex.
+  if probe then
+    console:log(string.format("state+probe: %d bytes of JSON", #json))
+    if not path then
+      console:log("NOTE: no path given -- a probe dump is only useful written "
+        .. "to a file for tools/fog_hunt.py. Try state(\"C:/tmp/fog_off.json\", true)")
+    end
+  else
+    console:log(json)
+  end
   if path and io and io.open then
     local f = io.open(path, "w")
     if f then
@@ -319,3 +372,4 @@ function state(path)
 end
 
 console:log("AW state reader loaded.  state()  or  state(\"C:/tmp/state.json\")")
+console:log("  state(path, true) also dumps an IWRAM probe -- see tools/fog_hunt.py")

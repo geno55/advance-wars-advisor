@@ -20,7 +20,7 @@ import sys
 
 ROOT = pathlib.Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT))
-from engine import threat                                      # noqa: E402
+from engine import fog, threat                                 # noqa: E402
 from engine.damage import screen_bars                          # noqa: E402
 from engine.state import load, summarise                       # noqa: E402
 
@@ -31,8 +31,9 @@ def bars(hp):
 
 def describe(ff, hp):
     """One line for a focus-fire result, in the terms a player thinks in."""
+    dark = f"  [{ff.blind_spots} unlit tiles in reach]" if ff.blind_spots else ""
     if not ff.delivered:
-        return "untouched"
+        return ("untouched" if not dark else "nothing VISIBLE can reach it" + dark)
     span = (f"{ff.best_damage}-{ff.worst_damage}"
             if ff.best_damage != ff.worst_damage else f"{ff.worst_damage}")
     who = f"{ff.attackers} attacker{'s' if ff.attackers != 1 else ''}"
@@ -47,22 +48,24 @@ def describe(ff, hp):
         out += f"  [+{len(ff.crowded_out)} crowded out]"
     if not ff.exact:
         out += "  [ordering not exhaustively searched]"
-    return out
+    return out + dark
 
 
-def report_units(board, player, warnings, weather=None):
+def report_units(board, player, warnings, weather=None, fog=None):
     carried = {u.cargo for u in board.units if u.cargo}
     rows = []
     for u in sorted(board.units_of(player), key=lambda u: (u.y, u.x)):
         if u.slot in carried:
             continue
-        ff = threat.focus_fire(board, u, weather=weather, warnings=warnings)
+        ff = threat.focus_fire(board, u, weather=weather, fog=fog,
+                               warnings=warnings)
         rows.append((u, ff))
     return rows
 
 
-def print_safety(board, unit, warnings, weather=None, limit=6):
-    ranked = threat.safety(board, unit, weather=weather, warnings=warnings)
+def print_safety(board, unit, warnings, weather=None, limit=6, fog=None):
+    ranked = threat.safety(board, unit, weather=weather, fog=fog,
+                           warnings=warnings)
     here = (unit.x, unit.y)
     print(f"\n  every tile {unit.type} #{unit.slot} can reach, safest first:")
     for r in ranked[:limit]:
@@ -74,10 +77,10 @@ def print_safety(board, unit, warnings, weather=None, limit=6):
         print(f"      ... and {len(ranked) - limit} more")
 
 
-def print_map(board, player, unit_type=None, weather=None):
+def print_map(board, player, unit_type=None, weather=None, fog=None):
     """Coverage grid: how many enemies can put a shot on each tile."""
     tmap = threat.threat_map(board, player, unit_type=unit_type,
-                             weather=weather)
+                             weather=weather, fog=fog)
     label = f" for {unit_type}" if unit_type else ""
     print(f"\n  threat coverage{label} (digits = attackers able to reach, "
           f"'.' = clear):")
@@ -105,6 +108,12 @@ def main():
     p.add_argument("--weather", help="ask a hypothetical instead of the board's")
     p.add_argument("--limit", type=int, default=6,
                    help="tiles to list with --unit")
+    p.add_argument("--fog", dest="fog", action="store_true", default=None,
+                   help="this match has fog of war on; count only what you can "
+                        "see. The reader cannot detect it yet, so you have to "
+                        "say -- see tools/fog_hunt.py")
+    p.add_argument("--no-fog", dest="fog", action="store_false",
+                   help="this match has fog off; silences the unknown warning")
     a = p.parse_args()
 
     board = load(a.state)
@@ -118,8 +127,12 @@ def main():
         return 1
 
     warnings = []
+    fog_on = board.fog if a.fog is None else a.fog
+    if fog_on:
+        print("\n" + fog.summarise(board, player))
+
     if a.map:
-        print_map(board, player, a.for_type, a.weather)
+        print_map(board, player, a.for_type, a.weather, a.fog)
 
     if a.unit is not None:
         unit = next((u for u in board.units if u.slot == a.unit), None)
@@ -129,10 +142,10 @@ def main():
         if unit.player != player:
             print(f"!! slot {a.unit} belongs to P{unit.player}, not P{player}")
             return 1
-        print_safety(board, unit, warnings, a.weather, a.limit)
+        print_safety(board, unit, warnings, a.weather, a.limit, a.fog)
     elif not a.map:
         print(f"\nP{player} exposure -- what the enemy can do on their next turn:")
-        rows = report_units(board, player, warnings, a.weather)
+        rows = report_units(board, player, warnings, a.weather, a.fog)
         if not rows:
             print("  (no units)")
         for u, ff in rows:

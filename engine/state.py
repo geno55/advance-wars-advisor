@@ -102,6 +102,13 @@ class Board:
     # to those tables are still inferred, so `weather_index` is the value to
     # trust and `weather` is a convenience over a label that may yet move.
     weather_index: Optional[int] = None
+    # Fog of war. None means UNKNOWN, not off -- the flag's RAM address has not
+    # been found yet (tools/fog_hunt.py is the way in), so the reader cannot
+    # currently tell a clear board from a fogged one. Anything that would give
+    # different advice under fog has to treat None as "ask" rather than "no",
+    # because defaulting to off is exactly how the advisor would end up quoting
+    # units the player cannot see. See engine/fog.py.
+    fog: Optional[bool] = None
     warnings: list = field(default_factory=list)
 
     @property
@@ -215,6 +222,7 @@ def load(path) -> Board:
         day=raw.get("day", 0),
         active_player=raw.get("active_player", 0),
         weather_index=raw.get("weather_index"),
+        fog=raw.get("fog"),
     )
     chk = raw.get("check", {})
     if "day" not in raw:

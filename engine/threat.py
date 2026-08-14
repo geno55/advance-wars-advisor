@@ -48,8 +48,13 @@ WHAT IS NOT MODELLED, deliberately and visibly
     unit never hits back, so `worst_damage` is an UPPER bound. That is the
     direction that fails safe for "can I die here", and it is a real
     overstatement when your unit counters hard.
-  * Fog of war. The reader reports true board state, so this sees enemies a
-    fogged player cannot. `Board` does not report fog, so this cannot either.
+  * Whether fog is even on. `Board.fog` is None until the flag is located in
+    RAM, and None is carried as UNKNOWN rather than collapsed to off -- an
+    unknown board gets a warning saying the numbers assume clear. Pass
+    fog=True and the enemy list drops to what you can legally see, with the
+    unlit tiles that could hide the rest reported as `blind_spots`. The
+    visibility rules themselves are engine/fog.py's assumptions, none of them
+    measured yet.
   * CO powers firing. The charge is readable but the activation threshold is
     not known (see aw1_army_struct.json), so a power landing mid-turn is
     outside the model entirely.
@@ -71,10 +76,11 @@ from typing import Dict, List, Optional, Sequence, Set, Tuple
 
 try:                                    # imported as engine.threat by tools/
     from . import co as co_mod
-    from . import damage, pathing
+    from . import damage, fog as fog_mod, pathing
 except ImportError:                     # imported as threat, engine/ on path
     import co as co_mod
     import damage
+    import fog as fog_mod
     import pathing
 
 Coord = Tuple[int, int]
@@ -147,11 +153,32 @@ def covered_tiles(board, unit, weather: Optional[str] = None) -> Dict[Coord, Set
     return out
 
 
-def hostiles(board, player: int, ignore_acted: bool = True) -> List:
-    """Enemy units that could still shoot. Every non-`player` army is hostile."""
-    return [u for u in board.units
-            if u.player != player and u.player != 0 and not u.loaded
-            and (ignore_acted or not u.acted)]
+def hostiles(board, player: int, ignore_acted: bool = True,
+             fog: bool = False, rule_set: Optional[dict] = None) -> List:
+    """Enemy units that could still shoot. Every non-`player` army is hostile.
+
+    Under fog this drops the ones the player cannot legally see. That makes the
+    answer WEAKER on purpose -- a projection built on hidden units is the
+    advisor telling you about an ambush you had no way of knowing about. What
+    is lost has to be reported separately; see `FocusFire.blind_spots`.
+    """
+    out = [u for u in board.units
+           if u.player != player and u.player != 0 and not u.loaded
+           and (ignore_acted or not u.acted)]
+    if fog:
+        visible = {u.slot for u in fog_mod.visible_units(board, player, rule_set)}
+        out = [u for u in out if u.slot in visible]
+    return out
+
+
+def fog_active(board, fog: Optional[bool]) -> Optional[bool]:
+    """Resolve the fog setting: explicit argument, else whatever the board knows.
+
+    None propagates as None rather than collapsing to False, because the reader
+    cannot yet tell fog from clear and "we do not know" must not silently
+    become "there is none".
+    """
+    return board.fog if fog is None else fog
 
 
 # --------------------------------------------------------------------------
@@ -226,6 +253,30 @@ def _modifier(board, unit, role: int, co_ids, warnings: list) -> int:
 # threats
 # --------------------------------------------------------------------------
 
+def _note_fog(board, player: int, fog: Optional[bool], rule_set, warnings: list):
+    """Say out loud which of the three fog states this answer was computed in.
+
+    Unknown is its own state and gets its own warning. Treating it as "off"
+    would produce a confident clear-board answer for a fogged game, which is
+    the whole reason this module grew a fog parameter.
+    """
+    state = fog_active(board, fog)
+    if state is None:
+        note = ("fog of war is UNKNOWN for this board. The reader cannot detect "
+                "it yet -- see tools/fog_hunt.py -- so these numbers assume a "
+                "clear board, and under fog they would quote you units you have "
+                "no way of seeing. Pass fog=True or fog=False to settle it.")
+    elif state:
+        hidden = len(fog_mod.hidden_tiles(board, player, rule_set))
+        note = (f"fog of war is ON: only units you can currently see are "
+                f"counted, and {hidden} tile(s) are unlit. Anything standing in "
+                f"them is absent from every number here.")
+    else:
+        return
+    if note not in warnings:
+        warnings.append(note)
+
+
 @dataclass(frozen=True)
 class Threat:
     """One enemy unit's attack on one tile, already resolved to damage."""
@@ -276,20 +327,25 @@ class _Damage:
 
 def threats_to(board, defender, tile: Optional[Coord] = None, *,
                co_ids: Optional[dict] = None, weather: Optional[str] = None,
-               ignore_acted: bool = True,
+               ignore_acted: bool = True, fog: Optional[bool] = None,
+               fog_rules: Optional[dict] = None,
                warnings: Optional[list] = None) -> List[Threat]:
     """Every enemy attack that could land on `defender` if it stood at `tile`.
 
     Defaults to where it actually stands. Enemy movement is recomputed against
-    the hypothetical board, so blocking effects are real.
+    the hypothetical board, so blocking effects are real -- and so is the
+    change in what you can SEE from there, since visibility is evaluated on the
+    same hypothetical board.
     """
     tile = tile or (defender.x, defender.y)
     warnings = warnings if warnings is not None else []
     hypo, moved = _relocate(board, defender, tile)
     dmg = _Damage(hypo, moved, tile, co_ids, warnings)
+    _note_fog(hypo, defender.player, fog, fog_rules, warnings)
 
     out = []
-    for enemy in hostiles(hypo, defender.player, ignore_acted):
+    for enemy in hostiles(hypo, defender.player, ignore_acted,
+                          fog=bool(fog_active(hypo, fog)), rule_set=fog_rules):
         sources = covered_tiles(hypo, enemy, weather).get(tile)
         if not sources:
             continue
@@ -318,6 +374,10 @@ class FocusFire:
     lethal: bool            # the worst case kills
     certain_death: bool     # even the best case kills
     exact: bool             # whether the ordering search was exhaustive
+    # Under fog, unlit tiles close enough that something parked there could
+    # reach this one. NOT a prediction -- a count of the places the prediction
+    # cannot see into, so a quiet report and a blind one look different.
+    blind_spots: int = 0
 
     @property
     def attackers(self) -> int:
@@ -368,7 +428,8 @@ def _chain(dmg: _Damage, start_hp: int, order: Sequence[Threat], high: bool) -> 
 
 def focus_fire(board, defender, tile: Optional[Coord] = None, *,
                co_ids: Optional[dict] = None, weather: Optional[str] = None,
-               ignore_acted: bool = True,
+               ignore_acted: bool = True, fog: Optional[bool] = None,
+               fog_rules: Optional[dict] = None,
                warnings: Optional[list] = None) -> FocusFire:
     """Worst and best case for `defender` standing at `tile` over one enemy turn.
 
@@ -378,17 +439,21 @@ def focus_fire(board, defender, tile: Optional[Coord] = None, *,
     tile = tile or (defender.x, defender.y)
     warnings = warnings if warnings is not None else []
     threats = threats_to(board, defender, tile, co_ids=co_ids, weather=weather,
-                         ignore_acted=ignore_acted, warnings=warnings)
+                         ignore_acted=ignore_acted, fog=fog,
+                         fog_rules=fog_rules, warnings=warnings)
     delivered, crowded = _match_distinct_tiles(threats)
 
     hypo, moved = _relocate(board, defender, tile)
     dmg = _Damage(hypo, moved, tile, co_ids, warnings)
+    blind = (len(fog_mod.blind_spots(hypo, defender.player, tile, fog_rules))
+             if fog_active(hypo, fog) else 0)
 
     if not delivered:
         return FocusFire(tile=tile, delivered=(), crowded_out=tuple(crowded),
                          worst_damage=0, best_damage=0,
                          worst_remaining=moved.hp, best_remaining=moved.hp,
-                         lethal=False, certain_death=False, exact=True)
+                         lethal=False, certain_death=False, exact=True,
+                         blind_spots=blind)
 
     exact = len(delivered) <= EXHAUSTIVE_ORDERINGS
     if exact:
@@ -408,7 +473,7 @@ def focus_fire(board, defender, tile: Optional[Coord] = None, *,
         worst_remaining=max(0, moved.hp - worst),
         best_remaining=max(0, moved.hp - best),
         lethal=worst >= moved.hp, certain_death=best >= moved.hp,
-        exact=exact,
+        exact=exact, blind_spots=blind,
     )
 
 
@@ -427,6 +492,7 @@ class TileRisk:
 
 def safety(board, unit, *, co_ids: Optional[dict] = None,
            weather: Optional[str] = None, ignore_acted: bool = True,
+           fog: Optional[bool] = None, fog_rules: Optional[dict] = None,
            warnings: Optional[list] = None) -> List[TileRisk]:
     """Every tile this unit can end on, worst case first cheapest.
 
@@ -438,7 +504,8 @@ def safety(board, unit, *, co_ids: Optional[dict] = None,
     out = []
     for tile, cost in pathing.destinations(board, unit, weather).items():
         ff = focus_fire(board, unit, tile, co_ids=co_ids, weather=weather,
-                        ignore_acted=ignore_acted, warnings=warnings)
+                        ignore_acted=ignore_acted, fog=fog,
+                        fog_rules=fog_rules, warnings=warnings)
         out.append(TileRisk(
             tile=tile, move_cost=cost,
             terrain=board.terrain_name(*tile),
@@ -449,8 +516,9 @@ def safety(board, unit, *, co_ids: Optional[dict] = None,
 
 
 def threat_map(board, player: int, *, unit_type: Optional[str] = None,
-               weather: Optional[str] = None,
-               ignore_acted: bool = True) -> Dict[Coord, List]:
+               weather: Optional[str] = None, ignore_acted: bool = True,
+               fog: Optional[bool] = None,
+               fog_rules: Optional[dict] = None) -> Dict[Coord, List]:
     """Tile -> the enemy units that could put a shot on it, as the board stands.
 
     Coverage, not damage: what a tile costs you depends on what you park there.
@@ -462,7 +530,8 @@ def threat_map(board, player: int, *, unit_type: Optional[str] = None,
     hypothetical placement.
     """
     out: Dict[Coord, List] = {}
-    for enemy in hostiles(board, player, ignore_acted):
+    for enemy in hostiles(board, player, ignore_acted,
+                          fog=bool(fog_active(board, fog)), rule_set=fog_rules):
         if unit_type is not None and not damage.can_attack(
                 enemy.type, unit_type, enemy.ammo):
             continue

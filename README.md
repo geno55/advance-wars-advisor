@@ -205,6 +205,51 @@ So the numbers are stated as composition, not as measurement, and
 by the counterattacks they would eat. That fails safe for "can I die here" and
 is a real overstatement when your unit hits back hard.
 
+**Fog of war — modelled, detection outstanding.**
+
+Under fog the reader is holding more than the player is allowed to know, so an
+advisor built straight on it answers questions using units you cannot see. That
+is not a missing feature, it is the confidently-wrong failure this project is
+organised against, so `engine/fog.py` models it.
+
+The two ways to be wrong pull opposite ways: see too much and the advisor
+cheats, warning you about an ambush you had no way of spotting; see too little
+and it calls a tile safe with a tank parked beside it. No single dial is safe
+in both directions, so a fogged answer is split — what is **known** from visible
+units, and a count of the **unlit tiles** an unseen attacker could be sitting
+in. The same board that reads `DIES` in the clear reads:
+
+```
+Infantry #10 ( 7, 6) 10 bars on Road   nothing VISIBLE can reach it  [131 unlit tiles in reach]
+```
+
+which is "you are blind here", not "you are safe". A fogged report without that
+second half would be lying by omission.
+
+`vision` is a real ROM field and its values are strongly consistent with a
+sight radius — Recon, Missiles and Sub at 5, the artillery family at 1. That is
+where the established part stops. Every rule layered on it is a named switch in
+`fog.RULES` with its own kill condition (`ASSUMPTIONS.md` A6), defaulting toward
+seeing *less*, because an advisor that cheats is worse than one that is blind.
+
+**What is missing is detection.** `Board.fog` is `None` — UNKNOWN, deliberately
+not collapsed to off — because the flag's address is unknown, and `threat`
+warns rather than assuming clear. VS mode can toggle fog per map, which makes
+this a controlled experiment rather than a search:
+
+```bash
+python tools/fog_hunt.py --off off1.json off2.json --on on1.json on2.json
+```
+
+Dump each with `state("C:/tmp/off1.json", true)` to include the IWRAM probe. A
+byte is a candidate only if it is constant across captures sharing a label and
+differs between labels — two captures per side, so a frame counter cannot
+masquerade as the flag. Static analysis of the settings struct at `0x03004310`
+predicts **`+0x32` (`0x03004342`)**, whose reads are 80 of 81
+compare-against-zero. That is a prior for the hunt to confirm or bury; this
+project's own history is mostly confident inferences that measurement
+overturned.
+
 ## Layout
 
 ```
@@ -213,6 +258,7 @@ engine/state.py           Board: terrain, defence, movement cost, units, cargo
 engine/pathing.py         one Dijkstra: reachable, destinations, path
 engine/co.py              CO modifiers, and what it refuses to model
 engine/threat.py          what the enemy can do to you next turn  <- the advisor
+engine/fog.py             what you can legally see, and what you cannot
 harness/mgba_state.lua    dump the live board as JSON          <- the state reader
 harness/mgba_ramtool.lua  RAM search/diff, map and army inspection, unit records
                           reset/mark/chg/unc, tag+tagfilter (labelled states),
@@ -231,7 +277,9 @@ data/aw1_unit_stats.json  cost, move, move type, range, vision, fuel, ammo
 tests/test_damage.py      39 regression tests
 tests/test_pathing.py     22 regression tests, incl. "no unit-type branches"
 tests/test_threat.py      23 regression tests, incl. the same branch ban
+tests/test_fog.py         21 regression tests, incl. the same branch ban
 tools/threat_report.py    exposure, per-unit safety, and the coverage grid
+tools/fog_hunt.py         pin the fog flag by diffing labelled RAM probes
 tools/path_diff.py        our reachable set vs the game's own flood fill
 harness/mgba_spike.lua    write state, drive input, sweep cases unattended
 tools/spike_check.py      sweep vs engine, and the write-vs-play control
@@ -363,12 +411,10 @@ damage back into rolls and distinguishes "unlucky sample" from "wrong model".
 
 ## Known gaps
 
-- **Fog of war, and it is now a correctness problem rather than a missing
-  feature.** The reader reports true board state. Under fog, threat projection
-  would quote you danger from units you cannot legally see — confidently wrong
-  in the one direction this project refuses. Nothing in the dump reports fog, so
-  the model cannot currently even detect that it is in it. Either the visibility
-  mask gets read, or `threat` learns to refuse the way `co` refuses Kanbei.
+- **Fog of war — modelled, and the flag not yet found.** `engine/fog.py` exists
+  and `threat` honours it, but `Board.fog` is `None` until the RAM flag is
+  located, so nothing fires automatically. See "Fog of war" above for where
+  that stands and how to finish it.
 - **The composition itself is unmeasured.** Threat projection's inputs are all
   verified; the matching and ordering built on top of them are covered by unit
   tests and by nothing else. The reachability half is checkable with the
