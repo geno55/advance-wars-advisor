@@ -103,6 +103,43 @@ local function readunit(slot)
   }
 end
 
+-- Read, or write, a unit's internal HP without disturbing what shares its
+-- halfword.
+--
+-- Record +4 packs THREE fields: hp in bits 0-6, ammo in 7-10, capture progress
+-- in 11-15. That was itself a correction -- `ammo = v >> 7` held only while
+-- capture was zero, which it was in everything dumped until a capturing
+-- infantry reported "ammo 160". So a plain write16 of an hp value zeroes both
+-- neighbours, and rng_write's write32 would take out fuel (+6) and cargo (+7)
+-- as well. Read, mask, write back.
+--
+-- Then read it AGAIN, and check the neighbours too. A write that silently did
+-- not take turns the sweep below into the machine agreeing with itself, which
+-- is the one failure this harness exists to prevent.
+function unithp(slot, v)
+  local a = unitaddr(slot)
+  local cur = emu:read16(a + 4)
+  if v == nil then return cur % 128 end
+  if v < 1 or v > 100 then
+    console:error("internal hp must be 1..100; the field holds 7 bits but no "
+      .. "board the game can reach has a unit outside that range")
+    return nil
+  end
+  emu:write16(a + 4, cur - cur % 128 + v)
+  local back = emu:read16(a + 4)
+  if back % 128 ~= v then
+    console:error(string.format("hp write did not take: wrote %d, read %d", v,
+      back % 128))
+    return nil
+  end
+  if math.floor(back / 128) ~= math.floor(cur / 128) then
+    console:error("hp write disturbed the ammo or capture bits it shares +4 "
+      .. "with; aborting rather than measuring a board the game cannot reach")
+    return nil
+  end
+  return v
+end
+
 local function terrainat(x, y)
   local w = emu:read8(MAP_DIMS)
   return emu:read8(MAP_ADDR + y * w + x) % 32
@@ -151,25 +188,60 @@ function dmg_save(path)
   end
 end
 
--- Press A and wait for the defender's HP to move, or for it to die.
--- Returns damage, frames_waited, died.
-local function confirm_and_read(def_slot, hp_before)
+-- How long to keep running after the first HP change before reading the result.
+-- This used to be 30 frames, taken on faith. Thirty is enough for ONE animation
+-- and not for two: the counterattack lands after the opening one finishes, so
+-- the old code read the board mid-exchange and threw the attacker away. The
+-- window is now generous and, more importantly, SELF-CHECKING -- see below.
+EXCHANGE_FRAMES = EXCHANGE_FRAMES or 240
+
+-- Press A, run the whole exchange out, and read BOTH sides.
+--
+-- Pass att_slot to get the counterattack. The old signature still works and
+-- still returns three values, so existing callers are unchanged.
+--
+-- Returns damage, frames_waited, died, counter, att_ammo_after, att_died.
+local function confirm_and_read(def_slot, hp_before, att_slot, att_hp_before)
   emu:setKeys(KEY_A)
   for _ = 1, 4 do emu:runFrame() end
   emu:setKeys(0)
   for f = 1, DMG_TIMEOUT_FRAMES do
     emu:runFrame()
     local d = readunit(def_slot)
-    if d.type == 0 then
-      return hp_before, f, true                 -- destroyed: took all its HP
-    end
-    if d.hp ~= hp_before then
-      -- let the exchange finish; a counterattack changes the ATTACKER's hp,
-      -- not the defender's, so the first change to settle is the real one
-      for _ = 1, 30 do emu:runFrame() end
+    if d.type == 0 or d.hp ~= hp_before then
+      -- Something landed. Run the exchange out, tracking the frame at which
+      -- either side last moved. A window long enough to contain the whole
+      -- exchange ends with a long quiet tail; one that is too short ends while
+      -- a unit is still changing. That is checkable, so check it rather than
+      -- trusting the constant.
+      local last_move, dprev, aprev = 0, nil, nil
+      for g = 1, EXCHANGE_FRAMES do
+        emu:runFrame()
+        local dd = readunit(def_slot)
+        local dk = dd.type == 0 and -1 or dd.hp
+        local ak = 0
+        if att_slot then
+          local aa = readunit(att_slot)
+          ak = aa.type == 0 and -1 or aa.hp * 16 + aa.ammo
+        end
+        if dk ~= dprev or ak ~= aprev then
+          if dprev ~= nil then last_move = g end
+          dprev, aprev = dk, ak
+        end
+      end
+      if last_move > EXCHANGE_FRAMES - 60 then
+        console:error(string.format(
+          "a unit was still changing at frame %d of a %d-frame window -- this "
+          .. "reading may be mid-exchange. Raise EXCHANGE_FRAMES and re-run; do "
+          .. "NOT record it.", last_move, EXCHANGE_FRAMES))
+      end
       local after = readunit(def_slot)
-      if after.type == 0 then return hp_before, f, true end
-      return hp_before - after.hp, f, false
+      local died = after.type == 0
+      local dmg = died and hp_before or (hp_before - after.hp)
+      if not att_slot then return dmg, f, died end
+      local a = readunit(att_slot)
+      if a.type == 0 then return dmg, f, died, att_hp_before, 0, true end
+      return dmg, f, died, att_hp_before - a.hp, a.ammo, false
     end
   end
   return nil, DMG_TIMEOUT_FRAMES, false         -- nothing happened
@@ -188,7 +260,8 @@ function dmg_probe(fixture, att_slot, def_slot)
   console:log(string.format("defender slot %d: type %d hp %d at (%d,%d) on terrain %d",
     def_slot, d.type, d.hp, d.x, d.y, terrainat(d.x, d.y)))
 
-  local dmg, frames, died = confirm_and_read(def_slot, d.hp)
+  local dmg, frames, died, counter, att_ammo, att_died =
+    confirm_and_read(def_slot, d.hp, att_slot, a.hp)
   if dmg == nil then
     console:error("no damage after " .. DMG_TIMEOUT_FRAMES .. " frames. The "
       .. "fixture is probably not sitting on a confirmable attack -- it should "
@@ -198,7 +271,9 @@ function dmg_probe(fixture, att_slot, def_slot)
   console:log(string.format("damage %d after %d frames%s", dmg, frames,
     died and "  (DESTROYED -- damage is a lower bound, use a healthier defender)"
     or ""))
-  return dmg
+  console:log(string.format("counter %d back at the attacker%s; its ammo is now %d",
+    counter, att_died and "  (ATTACKER DESTROYED)" or "", att_ammo))
+  return dmg, counter
 end
 
 -- The sweep. k frames of idling is the only thing that varies.
@@ -270,38 +345,155 @@ end
 -- is recorded next to the damage, and tools/rng_fit.py searches for the
 -- (consumption depth, modulus) that makes damage a consistent function of the
 -- roll. Guessing either would be inventing a value to fill a gap.
-function dmg_seedsweep(fixture, att_slot, def_slot, outpath, nseeds, stride, addr)
+ARMY_BASE_PTR = ARMY_BASE_PTR or 0x08282CBC
+ARMY_STRIDE = ARMY_STRIDE or 0x68
+
+-- Read or write a player's CO id (army +0x1D). Writing it changes the CO live,
+-- name and portrait included, which is how every record was identified.
+function coid(p, v)
+  local a = emu:read32(ARMY_BASE_PTR) + p * ARMY_STRIDE + 0x1D
+  if v then
+    if v < 0 or v > 11 then
+      console:error("co id must be 0..11; higher indexes past the record table")
+      return
+    end
+    emu:write8(a, v)
+  end
+  return emu:read8(a)
+end
+
+-- Sweep with the CO WRITTEN AFTER LOADING rather than baked into the fixture.
+--
+-- Two separate fixtures for two COs invites the obvious confound: if the CO id
+-- did not persist into one of the save states, both sweeps run the same CO and
+-- produce identical histograms, which looks exactly like "the CO has no
+-- effect". Writing it here means one fixture serves every CO and the only
+-- difference between runs is the byte we set. The sweep reports the id it read
+-- back, so a failed write cannot pass silently.
+function dmg_seedsweep(fixture, att_slot, def_slot, outpath, nseeds, stride, addr, co, co_player, opts)
   if not (io and io.open) then
     console:error("no io library; cannot write " .. tostring(outpath)); return
   end
-  nseeds = nseeds or 64
-  stride = stride or 2654435761        -- a big odd step, to spread the seeds
-  addr = addr or RNG_STATE
+  -- Late knobs live in a table so the positional list stops growing. Passing
+  -- the table in the nseeds slot works too, which is what you want when none of
+  -- the middle arguments are being overridden:
+  --   dmg_seedsweep(fix, 7, 66, out, {def_hp = 81})
+  if type(nseeds) == "table" then opts, nseeds = nseeds, nil end
+  opts = opts or {}
+  nseeds = nseeds or opts.nseeds or 64
+  stride = stride or opts.stride or 2654435761   -- big odd step, spreads seeds
+  addr = addr or opts.addr or RNG_STATE
+  co = co or opts.co
+  co_player = co_player or opts.co_player or 1
+  local def_hp, att_hp = opts.def_hp, opts.att_hp
   if not loadfixture(fixture) then return end
   local a0, d0 = readunit(att_slot), readunit(def_slot)
   local att_terr, def_terr = terrainat(a0.x, a0.y), terrainat(d0.x, d0.y)
   console:log(string.format("seeding 0x%08X (reads 0x%08X in the fixture)",
     addr, rng_read(addr)))
-
-  local rows, seen = {}, {}
-  for i = 0, nseeds - 1 do
-    if not loadfixture(fixture) then return end
-    local seed = (i * stride) % 0x100000000
-    rng_write(seed, addr)
-    if rng_read(addr) ~= seed then
-      console:error(string.format("seed write did not take: wrote 0x%08X read 0x%08X",
-        seed, rng_read(addr)))
-      return
+  local co_in_fixture = coid(co_player)
+  if co then
+    coid(co_player, co)
+    if coid(co_player) ~= co then
+      console:error("CO write did not take"); return
     end
-    local d = readunit(def_slot)
-    local dmg, _, died = confirm_and_read(def_slot, d.hp)
-    if dmg == nil then
+    console:log(string.format("P%d CO: fixture had %d, writing %d each case",
+      co_player, co_in_fixture, co))
+  else
+    console:log(string.format("P%d CO: %d (from the fixture, not written)",
+      co_player, co_in_fixture))
+  end
+
+  -- One case, from a clean reload. Everything below goes through this, so a
+  -- control cannot accidentally take a different path from a real case.
+  -- `writes` maps slot -> internal hp, or is nil to write no hp at all.
+  local function runcase(seed_v, writes)
+    if not loadfixture(fixture) then return nil end
+    if seed_v then
+      rng_write(seed_v, addr)
+      if rng_read(addr) ~= seed_v then
+        console:error(string.format("seed write did not take: wrote 0x%08X "
+          .. "read 0x%08X", seed_v, rng_read(addr)))
+        return nil
+      end
+    end
+    if co then coid(co_player, co) end       -- every case, after every reload
+    if writes then
+      for slot, v in pairs(writes) do
+        if unithp(slot, v) == nil then return nil end
+      end
+    end
+    local d, a = readunit(def_slot), readunit(att_slot)
+    local dmg, _, died, counter, att_ammo, att_died =
+      confirm_and_read(def_slot, d.hp, att_slot, a.hp)
+    if dmg == nil then return nil end
+    return { damage = dmg, destroyed = died, counter = counter,
+             att_ammo = att_ammo, att_died = att_died,
+             def_hp = d.hp, att_hp = a.hp }
+  end
+
+  -- THE CONTROLS. The rule is that every sweep ships one, because a machine
+  -- agreeing with itself looks exactly like a measurement. Three, and it is the
+  -- last pair that carries the argument:
+  --
+  --   none      load, write nothing. The fixture's own answer, for the record.
+  --   seed      load, write the seed only.
+  --   identity  load, write the seed AND write each unit's CURRENT hp back.
+  --
+  -- `seed` and `identity` differ by exactly one thing: identity performed the
+  -- write we are about to trust, with a value that changes nothing. They must
+  -- agree. If they do not, the ACT of writing perturbs the result and every row
+  -- below is an artifact -- which is the failure this cannot be allowed to miss,
+  -- because it would look like a clean measurement in every other respect.
+  local ctrl_seed = 0
+  local identity = { [def_slot] = d0.hp, [att_slot] = a0.hp }
+  local c_none = runcase(nil, nil)
+  local c_seed = runcase(ctrl_seed, nil)
+  local c_ident = runcase(ctrl_seed, identity)
+  if not (c_none and c_seed and c_ident) then
+    console:error("a control case produced no damage; aborting before the sweep")
+    return
+  end
+  console:log(string.format("control  none: damage %d, counter %d  (unwritten "
+    .. "fixture, for the record)", c_none.damage, c_none.counter))
+  console:log(string.format("control  seed: damage %d, counter %d",
+    c_seed.damage, c_seed.counter))
+  console:log(string.format("control ident: damage %d, counter %d  (same seed, "
+    .. "hp written to the value it already held)", c_ident.damage, c_ident.counter))
+  if c_seed.damage ~= c_ident.damage or c_seed.counter ~= c_ident.counter then
+    console:error("CONTROL FAILED: writing hp changed the result even when the "
+      .. "value written was the one already there. The write is not transparent "
+      .. "on this path, so nothing measured with it means anything. Aborting.")
+    return
+  end
+  console:log("control passed: an hp write of the existing value changes nothing")
+
+  local writes = nil
+  if def_hp or att_hp then
+    writes = {}
+    if def_hp then writes[def_slot] = def_hp end
+    if att_hp then writes[att_slot] = att_hp end
+    console:log(string.format("writing hp each case -- defender %s, attacker %s",
+      def_hp and tostring(def_hp) or "unchanged",
+      att_hp and tostring(att_hp) or "unchanged"))
+  end
+
+  local rows, seen, cseen = {}, {}, {}
+  local obs_att_hp, obs_def_hp = a0.hp, d0.hp
+  for i = 0, nseeds - 1 do
+    local seed = (i * stride) % 0x100000000
+    local r = runcase(seed, writes)
+    if r == nil then
       console:error("case seed=" .. seed .. " produced no damage; aborting"); return
     end
+    obs_att_hp, obs_def_hp = r.att_hp, r.def_hp
     rows[#rows + 1] = string.format(
-      '    {"seed": %d, "damage": %d, "destroyed": %s}', seed, dmg,
-      died and "true" or "false")
-    if not died then seen[dmg] = (seen[dmg] or 0) + 1 end
+      '    {"seed": %d, "damage": %d, "destroyed": %s, "attacker_hp_before": %d,'
+      .. ' "counter": %d, "attacker_ammo_after": %d, "attacker_destroyed": %s}',
+      seed, r.damage, r.destroyed and "true" or "false", r.att_hp, r.counter,
+      r.att_ammo, r.att_died and "true" or "false")
+    if not r.destroyed then seen[r.damage] = (seen[r.damage] or 0) + 1 end
+    if not r.att_died then cseen[r.counter] = (cseen[r.counter] or 0) + 1 end
   end
 
   local vals = {}
@@ -320,15 +512,49 @@ function dmg_seedsweep(fixture, att_slot, def_slot, outpath, nseeds, stride, add
       .. "narrow orbit a frame-delay sweep walks", vals[1], vals[#vals], nseeds))
   end
 
+  -- The counterattack histogram. This is the whole point of reading the
+  -- attacker: if the opening damage varies across seeds and the counter does
+  -- NOT, the counter carries no luck roll -- which is what the ROM says at
+  -- 0x080234DA and what engine/damage.py's counterattack() contradicts.
+  local cvals = {}
+  for v in pairs(cseen) do cvals[#cvals + 1] = v end
+  table.sort(cvals)
+  local chist = {}
+  for _, v in ipairs(cvals) do chist[#chist + 1] = v .. "x" .. cseen[v] end
+  if #cvals == 0 then
+    console:log("counter: none observed (attacker never lost HP)")
+  else
+    console:log("counter values seen: " .. table.concat(chist, "  "))
+    if #cvals == 1 and #vals > 1 then
+      console:log("*** the opening damage varied and the counter did NOT. "
+        .. "A luck-carrying counter cannot do that. ***")
+    end
+  end
+
   local out = {
     "{",
     '  "mode": "seed",',
     string.format('  "rng_state_addr": %d, "rng_mul": %d, "rng_add": %d,',
       addr, RNG_MUL, RNG_ADD),
+    string.format('  "co_written": %s, "co_player": %d, "co_in_fixture": %d,',
+      co and tostring(co) or "null", co_player, co_in_fixture),
     string.format('  "attacker_slot": %d, "defender_slot": %d,', att_slot, def_slot),
+    -- The HP the cases actually ran at, read back AFTER the write. Reporting
+    -- a0/d0 here would stamp the fixture's values onto every row of a sweep
+    -- that deliberately ran at something else, and no consumer could tell.
     string.format('  "attacker_type": %d, "attacker_hp": %d, "attacker_ammo": %d,',
-      a0.type, a0.hp, a0.ammo),
-    string.format('  "defender_type": %d, "defender_hp": %d,', d0.type, d0.hp),
+      a0.type, obs_att_hp, a0.ammo),
+    string.format('  "defender_type": %d, "defender_hp": %d,', d0.type, obs_def_hp),
+    string.format('  "hp_written": {"attacker": %s, "defender": %s},',
+      att_hp and tostring(att_hp) or "null",
+      def_hp and tostring(def_hp) or "null"),
+    string.format('  "hp_in_fixture": {"attacker": %d, "defender": %d},',
+      a0.hp, d0.hp),
+    string.format('  "controls": {"none": {"damage": %d, "counter": %d},'
+      .. ' "seed": {"damage": %d, "counter": %d},'
+      .. ' "identity": {"damage": %d, "counter": %d}, "passed": true},',
+      c_none.damage, c_none.counter, c_seed.damage, c_seed.counter,
+      c_ident.damage, c_ident.counter),
     string.format('  "attacker_terrain": %d, "defender_terrain": %d,',
       att_terr, def_terr),
     '  "cases": [',
