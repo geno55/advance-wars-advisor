@@ -15,8 +15,10 @@ import pathlib
 import sys
 
 sys.path.insert(0, str(pathlib.Path(__file__).resolve().parent.parent))
-from engine.damage import (Attack, DEFAULT_VARIANT, counterattack,  # noqa: E402
-                           display_hp, resolve, screen_bars, tables)
+from engine.damage import (Attack, CounterModifiersUnknown,  # noqa: E402
+                           DEFAULT_VARIANT, can_attack, counterattack,
+                           display_hp, fights_at_contact, resolve,
+                           screen_bars, tables)
 
 
 def resolve_co(spec):
@@ -48,7 +50,9 @@ def main():
     p.add_argument("--def-hp", type=int, default=100, help="internal 1..100")
     p.add_argument("--stars", type=int, default=0, help="defender terrain stars")
     p.add_argument("--att-stars", type=int, default=0, help="attacker terrain stars")
-    p.add_argument("--ammo", type=int, default=99)
+    p.add_argument("--ammo", type=int, default=99, help="attacker's ammo")
+    p.add_argument("--def-ammo", type=int, default=99,
+                   help="defender's ammo, which decides what it counters with")
     p.add_argument("--variant", default=DEFAULT_VARIANT)
     p.add_argument("--att-co", help="attacking CO, by name or id 0..11")
     p.add_argument("--def-co", help="defending CO, by name or id 0..11")
@@ -64,6 +68,9 @@ def main():
         print(f"!! Showing variant '{a.variant}' as a hypothesis. Base damage is")
         print("!! ROM-exact; the arithmetic around it is not. See README.md.\n")
 
+    # Kept in scope so the counterattack can look the records up again for the
+    # return strike, which reads different fields of them.
+    att_id = def_id = None
     if a.att_co or a.def_co:
         from engine import co as co_mod
         try:
@@ -118,17 +125,46 @@ def main():
     else:
         print("  kill          no")
 
-    back = counterattack(Attack(a.attacker, a.defender, a.att_hp, a.def_hp,
-                                a.stars, a.ammo), a.variant, verified=True)
+    # One call, and the terrain and COs go IN rather than being re-applied to a
+    # second resolve afterwards. That re-resolve was dropping the CO modifiers,
+    # so Grit, Andy and Max all printed the same counter.
+    counter_kw = dict(attacker_stars=a.att_stars, defender_ammo=a.def_ammo)
+    if att_id is not None:
+        counter_kw.update(attacker_co=att_id, defender_co=def_id,
+                          attacker_power=a.att_power,
+                          defender_power=a.def_power)
+    try:
+        back = counterattack(atk, a.variant, verified=True, **counter_kw)
+    except CounterModifiersUnknown as e:
+        # Refused rather than approximated, the same way engine/co.py refuses
+        # Kanbei. The opening quote above is still good; only the counter is not.
+        print(f"  counter       REFUSED -- {e}")
+        return
     if back is None:
-        print("  counter       none (destroyed, or defender cannot return fire)")
+        # Name the reason. "destroyed, or defender cannot return fire" read as a
+        # shrug, and printed alongside "kill possible but NOT guaranteed" it was
+        # a contradiction. Several of these can hold at once -- an APC is both
+        # unarmed and out of range -- so they are ordered most specific first,
+        # and every branch is true whenever it is reached.
+        if not fights_at_contact(a.attacker):
+            why = f"{a.attacker} strikes from range, which draws no counter"
+        elif not can_attack(a.defender, a.attacker, a.def_ammo):
+            why = (f"{a.defender} has no weapon that damages {a.attacker}"
+                   + (" with 0 ammo" if a.def_ammo == 0 else ""))
+        elif not fights_at_contact(a.defender):
+            why = f"{a.defender} cannot fire at contact range"
+        elif out.guaranteed_kill:
+            why = "guaranteed kill, no survivor to fire back"
+        else:
+            why = "the engine declined to model one"     # no path reaches this
+        print(f"  counter       none ({why})")
     else:
-        # Re-apply the attacker's own terrain to the return strike.
-        back = resolve(Attack(a.defender, a.attacker,
-                              max(0, a.def_hp - out.max_damage), a.att_hp,
-                              a.att_stars), a.variant, verified=True)
         print(f"  counter       {back.min_damage}-{back.max_damage} internal back at you"
               + ("  (LETHAL)" if back.guaranteed_kill else ""))
+        if back.min_damage != back.max_damage:
+            print("                (the counter carries no luck of its own; the "
+                  "spread is which")
+            print("                 survivor your opening roll leaves)")
 
 
 if __name__ == "__main__":

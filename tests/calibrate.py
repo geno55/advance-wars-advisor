@@ -312,6 +312,16 @@ def report(observations, alive):
               "(tools/rng_fit.py, DERIVATION.md 17): luck_after_hp.")
     print(f"display rule ({len(ds)}): {', '.join(ds)}"
           + ("  (determined)" if len(ds) == 1 else ""))
+    if len(ds) > 1:
+        # Do not let this read as "unsettled". This corpus cannot settle it at
+        # any sample size, because every first strike in it has the attacker at
+        # 100 or 9 internal HP -- the values where the candidates agree. It was
+        # settled elsewhere, by writing HP to a value where they disagree.
+        print("  This corpus CANNOT narrow this further: every first strike in "
+              "it has the\n  attacker at 100 or 9 internal HP, where these "
+              "rules all return the same\n  number. Settled instead by seeded "
+              "sweeps at written HP (ASSUMPTIONS A9a,\n  fixtures in "
+              "tests/fixtures/, replayed by tests/test_corpus.py): ceil.")
     for t in terrains:
         vals = sorted({h[1][t] for h in alive})
         star = "determined" if len(vals) == 1 else "ambiguous"
@@ -451,6 +461,27 @@ def main(argv):
                 if r.get("attacker") and not r["attacker"].lstrip().startswith("#")]
     if not rows:
         sys.exit(f"{path} has no observations yet -- go record some battles.")
+
+    # COUNTERATTACKS DO NOT BELONG IN THIS ELIMINATION.
+    #
+    # Everything below fits the FIRST-STRIKE formula. The game computes a
+    # counter differently -- base * raw internal hp / 100, no display term and
+    # no luck (ASSUMPTIONS A9b) -- so a counter row scored here is a row scored
+    # with arithmetic that does not apply to it.
+    #
+    # This is not hypothetical tidiness. Four counter rows were in this corpus,
+    # and under the strike formula two of them refuted `ceil` and installed
+    # `floor_min1` as "determined" for months. The other 71 rows could not
+    # object: every one of them has the attacker at 100 or 9 internal HP, where
+    # all four candidate display rules return the same number. So this tool
+    # confidently reported a display rule that the corpus had never constrained
+    # and that direct measurement later refuted. Dropping them here is the fix.
+    counters = [r for r in rows if "counter" in (r.get("notes") or "").lower()]
+    rows = [r for r in rows if "counter" not in (r.get("notes") or "").lower()]
+    if counters:
+        print(f"excluding {len(counters)} counterattack row(s): the game "
+              "computes counters\nwith a different formula (A9b), so they "
+              "cannot eliminate strike hypotheses.\n")
     observations = [Obs(r, i + 2) for i, r in enumerate(rows)]
     shared = "--shared-luck" in argv
     if shared:

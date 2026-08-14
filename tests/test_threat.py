@@ -224,8 +224,14 @@ class TestFocusFireIsSequenced(unittest.TestCase):
         self.assertEqual(ff.attackers, 2)
         singles = [t.max_damage for t in ff.delivered]
         self.assertEqual(singles, [14, 14])
-        self.assertEqual(ff.worst_damage, 30)      # 14 then 16, not 14 + 14
+        self.assertEqual(ff.worst_damage, 29)      # 14 then 15, not 14 + 14
         self.assertGreater(ff.worst_damage, sum(singles))
+        # The effect survived the display rule changing from floor_min1 to the
+        # measured ceil, and it had to: a defender that has lost HP keeps a
+        # smaller share of its terrain bonus whichever way the tenth rounds.
+        # Only the size moved -- under ceil a survivor on 86 displays 9 rather
+        # than 8, so it holds slightly more cover and the second hit gains 1
+        # instead of 2.
 
     def test_damage_is_capped_at_the_defenders_health(self):
         rows = [[ROAD, ROAD, ROAD]]

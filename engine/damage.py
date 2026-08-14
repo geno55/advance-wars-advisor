@@ -21,6 +21,7 @@ backwards is the single most common bug in third-party AW calculators.
 """
 from __future__ import annotations
 
+import functools
 import json
 import math
 import pathlib
@@ -29,6 +30,12 @@ from fractions import Fraction
 from typing import Optional
 
 DATA = pathlib.Path(__file__).resolve().parent.parent / "data" / "aw1_damage.json"
+STATS = pathlib.Path(__file__).resolve().parent.parent / "data" / "aw1_unit_stats.json"
+
+# The CO modifier a record carries when it does nothing. Both halves of a
+# neutral matchup read this, which is what makes the neutral case answerable
+# without knowing which CO it was.
+NEUTRAL_CO = 100
 
 LUCK_MIN, LUCK_MAX = 0, 9          # standard CO luck roll; Nell/Flak differ
 
@@ -69,10 +76,24 @@ DISPLAY_VARIANTS = {
     "round":      lambda h: (h + 5) // 10 if h > 0 else 0,
 }
 
-# Determined. "ceil" and "round" were refuted by the Mech-at-57 counterattack;
-# plain "floor" was refuted by an Infantry at 9 internal HP dealing 11 damage,
-# which floor caps at 9. A unit on its last bar attacks at strength 1, not 0.
-DEFAULT_DISPLAY = "floor_min1"
+# MEASURED: it is `ceil`, on both operands. See ASSUMPTIONS A9a.
+#
+# This was `floor_min1` for months on the strength of two observations that
+# turned out to be counterattacks, which the game computes with an entirely
+# different formula (A9b) -- so they never constrained this at all. Fitting them
+# with the strike formula produced a rule that agreed with every other row in
+# the corpus, because every other row had the attacker at 100 or 9 internal HP,
+# the values where all four candidate rules return the same number.
+#
+# Settled by writing HP directly and sweeping 64 luck seeds per board:
+#   attacker at 57  -> damage 27..32   (floor_min1 predicts 22..27)
+#   defender at 81  -> damage 48..53   (floor_min1 predicts 51..57; and 81 is
+#                                       the board that also excludes `round`)
+#   defender at 85  -> damage 48..53
+# The observed multiplicities match ceil's 2:2:1:2:1:2 collapse of ten rolls,
+# not merely its endpoints. The ROM says the same thing at 0x080232C8:
+# `(hp-1)/10 + 1`, which is ceil for every hp in 1..100.
+DEFAULT_DISPLAY = "ceil"
 
 
 def display_hp(internal: int, rule: Optional[str] = None) -> int:
@@ -343,21 +364,161 @@ def resolve(a: Attack, variant: str = DEFAULT_VARIANT,
     )
 
 
+# --------------------------------------------------------------------------
+# counterattack
+# --------------------------------------------------------------------------
+
+class CounterModifiersUnknown(RuntimeError):
+    pass
+
+
+@functools.lru_cache(maxsize=None)
+def _unit_stats() -> dict:
+    """Range data, read once. Loaded here rather than imported from pathing:
+    pathing depends on nothing in this module and the damage model is the
+    bottom of the stack, so inverting that to borrow one dict would be the
+    wrong trade for four lines."""
+    return json.loads(STATS.read_text(encoding="utf-8"))["units"]
+
+
+def fights_at_contact(unit_type: str) -> bool:
+    """Whether this unit's range ring includes 1 -- can it fight at touching
+    distance, in either direction.
+
+    One predicate read off min_range/max_range, applied to both roles, and no
+    unit is named. An Artillery (2..3) is neither countered nor countering: it
+    never stood adjacent, and it cannot fire at its own feet. Unarmed units read
+    0..0 and fall out for free, without being enumerated.
+    """
+    st = _unit_stats().get(unit_type)
+    if st is None:
+        raise KeyError(f"no stats for unit type {unit_type!r}; the reader saw a "
+                       "type the ROM table does not describe")
+    return st["min_range"] <= 1 <= st["max_range"]
+
+
+def counter_damage(base: int, survivor_hp: int, co_defense: int,
+                   target_stars: int, target_hp: int) -> int:
+    """The counterattack's own formula. MEASURED -- see ASSUMPTIONS A9b.
+
+    A counter is not a second strike. The game overwrites the scaled value the
+    strike path computed (`0x080234DA-0x080234F6`) with the survivor's **raw
+    internal HP over 100** -- no display quantisation and no luck roll -- before
+    applying the defence multiplier.
+
+    Three independent lines pin this, and each kills something the others do
+    not. A 64-seed sweep on a fixed board: the opening damage ranged 45..50 and
+    the counter read 2 every single time, which no luck-carrying formula can do,
+    and which also refutes a `ceil` or `round` display rule (survivors 51..55
+    would have countered for 3). The recorded Mech at 57 HP: raw internal gives
+    (55*57/100)*90/100 = 27 against the observed 27, where a `floor` display
+    rule gives 24. And the ROM instruction sequence says raw internal directly.
+    """
+    return max(0, min((base * survivor_hp // 100)
+                      * (200 - (co_defense + target_stars * display_hp(target_hp)))
+                      // 100,
+                      target_hp))
+
+
 def counterattack(a: Attack, variant: str = DEFAULT_VARIANT,
-                  verified: bool = False) -> Optional[Outcome]:
-    """The defender's return strike, at whatever HP it has left after taking the
-    worst case. Counters use the survivor's reduced HP -- that is the whole
-    reason alpha-striking works, so it must not be modelled as full strength."""
+                  verified: bool = False, *,
+                  attacker_stars: int = 0,
+                  defender_ammo: int = 99,
+                  attacker_co: Optional[int] = None,
+                  defender_co: Optional[int] = None,
+                  attacker_power: bool = False,
+                  defender_power: bool = False) -> Optional[Outcome]:
+    """The defender's return strike. None when there is no counter to model.
+
+    Three distinct reasons for None, all of them real:
+      * the opening attack is illegal, so nothing happened at all;
+      * the battle was not fought at contact -- an Artillery shelling from two
+        tiles is neither countered nor countering (see `fights_at_contact`);
+      * the kill is GUARANTEED, so no survivor exists on any luck roll.
+
+    A merely POSSIBLE kill still returns a counter. The attacker has to live
+    with the roll where the defender survives, and saying "no counter" there is
+    how the same output claimed a kill was not guaranteed and that nothing
+    would come back, on adjacent lines.
+
+    The survivor is the STRONGEST one -- `max_remaining_hp`, the defender that
+    took the smallest damage roll. That is the pessimistic direction for the
+    attacker, which is the one that matters here: this number answers "what is
+    the worst that comes back at me", and understating it is how a tool talks a
+    player into a bad trade. It used to read `min_remaining_hp` under a comment
+    claiming that was pessimistic; it is the opposite, because the weakest
+    survivor hits weakest.
+
+    `attacker_stars` is the cover on the ORIGINAL attacker's tile, which is
+    where the return strike lands. It defaults to 0, the same open-ground
+    default the rest of the module uses.
+
+    CO modifiers cannot be swapped out of `a`. `a.co_attack` is the attacking
+    CO's ATTACK modifier indexed by the attacking unit; the return strike needs
+    the defending CO's ATTACK modifier indexed by the DEFENDING unit, which is a
+    different field of a different record -- Max reads 150/100, so reusing his
+    defence figure quotes his counter 50 points light. Pass the two CO ids and
+    both are looked up properly, with roles and power flags swapped here rather
+    than at every call site. Omit them only for a neutral opening attack, where
+    the question does not arise; anything else raises rather than reusing a
+    number that cannot be right.
+    """
     first = resolve(a, variant, verified)
     if first is None:
         return None
-    survivor_hp = first.min_remaining_hp        # pessimistic for the attacker
-    if survivor_hp <= 0:
+    if not (fights_at_contact(a.attacker) and fights_at_contact(a.defender)):
         return None
-    back = Attack(
-        attacker=a.defender, defender=a.attacker,
-        attacker_hp=survivor_hp, defender_hp=a.attacker_hp,
-        terrain_stars=0,      # caller supplies the attacker's tile
-        co_attack=a.co_defense, co_defense=a.co_attack,
+    w = select_weapon(a.defender, a.attacker, defender_ammo)
+    if w is None:
+        return None
+
+    if (attacker_co is None) != (defender_co is None):
+        raise ValueError("pass both attacker_co and defender_co, or neither -- "
+                         "one alone cannot fill in the return strike")
+    co_a = a.co_attack if attacker_co is None else None
+    if attacker_co is not None:
+        back = Attack.between(a.defender, a.attacker, defender_co, attacker_co,
+                              attacker_power=defender_power,
+                              defender_power=attacker_power)
+        co_a, co_d = back.co_attack, back.co_defense
+    else:
+        co_a, co_d = a.co_defense, a.co_attack
+    if (co_a, co_d) != (NEUTRAL_CO, NEUTRAL_CO):
+        raise CounterModifiersUnknown(
+            f"this counter carries CO modifiers ({co_a}/{co_d}), and where they "
+            "enter the COUNTER path has never been observed -- every counter "
+            "ever recorded was neutral on both sides, and the ROM folds the "
+            "defence byte into a different position than the strike path does. "
+            "A quote would be inventing the one number that matters. See "
+            "ASSUMPTIONS A9b; record a counter under a non-neutral CO to settle "
+            "it.")
+
+    # The counter carries no luck of its own, but the SURVIVOR does: which
+    # defender is left depends on the opening roll. So walk the opening's luck
+    # range and map each surviving defender through the counter formula. This is
+    # a real envelope over one variable, not a range over a variable the game
+    # does not have -- and it is why the old lower bound was too high.
+    dmgs = []
+    for lk in range(LUCK_MIN, LUCK_MAX + 1):
+        d = damage_for_luck(a, lk, variant)
+        if d is None:
+            continue
+        survivor = a.defender_hp - d
+        if survivor <= 0:
+            continue                      # dead on this roll: no counter at all
+        dmgs.append(counter_damage(w.base, survivor, co_d,
+                                   attacker_stars, a.attacker_hp))
+    if not dmgs:
+        return None                       # guaranteed kill on every roll
+
+    lo, hi = min(dmgs), max(dmgs)
+    return Outcome(
+        min_damage=lo, max_damage=hi,
+        min_remaining_hp=max(0, a.attacker_hp - hi),
+        max_remaining_hp=max(0, a.attacker_hp - lo),
+        weapon=w.slot, base=w.base,
+        guaranteed_kill=lo >= a.attacker_hp,
+        possible_kill=hi >= a.attacker_hp,
+        variant="rom_counter",
+        variants_agree=True,
     )
-    return resolve(back, variant, verified)

@@ -32,8 +32,13 @@ paid off — see "What got caught" below.
 - Weapon selection reproducing known behaviour (Md Tank hits Infantry for 105
   with its MG but Tank for 85 with its cannon; out-of-ammo fallback).
 - Calibrated against 75 exact-HP observations from a live game — 14
-  hand-recorded, 61 from the automated sweep. Display rule determined as
-  `floor_min1`; terrain stars confirmed; five of six formula variants refuted.
+  hand-recorded, 61 from the automated sweep. Terrain stars confirmed; five of
+  six formula variants refuted.
+- **Display rule measured as `ceil`, on both operands** — by writing HP directly
+  and sweeping 64 luck seeds per board, because the 75-row corpus turns out to be
+  blind to the question: every first strike in it has the attacker at 100 or 9
+  internal HP, where all four candidate rules agree. It read `floor_min1` for
+  months on the strength of two rows that were counterattacks. See A5.
 - CO modifiers filled from the ROM record, and refused where a CO's strength
   lives in header fields the damage path has never been shown to read.
 - **The formula is determined: `luck_after_hp`.** `resolve()` returns an exact
@@ -521,9 +526,20 @@ damage back into rolls and distinguishes "unlucky sample" from "wrong model".
 Kept as a record of why the project is built this way. Every one of these was a
 confident inference overturned by a measurement:
 
-- **`ceil` display HP.** Attack strength scales by a *truncated* tenth of
-  internal HP, not the bar count — a Mech at 57 HP shows 6 bars but attacks as
-  5. Screen rounding and combat rounding are different functions.
+- **`floor_min1` display HP, and the retraction of the retraction.** The
+  original model said `ceil`. It was withdrawn on the strength of a recorded
+  counterattack — a Mech at 57 hitting a Tank for 27 — and `floor_min1` took its
+  place, in this list, for months. Both were wrong to be confident: the game
+  computes a *counter* with a formula that has no display term at all, so that
+  observation never spoke to the question. `floor_min1` then agreed with all 71
+  first strikes for a reason that had nothing to do with being right — every one
+  of them had the attacker at 100 or 9 HP, the values where all four candidate
+  rules return the same number. Writing HP to 57 and 81 and sweeping the luck
+  settled it as `ceil` in three runs. The lesson is not "be more careful with
+  the corpus": no amount of care would have got there, because the corpus never
+  varied the input the question turns on. It is that a rule agreeing with every
+  observation you have is worth nothing until at least one of them could have
+  disagreed.
 - **`ammo = v >> 7`.** Correct only while capture progress was zero, which it
   was in everything dumped until a capturing infantry reported "ammo 160". `+4`
   packs three fields: hp, ammo, capture.
