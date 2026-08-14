@@ -56,6 +56,12 @@ WEATHER_ADDR = 0x0300433C
 -- Two static predictions (+0x32 and +0x08, both overwhelmingly read as
 -- booleans) were refuted: neither moved at all.
 FOG_ADDR = 0x0300431D
+-- Per-tile visibility COUNT, byte per tile at the map's width. Found by
+-- diffing labelled probes and pinned with rule-independent constraints (see
+-- DERIVATION.md 21); confirmed at the same address on a 15x10 and a 19x16 map.
+-- The duplicate is dumped only to cross-check it.
+VISION_ADDR = 0x0201763A
+VISION_ADDR_DUP = 0x02017B42
 -- The game's own list of every capturable property: 8-byte records of
 -- {terrain type, x, y, ...}, sorted by y then x, terminated by 0xFF.
 -- Reached from the ROM pointer at 0x08282CC4. This is the cross-check that
@@ -264,6 +270,37 @@ function state(path, probe)
   end
   w_(table.concat(rows, ",\n"))
   w_("  ],")
+
+  -- The game's own visibility answer: one byte per tile holding HOW MANY of
+  -- the active player's units can see it, row-major at the map's width. Not a
+  -- flag -- a count, 0..6 observed. Reading it means the advisor does not have
+  -- to infer visibility under fog; engine/fog.py's rules become a cross-check
+  -- against ground truth rather than the source of it.
+  --
+  -- Static address, like the terrain map, and confirmed on two maps of
+  -- different sizes (15x10 and 19x16). An identical copy sits at 0x02017B42
+  -- and is dumped as a cross-check: if the two ever disagree, one of them is
+  -- not what we think it is.
+  --
+  -- Whose view it is remains ambiguous. It matched P1 on all three captures
+  -- and P1 was the active player in all three, so "P1's" and "the active
+  -- player's" are not yet distinguishable. No second array for P2 exists.
+  w_(string.format('  "vision_addr": "0x%08X", "vision": [', VISION_ADDR))
+  rows = {}
+  local vdup = true
+  for y = 0, h - 1 do
+    local v = {}
+    for x = 0, w - 1 do
+      local o = y * w + x
+      v[#v + 1] = tostring(emu:read8(VISION_ADDR + o))
+      if emu:read8(VISION_ADDR + o) ~= emu:read8(VISION_ADDR_DUP + o) then
+        vdup = false
+      end
+    end
+    rows[#rows + 1] = string.format('    [%s]', table.concat(v, ","))
+  end
+  w_(table.concat(rows, ",\n"))
+  w_(string.format('  ], "vision_copies_agree": %s,', vdup and "true" or "false"))
 
   -- The game's own property list. Authoritative for WHERE the properties are;
   -- ownership stays in the terrain array's type + 32*owner encoding.

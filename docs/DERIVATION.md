@@ -1051,3 +1051,53 @@ nothing on the board exercised it.
   mountain.
 * **Whether `0x0201763A` is stable.** One capture is not an address. The reader
   does not read it, and should not until a second map says where it lives.
+
+## 22. Closing the three loose ends, and reading the answer instead of computing it
+
+Section 21 left three things open. All three are now settled, each by a capture
+built to isolate one of them.
+
+**Adjacency reveals concealing terrain.** Confirmed on screen. The rule is
+"Wood and Reef are dark beyond 1 step", not "never visible" -- the two fit the
+earlier data identically because no unit had stood next to a wood tile.
+
+**The mountain bonus is +3 for Infantry as well as Mech.** A capture with both
+on mountains matches at +3 with a *unique* minimum: +2 and +4 each miss 29
+tiles, +1 misses 46, +0 misses 59. Two unit classes and a sharp optimum is a
+long way from the single Mech that produced the number.
+
+**The address is static.** On a 19x16 map the array is at the same
+`0x0201763A`, stride following the map width, with the duplicate still at
+`0x02017B42`. That map is Day 1 with **no units at all**, so the only vision
+source is property ownership -- and the array holds exactly eight ones on the
+eight P1 properties and zero everywhere else. Property vision measured on its
+own, with nothing else in the frame to confuse it.
+
+### The reader now reads it
+
+`mgba_state.lua` dumps the array, `Board.vision` carries it, and
+`fog.observed_count()` hands back the game's own numbers. `viewer_count()`
+prefers them over the rules, because a reproduction of ground truth is worth
+less than ground truth.
+
+The rules do not become dead code. The observed array is a photograph of the
+board as it stands, and the advisor's central question -- *what could I see
+from a tile I have not moved to yet* -- is about a board that does not exist.
+So `threat._relocate` sets `vision=None` on every hypothetical board and the
+model answers those. Carrying the array forward would silently evaluate each
+candidate placement using the sight lines of where the unit actually is.
+
+That split also turns every future dump into a free regression test:
+`model_disagreement()` re-checks all four rules against the game on any board
+that carries the array.
+
+### On the fixtures
+
+Three real boards are checked in, and the oracle tests deliberately call
+`computed_count()` rather than `viewer_count()`. Pointing them at the latter
+would compare the fixture against itself now that it prefers the observed
+array, and pass no matter how wrong the rules were.
+
+One test asserts each rule is load-bearing on at least one fixture. That exists
+because `mountain_bonus` spent its whole assumed life switched off and wrong
+without a single test noticing -- nothing on the board exercised it.

@@ -202,11 +202,21 @@ regression oracle. Measured:
 | property vision | own tile only | off |
 | concealing terrain | Wood/Reef dark beyond 1 step, **on the tile** | applied to the unit, tile left lit |
 
-Three of four were wrong. Still open: whether adjacency *reveals* concealing
-terrain (no unit stood within 1 of any wood tile, so "adjacent reveals" and
-"never visible" fit identically); whether +3 holds for every unit class; Sonja's
-trait; and whether that address is stable across maps — the reader does not read
-it, because one capture is not an address. See `DERIVATION.md` 21.
+Three of four were wrong. All four were then re-confirmed on further captures:
+adjacency does reveal wood and reef; +3 holds for Infantry as well as Mech with
+a unique minimum at 3; and a 19x16 board with no units lights exactly its eight
+properties, measuring property vision on its own.
+
+The address is **static** — same `0x0201763A` on both map sizes — so the reader
+now dumps the array and `fog.observed_count()` returns the game's own numbers.
+The rules are a cross-check against ground truth rather than the source of it,
+and `model_disagreement()` re-tests them on every dump that carries the array.
+They still do the work for hypothetical placements, where no observed array can
+exist. See `DERIVATION.md` 21 and 22.
+
+Still open: whose view the array holds (it matched P1 on every capture and P1
+was active every time, so `observed_count` refuses to answer for anyone else);
+what the identical copy at `0x02017B42` is for; and Sonja's vision trait.
 
 The original text follows, kept because it is the record of what was assumed
 and how wrong being careful can still be.

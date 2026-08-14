@@ -108,6 +108,11 @@ class Board:
     # before the field existed: defaulting those to clear is exactly how the
     # advisor would end up quoting units the player cannot see.
     fog: Optional[bool] = None
+    # The game's own visibility answer, [y][x] -> how many of the ACTIVE
+    # player's units can see that tile. Ground truth, so it beats anything
+    # engine/fog.py computes -- but only for THIS board. Anything that moves a
+    # unit must drop it, or it describes a position that no longer exists.
+    vision: Optional[list] = None
     warnings: list = field(default_factory=list)
 
     @property
@@ -222,7 +227,12 @@ def load(path) -> Board:
         active_player=raw.get("active_player", 0),
         weather_index=raw.get("weather_index"),
         fog=raw.get("fog"),
+        vision=raw.get("vision"),
     )
+    if raw.get("vision_copies_agree") is False:
+        board.warnings.append(
+            "the two copies of the visibility array disagree -- one of the "
+            "two addresses is not what we think it is; do not trust `vision`")
     chk = raw.get("check", {})
     if "day" not in raw:
         board.warnings.append(

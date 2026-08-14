@@ -235,46 +235,116 @@ class TestThreatUnderFog(unittest.TestCase):
         self.assertEqual(threat.threat_map(b, 1, fog=True), {})
 
 
+FIXTURES = ("fog_vision_15x10", "fog_vision_15x10_mtn", "fog_vision_19x16_props")
+
+
 class TestAgainstTheGame(unittest.TestCase):
-    """The oracle. A real fogged 15x10 board captured from mGBA, checked in
-    alongside the game's own per-tile viewer count read out of EWRAM.
+    """The oracle. Real fogged boards captured from mGBA, each checked in with
+    the game's own per-tile viewer count read out of EWRAM.
 
     Everything else in this file pins what the model DOES. This pins what the
-    game does, so if the two ever part company the test says so."""
+    GAME does, so if the two ever part company the test says so.
 
-    def setUp(self):
-        path = ROOT / "tests" / "fixtures" / "fog_vision_15x10.json"
-        self.board = load(path)
-        raw = json.loads(path.read_text(encoding="utf-8"))
-        self.oracle = raw["vision_oracle"]
+    Note these check `computed_count`, not `viewer_count`. The latter now
+    prefers the observed array when a board carries one, so pointing the oracle
+    at it would compare the fixture against itself and pass no matter how
+    wrong the rules were.
+    """
 
-    def test_viewer_count_matches_the_game_tile_for_tile(self):
-        got = fog.viewer_count(self.board, self.oracle["player"])
-        counts = self.oracle["counts"]
-        wrong = [(x, y, counts[y][x], got[(x, y)])
-                 for y in range(self.board.height)
-                 for x in range(self.board.width)
-                 if counts[y][x] != got[(x, y)]]
-        self.assertEqual(wrong, [], f"{len(wrong)} tile(s) disagree with the game")
+    def boards(self):
+        for name in FIXTURES:
+            path = ROOT / "tests" / "fixtures" / f"{name}.json"
+            board = load(path)
+            yield name, board, board.vision
 
-    def test_each_measured_rule_is_load_bearing(self):
-        """Turn any one of them off and the match breaks. Without this a rule
-        could be quietly wrong and still pass, because nothing on this board
-        exercised it."""
-        player = self.oracle["player"]
-        counts = self.oracle["counts"]
+    def test_computed_count_matches_the_game_tile_for_tile(self):
+        for name, board, counts in self.boards():
+            with self.subTest(fixture=name):
+                got = fog.computed_count(board, board.active_player)
+                wrong = [(x, y, counts[y][x], got[(x, y)])
+                         for y in range(board.height)
+                         for x in range(board.width)
+                         if counts[y][x] != got[(x, y)]]
+                self.assertEqual(wrong, [], f"{len(wrong)} tile(s) disagree")
 
-        def mismatches(rule_set):
-            got = fog.viewer_count(self.board, player, rule_set)
-            return sum(1 for y in range(self.board.height)
-                       for x in range(self.board.width)
-                       if counts[y][x] != got[(x, y)])
+    def test_the_two_copies_of_the_array_agreed_when_captured(self):
+        for name, board, _ in self.boards():
+            raw = json.loads((ROOT / "tests" / "fixtures" / f"{name}.json")
+                             .read_text(encoding="utf-8"))
+            self.assertTrue(raw["vision_copies_agree"], name)
 
-        self.assertEqual(mismatches(None), 0)
+    def test_each_measured_rule_is_load_bearing_somewhere(self):
+        """Turn a rule off and at least one fixture must break. Without this a
+        rule could be quietly wrong and still pass, because nothing on a given
+        board exercised it -- which is exactly what happened to
+        `mountain_bonus` while it was assumed."""
         for name in ("hiding_terrain", "property_vision", "mountain_bonus"):
-            self.assertGreater(mismatches(fog.rules(**{name: False})), 0,
-                               f"{name} changes nothing on this board, so the "
-                               f"fixture does not actually test it")
+            broke = 0
+            for _, board, counts in self.boards():
+                got = fog.computed_count(board, board.active_player,
+                                         fog.rules(**{name: False}))
+                if any(counts[y][x] != got[(x, y)]
+                       for y in range(board.height)
+                       for x in range(board.width)):
+                    broke += 1
+            self.assertGreater(broke, 0,
+                               f"no fixture exercises {name}")
+
+    def test_the_mountain_bonus_is_pinned_to_exactly_three(self):
+        """Not just 'nonzero'. The board with two units on mountains puts a
+        unique minimum at +3 -- +2 and +4 are both wrong, in both directions."""
+        board = load(ROOT / "tests" / "fixtures" / "fog_vision_15x10_mtn.json")
+        counts = board.vision
+        scores = {}
+        original = fog.MOUNTAIN_BONUS
+        try:
+            for bonus in range(0, 6):
+                fog.MOUNTAIN_BONUS = bonus
+                got = fog.computed_count(board, board.active_player)
+                scores[bonus] = sum(1 for y in range(board.height)
+                                    for x in range(board.width)
+                                    if counts[y][x] != got[(x, y)])
+        finally:
+            fog.MOUNTAIN_BONUS = original
+        self.assertEqual(scores[3], 0)
+        self.assertEqual(min(scores, key=scores.get), 3)
+        for bonus, wrong in scores.items():
+            if bonus != 3:
+                self.assertGreater(wrong, 0, f"+{bonus} also matches")
+
+
+class TestObservedBeatsComputed(unittest.TestCase):
+    def test_a_board_carrying_the_array_uses_it(self):
+        board = load(ROOT / "tests" / "fixtures" / "fog_vision_15x10.json")
+        self.assertIsNotNone(fog.observed_count(board, board.active_player))
+        self.assertEqual(fog.viewer_count(board, board.active_player),
+                         fog.observed_count(board, board.active_player))
+
+    def test_it_is_only_offered_for_the_active_player(self):
+        """The array matched P1 on every capture and P1 was active on every
+        capture, so whose view it is cannot be told apart yet. Handing it back
+        for anyone else would be reading one of those guesses as fact."""
+        board = load(ROOT / "tests" / "fixtures" / "fog_vision_15x10.json")
+        other = 3 - board.active_player
+        self.assertIsNone(fog.observed_count(board, other))
+
+    def test_the_model_agrees_with_every_dump_that_carries_the_array(self):
+        for name in FIXTURES:
+            board = load(ROOT / "tests" / "fixtures" / f"{name}.json")
+            with self.subTest(fixture=name):
+                self.assertEqual(
+                    fog.model_disagreement(board, board.active_player), [])
+
+    def test_moving_a_unit_drops_the_observed_array(self):
+        """The trap. The game's array is a photograph of the board as it
+        stands; a hypothetical placement must fall back to the rules or every
+        'what if I stood here' uses the sight lines of where the unit is."""
+        board = load(ROOT / "tests" / "fixtures" / "fog_vision_15x10.json")
+        unit = next(u for u in board.units
+                    if u.player == board.active_player and not u.loaded)
+        hypo, moved = threat._relocate(board, unit, (unit.x, unit.y + 1))
+        self.assertIsNone(hypo.vision)
+        self.assertIsNone(fog.observed_count(hypo, board.active_player))
 
 
 class TestNoUnitTypeBranches(unittest.TestCase):

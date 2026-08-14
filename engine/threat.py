@@ -196,6 +196,11 @@ def _relocate(board, unit, tile: Coord):
         return board, unit
     x, y = tile
     moved = dataclasses.replace(unit, x=x, y=y)
+    # The game's observed visibility array describes the board as it stands.
+    # Move a unit and it is a photograph of a position that no longer exists,
+    # so the hypothetical board drops it and falls back to the rules. Carrying
+    # it forward would make every "what if I stood here" answer use the sight
+    # lines of where the unit actually is.
     riders = {unit.cargo} if unit.cargo else set()
     units = []
     for u in board.units:
@@ -205,7 +210,7 @@ def _relocate(board, unit, tile: Coord):
             units.append(dataclasses.replace(u, x=x, y=y))
         else:
             units.append(u)
-    return dataclasses.replace(board, units=units), moved
+    return dataclasses.replace(board, units=units, vision=None), moved
 
 
 # --------------------------------------------------------------------------

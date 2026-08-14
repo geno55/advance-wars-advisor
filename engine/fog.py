@@ -52,19 +52,34 @@ off that should be on, and the mountain bonus was a third of its real value.
 The bias toward seeing less was the right instinct and still produced a model
 that disagreed with the game on 13 tiles.
 
+All four were then re-confirmed on further captures: adjacency does reveal wood
+and reef (checked on screen), the +3 holds for Infantry as well as Mech with a
+unique minimum at 3, and a 19x16 board carrying no units at all lights exactly
+its eight properties -- property vision on its own, with nothing else to
+confuse it.
+
+THE READER NOW SUPPLIES THE ANSWER DIRECTLY
+
+The array is at a static 0x0201763A, confirmed on two maps of different sizes,
+row-major at the map's width. `harness/mgba_state.lua` dumps it, so
+`observed_count()` returns the game's own numbers and `viewer_count()` prefers
+them. The rules below are then a CROSS-CHECK against ground truth rather than
+the source of it, and `model_disagreement()` re-tests all of them on every dump
+that carries the array.
+
+The rules still matter, because the observed array describes the board as it
+stands. Ask what you could see from a tile you have not moved to yet and only
+the model can answer -- which is why `threat._relocate` drops the array rather
+than carrying a photograph of the wrong position forward.
+
 WHAT IS STILL NOT MEASURED
 
-  * Whether adjacency actually REVEALS concealing terrain. On the capture that
-    settled the rest, no unit stood within 1 of any wood tile, so "visible from
-    adjacent" and "never visible" fit the data identically. `can_see` keeps the
-    adjacency branch because it is the documented behaviour of the series, but
-    it is the one clause here with nothing behind it.
-  * Whether the mountain bonus is +3 for every unit class. One Mech on one
-    mountain produced it.
+  * Whose view the array holds. It matched P1 on every capture and P1 was the
+    active player on every capture, so "P1's" and "the active player's" are
+    indistinguishable. `observed_count` therefore refuses to answer for anyone
+    but the active player. No second array for another player was found.
+  * What the identical copy at 0x02017B42 is for. Dumped as a cross-check only.
   * Sonja's vision trait, and CO powers that reveal the map.
-  * Whether the count array's address is stable across maps. It was found at
-    0x0201763A on a 15x10 board, with an identical copy at 0x02017B42, and the
-    reader does NOT yet read it -- one capture is not an address.
 
 Because `Board.fog` is only known when the reader supplies it, nothing here
 fires by accident: callers must say fog is on, or pass a board that knows.
@@ -136,14 +151,56 @@ def _sight(board, unit, rule_set) -> int:
     return v
 
 
-def viewer_count(board, player: int,
-                 rule_set: Optional[dict] = None) -> Dict[Coord, int]:
+def observed_count(board, player: int) -> Optional[Dict[Coord, int]]:
+    """The game's own answer, if the reader supplied it.
+
+    Only for the ACTIVE player: the array matched P1 on every capture and P1
+    was active on every capture, so "P1's view" and "the active player's view"
+    are not yet distinguishable. Returning it for anyone else would be reading
+    one of those two guesses as fact.
+    """
+    if not board.vision or player != board.active_player:
+        return None
+    return {(x, y): board.vision[y][x]
+            for y in range(board.height) for x in range(board.width)}
+
+
+def model_disagreement(board, player: int,
+                       rule_set: Optional[dict] = None) -> Optional[list]:
+    """Tiles where our rules and the game disagree, or None if it cannot check.
+
+    Every dump that carries the array is a free re-test of the whole rule set,
+    which is the point of reading it rather than only computing.
+    """
+    seen = observed_count(board, player)
+    if seen is None:
+        return None
+    ours = computed_count(board, player, rule_set)
+    return [(t, seen[t], ours[t]) for t in sorted(seen) if seen[t] != ours[t]]
+
+
+def viewer_count(board, player: int, rule_set: Optional[dict] = None,
+                 prefer_observed: bool = True) -> Dict[Coord, int]:
     """How many of this player's units can see each tile.
+
+    Prefers the game's own array when the reader supplied one, because ground
+    truth beats a reproduction of it. Falls back to the rules for hypothetical
+    boards, where the observed array describes a position that no longer
+    exists -- see how threat.py drops it when relocating a unit.
+    """
+    if prefer_observed:
+        seen = observed_count(board, player)
+        if seen is not None:
+            return seen
+    return computed_count(board, player, rule_set)
+
+
+def computed_count(board, player: int,
+                   rule_set: Optional[dict] = None) -> Dict[Coord, int]:
+    """How many of this player's units can see each tile, from the rules alone.
 
     This is the shape the GAME stores -- a byte per tile, a count and not a
     flag -- so it is the form the oracle can be compared against directly.
-    Everything else here is derived from it, which keeps the thing we check
-    and the thing we use the same computation.
     """
     rule_set = rule_set or RULES
     counts: Dict[Coord, int] = {(x, y): 0

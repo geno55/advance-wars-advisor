@@ -246,6 +246,22 @@ would have called a wood tile visible when nothing could see into it. Erring
 toward seeing less was the right instinct and still left the model disagreeing
 with the game on 13 tiles — conservative is not the same as correct.
 
+Each rule was then re-confirmed on a capture built to isolate it: adjacency
+does reveal wood and reef; +3 holds for Infantry as well as Mech, with a unique
+minimum at 3 (+2 and +4 each miss 29 tiles); and a 19×16 board carrying **no
+units at all** lights exactly its eight properties — property vision measured
+on its own, with nothing else in frame.
+
+**The reader now reads the array rather than reproducing it.** The address is
+static — same `0x0201763A` on both map sizes, stride following the map width —
+so `Board.vision` carries the game's own numbers and `viewer_count()` prefers
+them. The rules stay load-bearing for the advisor's central question, *what
+could I see from a tile I have not moved to yet*, which is about a board that
+does not exist; `threat` drops the observed array when it relocates a unit, or
+every candidate placement would be scored with the sight lines of where the
+unit actually is. Every dump that carries the array is then a free re-test of
+all four rules.
+
 **Detection is done.** Fog is the **u8 at `0x0300431D`** — battle settings
 `+0x0D`, 0 clear and 1 fogged — so `Board.fog` is real and the reader reports
 it. Dumps predating the field still read `None`, carried as UNKNOWN rather than
@@ -303,7 +319,7 @@ engine/state.py           Board: terrain, defence, movement cost, units, cargo
 engine/pathing.py         one Dijkstra: reachable, destinations, path
 engine/co.py              CO modifiers, and what it refuses to model
 engine/threat.py          what the enemy can do to you next turn  <- the advisor
-engine/fog.py             what you can legally see, and what you cannot
+engine/fog.py             what you can legally see; reads the game's own array
 harness/mgba_state.lua    dump the live board as JSON          <- the state reader
 harness/mgba_ramtool.lua  RAM search/diff, map and army inspection, unit records
                           reset/mark/chg/unc, tag+tagfilter (labelled states),
@@ -322,7 +338,7 @@ data/aw1_unit_stats.json  cost, move, move type, range, vision, fuel, ammo
 tests/test_damage.py      39 regression tests
 tests/test_pathing.py     22 regression tests, incl. "no unit-type branches"
 tests/test_threat.py      23 regression tests, incl. the same branch ban
-tests/test_fog.py         24 tests, incl. the game-array oracle and branch ban
+tests/test_fog.py         30 tests, incl. three real-board oracles and branch ban
 tools/threat_report.py    exposure, per-unit safety, and the coverage grid
 tools/fog_hunt.py         pin the fog flag by diffing labelled RAM probes
 tools/fog_diff.py         our predicted visibility vs the game's own count array
@@ -457,13 +473,12 @@ damage back into rolls and distinguishes "unlucky sample" from "wrong model".
 
 ## Known gaps
 
-- **The vision array's address is not established.** The rules are measured,
-  but `0x0201763A` comes from one capture on one map, so the reader does not
-  read it and `fog.py` computes visibility instead. A second map settles
-  whether it moves.
-- **Two fog clauses remain unmeasured**: whether adjacency actually *reveals*
-  wood and reef (no unit stood next to one on the capture that settled the
-  rest), and whether the mountain bonus is +3 for every unit class.
+- **Whose view the vision array holds.** It matched P1 on every capture and P1
+  was the active player on every capture, so "P1's" and "the active player's"
+  are indistinguishable. `observed_count()` refuses to answer for anyone else
+  rather than pick. No second array for another player was found, and the
+  identical copy at `0x02017B42` has no known purpose.
+- **Sonja's vision trait**, and CO powers that reveal the map.
 - **The composition itself is unmeasured.** Threat projection's inputs are all
   verified; the matching and ordering built on top of them are covered by unit
   tests and by nothing else. The reachability half is checkable with the
