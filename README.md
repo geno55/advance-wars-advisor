@@ -256,21 +256,35 @@ boolean read patterns. **Both were refuted** — neither byte moved. The tally
 did put the answer in the top three of a 32K space, but it was not evidence,
 and `fog_hunt` now prints failed priors as REFUTED rather than dropping them.
 
-**The remaining question is the oracle.** The same diff turned up
-`0x03007910..0x0300792C`: all zero with fog off, bitmask-shaped with it on
-(`192, 83, 3, 232, 253, 128`). That is what a per-tile hidden mask looks like.
-If it is one, the four assumed rules above become *measurable*:
+**The remaining question is the oracle — and the first candidate was a dud.**
+The same diff turned up `0x03007910`, all zero with fog off and bitmask-shaped
+with it on. It is not a mask. Read as words it is `0x030053C0`, `0x0823066C`,
+`0x080780FD` — IWRAM and ROM pointers, one odd and therefore a THUMB function
+pointer. It is a handler table the game fills in when fog switches on, and the
+"bitmask" bytes were the low halves of pointers. A bitmask and a pointer are
+the same bytes; only alignment separates them, and a hex dump hides alignment.
+
+The probe was also looking in the wrong place: IWRAM only, while the terrain
+map is at `0x02016C2A` in **EWRAM**, which is where a per-tile array would
+actually sit. It now covers both work RAMs in full.
+
+If a per-tile mask exists, the four assumed rules become *measurable*:
 
 ```bash
-python tools/fog_diff.py fogged.json
+python tools/fog_diff.py fog_on.json --off fog_off.json
 ```
 
-It pins the mask layout first, using only the fact that your own units must
-stand on visible tiles — an anchor that owes nothing to `fog.py`, because
-pinning the layout with our own rules would launder the assumptions into the
-test meant to check them. Only then does it score the rules, and a tie is
-reported as *unexercised on this board* rather than as agreement. Validated
-against a synthetic planted mask; **not yet run against a real capture.**
+It searches both RAMs for both plausible shapes — bit-per-tile, and
+byte-per-tile like the terrain map next door — and pins the layout **before**
+consulting `fog.py`, since pinning it with our own rules would launder the
+assumptions into their own test. Three rule-independent constraints do the
+work: own units must read as visible; the span must be all-zero in the clear
+control and contain bytes fog changed; and every lit tile must be near a unit
+or a property, because fog means sight is local. Without those the first run
+survived 984 layouts and top-ranked the pointer table.
+
+Validated against planted masks of both shapes. **No mask has been found in a
+real capture yet.**
 
 ## Layout
 

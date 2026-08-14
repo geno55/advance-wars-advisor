@@ -141,19 +141,31 @@ local function q(s) return '"' .. s .. '"' end
 -- Off by default: it makes the dump about fifty times bigger.
 --     state("C:/tmp/fog_off.json", true)
 --
--- IWRAM is the whole 32K because that is where every battle-state address
--- found so far lives -- the settings struct, the turn block and the weather
--- byte are all in it. Casting narrowly is how you miss the thing you are
--- looking for and conclude it is not there.
+-- BOTH work RAMs, in full.
+--
+-- The first version of this probed IWRAM only, on the reasoning that every
+-- battle-state address found so far lives there -- the settings struct, the
+-- turn block, the weather byte. That found the fog FLAG and then sent the
+-- search for the visibility mask into a pointer table that merely looked
+-- bitmask-shaped in a hex dump.
+--
+-- The terrain map is at 0x02016C2A, in EWRAM, and a per-tile visibility array
+-- would sit near it rather than in IWRAM. So: casting narrowly is how you miss
+-- the thing you are looking for and conclude it is not there, which is what
+-- the comment here said before it was ignored.
 local PROBE_REGIONS = {
-  { 0x03000000, 0x8000, "iwram" },
+  { 0x03000000, 0x08000, "iwram" },
+  { 0x02000000, 0x40000, "ewram" },
 }
 
+-- Table replacement rather than a function callback: gsub calls this a quarter
+-- of a million times for EWRAM, and a table lookup is markedly cheaper than a
+-- Lua call plus a string.format.
+local HEXBYTE = {}
+for i = 0, 255 do HEXBYTE[string.char(i)] = string.format("%02x", i) end
+
 local function hexdump(base, len)
-  local data = emu:readRange(base, len)
-  return (data:gsub(".", function(c)
-    return string.format("%02x", string.byte(c))
-  end))
+  return (emu:readRange(base, len):gsub(".", HEXBYTE))
 end
 
 function state(path, probe)

@@ -909,24 +909,64 @@ settles it.
 unrecognised value stays visible, and the turn-block sanity check now rejects
 anything that is not 0 or 1.
 
-### What the same diff turned up for free
+### A mask that was not a mask
 
-`0x03007910..0x0300792C` is **all zero with fog off** and bitmask-shaped with
-it on -- `192, 83, 3, 232, 253, 128`. That is what a per-tile hidden mask looks
-like when there is nothing to hide.
+`0x03007910..0x0300792C` is all zero with fog off and reads
+`c0 53 00 03 e8 02 00 03 ...` with it on. Called bitmask-shaped, and it is not.
+Read as 32-bit words:
 
-If it is one, it is an oracle, and the four assumed visibility rules in
-`engine/fog.py` stop being assumptions. `tools/fog_diff.py` pins the layout
-first -- sweeping base, stride, bit order and polarity, keeping only layouts
-where every one of the player's own units stands on a tile the mask calls
-visible. That anchor holds in any fog implementation and owes nothing to
-`fog.py`, which is the point: pinning the layout with our own rules would
-launder the assumptions into the test meant to check them.
+```
+  0x03007910  0x030053C0   IWRAM pointer
+  0x03007914  0x030002E8   IWRAM pointer
+  0x0300791C  0x0823066C   ROM pointer
+  0x03007920  0x080780FD   ROM pointer, odd -> a THUMB function pointer
+  0x03007924  0x030063F0   IWRAM pointer
+```
 
-Only with the layout pinned independently does it score the rules, and a tie
-between rule combinations is reported as *unexercised on this board* rather
-than as agreement. Validated against a synthetic dump with a planted mask and a
-deliberately non-default rule set: it recovers the layout and names the rule.
+It is a handler table the game populates when fog switches on. The bytes that
+looked like masks -- 192, 83, 3, 232 -- are the low halves of pointers. A
+bitmask and a pointer are the same bytes; only the alignment tells them apart,
+and a hex dump does not show alignment.
 
-This is unrun against a real capture. The mask is a hypothesis with a good
-shape and nothing more.
+Two lessons, both cheap in hindsight. Read a candidate structure at every width
+before naming it, since a byte view of a pointer table looks like anything you
+want. And the probe covered IWRAM only, on the reasoning that every
+battle-state address found so far lived there -- while the terrain map is at
+`0x02016C2A` in **EWRAM**, which is exactly where a per-tile array would sit.
+The probe's own comment said casting narrowly is how you miss the thing you are
+looking for.
+
+### Hunting the mask properly
+
+`state(path, true)` now probes both work RAMs in full. `tools/fog_diff.py`
+searches for a per-tile visibility array in either, in both plausible shapes --
+bit-per-tile and byte-per-tile, the latter being what sitting next to the
+byte-per-tile terrain map would suggest.
+
+It pins the layout **before** consulting `engine/fog.py`, because pinning it
+with our own rules would launder the assumptions into the test meant to check
+them. Three rule-independent constraints:
+
+  * every one of the player's own units stands on a tile the mask calls visible
+  * with a clear capture of the same map as a control, the span must read all
+    zero there and must contain bytes fog changed
+  * every lit tile is near *something* -- a unit or an owned property. Fog means
+    sight is local, and without this a `1 = hidden` layout that lights 139 of
+    150 tiles passes the own-units anchor trivially
+
+The first run had none of these but the first, survived 984 layouts, and
+top-ranked the pointer table. The control is what makes the search tractable;
+the locality filter is what makes the ranking mean anything.
+
+Ranking then prefers the natural row stride and, among those, the span that
+accounts for the most of what fog actually wrote -- neighbouring offsets decode
+nearly the same picture, so covering the writes is the discriminator.
+
+Validated against synthetic dumps carrying a planted bit-per-tile mask in IWRAM
+and a planted byte-per-tile one in EWRAM, each with a deliberately non-default
+rule set. It recovers both. It also demonstrates the failure it warns about: on
+the byte-per-tile fixture, whose surrounding memory was zeroed so that
+neighbouring offsets alias, it pinned one byte early and step 2 then reported
+rule disagreements that are artefacts of the mis-pin.
+
+Unrun against a real capture. No mask has been found.

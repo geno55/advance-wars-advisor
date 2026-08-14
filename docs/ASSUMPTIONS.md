@@ -219,14 +219,16 @@ fog toggle and confirmed by writing it mid-match. `Board.fog` is now real, and
 predicted `+0x32` and `+0x08`; both were refuted, neither moved. See
 `DERIVATION.md` 20.
 
-**The oracle is the open question.** The same diff turned up
-`0x03007910..0x0300792C`, all zero with fog off and bitmask-shaped with it on —
-the shape of a per-tile hidden mask. If it is one, every rule in the table
-above becomes measurable and stops being an assumption. `tools/fog_diff.py`
-pins the layout using only the player's own unit positions as an anchor, so the
-rules cannot launder themselves into their own test, and scores them only
-afterwards. It is validated against a synthetic planted mask and has not been
-run against a real capture.
+**The oracle is still open.** A per-tile visibility mask would make every rule
+in the table above measurable. The first candidate, `0x03007910`, turned out to
+be a table of pointers — including a THUMB function pointer — that the game
+fills in when fog switches on, not a mask. See `DERIVATION.md` 20.
+
+`tools/fog_diff.py` now searches both work RAMs for both plausible shapes and
+pins any layout using only rule-independent constraints, so the rules cannot
+launder themselves into their own test. Validated against planted masks; no
+real mask found yet. Until one is, every rule above stays an assumption and
+`engine/fog.py`'s defaults stay biased toward seeing less.
 
 ## Unknown — not modelled
 
