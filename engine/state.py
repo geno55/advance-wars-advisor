@@ -10,6 +10,7 @@ bad advice, which is the failure mode this whole project exists to avoid.
 """
 from __future__ import annotations
 
+import functools
 import json
 import pathlib
 from dataclasses import dataclass, field
@@ -19,7 +20,17 @@ DATA = pathlib.Path(__file__).resolve().parent.parent / "data"
 IMPASSABLE = 255
 
 
+@functools.lru_cache(maxsize=None)
 def _load(name):
+    """The extracted tables, read once.
+
+    These are static ROM data and every lookup below re-reads them -- terrain
+    names, defence and movement cost are all called from inside a Dijkstra, so
+    an uncached read here is a JSON parse per tile expansion. Threat projection
+    runs a search per enemy per candidate tile and made that cost visible.
+
+    Callers must treat the result as read-only; it is now shared.
+    """
     return json.loads((DATA / name).read_text(encoding="utf-8"))
 
 
@@ -64,6 +75,11 @@ class Army:
     # damage gain. The activation threshold and the gain formula are UNKNOWN, so
     # this is a raw number, not a percentage -- do not render it as one.
     power: int = 0
+    # CO identity, 0..11, from army +0x1D. None means the dump predates the
+    # field, NOT that the army has no CO -- callers must treat the two
+    # differently, because assuming a neutral CO where one is unknown is how a
+    # prediction ends up 50% low against Max.
+    co_id: Optional[int] = None
 
 
 @dataclass
@@ -191,7 +207,8 @@ def load(path) -> Board:
                     u.get("loaded", False),
                     u.get("state", 0), u.get("cargo", 0))
                for u in raw["units"]],
-        armies=[Army(a["player"], a["funds"], a["income"], a.get("power", 0))
+        armies=[Army(a["player"], a["funds"], a["income"], a.get("power", 0),
+                     a.get("co_id"))
                 for a in raw["armies"]],
         terrain=[r["t"] for r in rows],
         owner=[r["owner"] for r in rows],

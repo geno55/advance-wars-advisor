@@ -40,6 +40,7 @@ WHAT IS NOT MODELLED, deliberately and visibly
 """
 from __future__ import annotations
 
+import functools
 import heapq
 import json
 import pathlib
@@ -49,7 +50,9 @@ DATA = pathlib.Path(__file__).resolve().parent.parent / "data"
 Coord = Tuple[int, int]
 
 
+@functools.lru_cache(maxsize=None)
 def _stats():
+    """Static ROM data, read once -- see the same note in state.py. Read-only."""
     return json.loads((DATA / "aw1_unit_stats.json").read_text(encoding="utf-8"))["units"]
 
 

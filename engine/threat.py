@@ -1,0 +1,471 @@
+"""What the enemy can do to you next turn.
+
+Composition, not new reverse engineering. Every input is already extracted and
+already checked against the running game:
+
+  * where an enemy can go            -- pathing.py, matched tile-for-tile
+                                        against the game's own flood fill
+  * whether it can shoot you at all  -- the damage matrices, ROM-exact
+  * for how much                     -- the calibrated formula, luck_after_hp
+  * how much cover you have          -- terrain stars, and the sky substitution
+                                        that stops aircraft inheriting them
+
+There is not a single branch on unit type in this file, for the same reason
+there is none in pathing.py. Whether a unit can shoot after moving, how far it
+reaches, and whether it is armed at all are three ROM fields -- `armed`,
+`can_move_and_fire`, `min_range`/`max_range`. An Artillery threatens a ring
+around where it stands rather than around everywhere it could drive, and that
+falls out of `can_move_and_fire` being false, not out of anyone typing its name.
+
+WHAT IS MODELLED, and where each rule comes from
+
+  * Direct units threaten every tile adjacent to any tile they may END on.
+    `destinations()`, not `reachable()` -- a unit cannot shoot from a tile it
+    is only passing through.
+  * Indirect units threaten the range ring around their CURRENT tile, because
+    `can_move_and_fire` is false and firing is therefore this turn's whole
+    action. Range is Manhattan distance.
+  * Unarmed units threaten nothing. `armed` is a ROM field, so transports and
+    the like drop out without being enumerated.
+  * Your unit blocks enemy movement. Asking "what if I stood at X" moves it
+    there first and re-runs the enemy searches against that board, so a tile
+    you would plug is scored as plugged, and the tile you vacate opens up.
+  * A tile can only be shot from by one unit at a time. Attackers are matched
+    to DISTINCT firing tiles, so a chokepoint that only one enemy can occupy
+    is reported as one attacker and not as six.
+  * Focus fire is sequenced, not summed. The defence term reads the defender's
+    CURRENT displayed HP, so each hit lands into a weaker unit and is worth
+    more than the last. Summing independent quotes understates a gang-up on
+    starred terrain; the order is searched rather than assumed.
+  * Enemy `acted` flags are IGNORED by default. The question is what happens
+    over the opponent's next whole turn, by which point every one of their
+    units has refreshed. Pass ignore_acted=False to ask what can hit you
+    before the current turn ends.
+
+WHAT IS NOT MODELLED, deliberately and visibly
+
+  * Counterattacks weakening the attackers. A gang-up is scored as though your
+    unit never hits back, so `worst_damage` is an UPPER bound. That is the
+    direction that fails safe for "can I die here", and it is a real
+    overstatement when your unit counters hard.
+  * Fog of war. The reader reports true board state, so this sees enemies a
+    fogged player cannot. `Board` does not report fog, so this cannot either.
+  * CO powers firing. The charge is readable but the activation threshold is
+    not known (see aw1_army_struct.json), so a power landing mid-turn is
+    outside the model entirely.
+  * Enemy production. Anything bought on their turn appears from nowhere.
+  * Alliances. Every player that is not you is treated as hostile; the dump
+    carries no team data.
+
+Threat numbers inherit the CO caveats from co.py. If a CO's strength lives in
+header fields the damage path has never been shown to read -- Kanbei, Sturm --
+the numbers come out LOW, which is the dangerous direction, so it is reported
+as a warning rather than swallowed.
+"""
+from __future__ import annotations
+
+import dataclasses
+import itertools
+from dataclasses import dataclass
+from typing import Dict, List, Optional, Sequence, Set, Tuple
+
+try:                                    # imported as engine.threat by tools/
+    from . import co as co_mod
+    from . import damage, pathing
+except ImportError:                     # imported as threat, engine/ on path
+    import co as co_mod
+    import damage
+    import pathing
+
+Coord = Tuple[int, int]
+
+# Above this many simultaneous attackers the ordering search stops being
+# exhaustive. 6! is 720 orderings, and the per-attack damages are memoised
+# across them, so this costs far less than it looks like it should.
+EXHAUSTIVE_ORDERINGS = 6
+
+
+# --------------------------------------------------------------------------
+# geometry -- all of it driven by the three ROM range fields
+# --------------------------------------------------------------------------
+
+def manhattan(a: Coord, b: Coord) -> int:
+    return abs(a[0] - b[0]) + abs(a[1] - b[1])
+
+
+def in_range(board, origin: Coord, lo: int, hi: int) -> Set[Coord]:
+    """On-board tiles at Manhattan distance lo..hi from `origin`."""
+    ox, oy = origin
+    out = set()
+    for dx in range(-hi, hi + 1):
+        span = hi - abs(dx)
+        for dy in range(-span, span + 1):
+            if lo <= abs(dx) + abs(dy) <= hi:
+                x, y = ox + dx, oy + dy
+                if 0 <= x < board.width and 0 <= y < board.height:
+                    out.add((x, y))
+    return out
+
+
+def firing_positions(board, unit, weather: Optional[str] = None) -> Dict[Coord, int]:
+    """Tiles this unit could shoot FROM, mapped to what it costs to get there.
+
+    Three cases, and all three come out of the stats table rather than out of
+    a type test: unarmed units shoot from nowhere, units that may move and fire
+    shoot from anywhere they can stop, and the rest shoot from where they are.
+
+    Tiles occupied by another unit are dropped. They appear in `destinations()`
+    because loading into a transport is a legal way to end a move, but a unit
+    that loads has spent its turn and is not shooting anybody.
+    """
+    st = pathing.unit_stats(unit.type)
+    if unit.loaded or not st["armed"]:
+        return {}
+    if not st["can_move_and_fire"]:
+        return {(unit.x, unit.y): 0}
+    here = (unit.x, unit.y)
+    out = {}
+    for tile, cost in pathing.destinations(board, unit, weather).items():
+        blocker = board.unit_at(*tile)
+        if tile == here or blocker is None:
+            out[tile] = cost
+    return out
+
+
+def covered_tiles(board, unit, weather: Optional[str] = None) -> Dict[Coord, Set[Coord]]:
+    """Every tile this unit could put a shot on -> the tiles it could shoot from.
+
+    Geometry and reach only. Whether the shot is LEGAL depends on what is
+    standing there, which is the damage matrices' business, not this one's.
+    """
+    st = pathing.unit_stats(unit.type)
+    lo, hi = st["min_range"], st["max_range"]
+    out: Dict[Coord, Set[Coord]] = {}
+    for src in firing_positions(board, unit, weather):
+        for tgt in in_range(board, src, lo, hi):
+            out.setdefault(tgt, set()).add(src)
+    return out
+
+
+def hostiles(board, player: int, ignore_acted: bool = True) -> List:
+    """Enemy units that could still shoot. Every non-`player` army is hostile."""
+    return [u for u in board.units
+            if u.player != player and u.player != 0 and not u.loaded
+            and (ignore_acted or not u.acted)]
+
+
+# --------------------------------------------------------------------------
+# hypothetical placement
+# --------------------------------------------------------------------------
+
+def _relocate(board, unit, tile: Coord):
+    """A copy of the board with `unit` standing at `tile`, cargo carried along.
+
+    Enemy movement is computed against this, not against the real board: a
+    tile is only genuinely safe if it is safe once your unit is standing in it
+    plugging the gap, and the tile you left has to open back up.
+    """
+    if (unit.x, unit.y) == tile:
+        return board, unit
+    x, y = tile
+    moved = dataclasses.replace(unit, x=x, y=y)
+    riders = {unit.cargo} if unit.cargo else set()
+    units = []
+    for u in board.units:
+        if u.slot == unit.slot:
+            units.append(moved)
+        elif u.slot in riders:
+            units.append(dataclasses.replace(u, x=x, y=y))
+        else:
+            units.append(u)
+    return dataclasses.replace(board, units=units), moved
+
+
+# --------------------------------------------------------------------------
+# CO resolution
+# --------------------------------------------------------------------------
+
+def _co_of(board, player: int, co_ids: Optional[dict]) -> Optional[int]:
+    if co_ids and player in co_ids:
+        return co_ids[player]
+    try:
+        return board.army(player).co_id
+    except (StopIteration, AttributeError):
+        return None
+
+
+def _modifier(board, unit, role: int, co_ids, warnings: list) -> int:
+    """This unit's CO attack (role 0) or defence (role 1) percentage.
+
+    Falls back to a neutral 100 when the CO is unknown, and says so once --
+    silently assuming neutral is how a Max prediction comes out a third low.
+    """
+    cid = _co_of(board, unit.player, co_ids)
+    if cid is None:
+        note = (f"P{unit.player}'s CO is unknown -- this dump predates the "
+                f"co_id field, so their modifiers are assumed neutral. Re-dump "
+                f"with the current mgba_state.lua to fix it.")
+        if note not in warnings:
+            warnings.append(note)
+        return 100
+    gaps = co_mod.unmodelled(cid)
+    if gaps:
+        rec = co_mod.record(cid)
+        note = (f"P{unit.player} is {rec.name}, whose strength lives in header "
+                f"fields {sorted(gaps)} the damage path has never been shown "
+                f"to read. Numbers involving them are UNDERSTATED.")
+        if note not in warnings:
+            warnings.append(note)
+    try:
+        return co_mod.modifiers(cid, unit.type)[role]
+    except KeyError:
+        return 100
+
+
+# --------------------------------------------------------------------------
+# threats
+# --------------------------------------------------------------------------
+
+@dataclass(frozen=True)
+class Threat:
+    """One enemy unit's attack on one tile, already resolved to damage."""
+    attacker: object
+    firing_tiles: tuple          # every tile it could deliver this from
+    target_tile: Coord
+    outcome: object              # damage.Outcome
+
+    @property
+    def min_damage(self) -> int:
+        return self.outcome.min_damage
+
+    @property
+    def max_damage(self) -> int:
+        return self.outcome.max_damage
+
+
+class _Damage:
+    """Resolved damage against one defender on one tile, memoised over its HP.
+
+    The ordering search re-asks the same questions hundreds of times, and
+    display HP quantises to tens, so the cache collapses 720 orderings down to
+    a handful of real evaluations.
+    """
+
+    def __init__(self, board, defender, tile: Coord, co_ids, warnings):
+        self.board, self.defender, self.tile = board, defender, tile
+        self.co_ids, self.warnings = co_ids, warnings
+        move_type = pathing.unit_stats(defender.type)["move_type"]
+        self.stars = board.defence_for(tile[0], tile[1], move_type)
+        self.co_def = _modifier(board, defender, 1, co_ids, warnings)
+        self._cache: dict = {}
+
+    def outcome(self, attacker, defender_hp: int):
+        key = (attacker.slot, defender_hp)
+        if key not in self._cache:
+            atk = damage.Attack(
+                attacker=attacker.type, defender=self.defender.type,
+                attacker_hp=attacker.hp, defender_hp=defender_hp,
+                terrain_stars=self.stars, ammo=attacker.ammo,
+                co_attack=_modifier(self.board, attacker, 0,
+                                    self.co_ids, self.warnings),
+                co_defense=self.co_def,
+            )
+            self._cache[key] = damage.resolve(atk)
+        return self._cache[key]
+
+
+def threats_to(board, defender, tile: Optional[Coord] = None, *,
+               co_ids: Optional[dict] = None, weather: Optional[str] = None,
+               ignore_acted: bool = True,
+               warnings: Optional[list] = None) -> List[Threat]:
+    """Every enemy attack that could land on `defender` if it stood at `tile`.
+
+    Defaults to where it actually stands. Enemy movement is recomputed against
+    the hypothetical board, so blocking effects are real.
+    """
+    tile = tile or (defender.x, defender.y)
+    warnings = warnings if warnings is not None else []
+    hypo, moved = _relocate(board, defender, tile)
+    dmg = _Damage(hypo, moved, tile, co_ids, warnings)
+
+    out = []
+    for enemy in hostiles(hypo, defender.player, ignore_acted):
+        sources = covered_tiles(hypo, enemy, weather).get(tile)
+        if not sources:
+            continue
+        outcome = dmg.outcome(enemy, moved.hp)
+        if outcome is None:              # no weapon can touch this target
+            continue
+        out.append(Threat(attacker=enemy, firing_tiles=tuple(sorted(sources)),
+                          target_tile=tile, outcome=outcome))
+    out.sort(key=lambda t: (-t.max_damage, t.attacker.slot))
+    return out
+
+
+# --------------------------------------------------------------------------
+# focus fire
+# --------------------------------------------------------------------------
+
+@dataclass(frozen=True)
+class FocusFire:
+    tile: Coord
+    delivered: tuple        # Threats that can all be delivered at once
+    crowded_out: tuple      # Threats dropped for want of a distinct firing tile
+    worst_damage: int       # every attacker rolls high, in the worst order
+    best_damage: int        # every attacker rolls low, in the kindest order
+    worst_remaining: int
+    best_remaining: int
+    lethal: bool            # the worst case kills
+    certain_death: bool     # even the best case kills
+    exact: bool             # whether the ordering search was exhaustive
+
+    @property
+    def attackers(self) -> int:
+        return len(self.delivered)
+
+
+def _match_distinct_tiles(threats: Sequence[Threat]):
+    """Assign each attacker its own firing tile; drop those that cannot get one.
+
+    Kuhn's algorithm, heaviest hitters first. Two enemies wanting the single
+    tile beside a chokepoint means one of them does not get to shoot, and
+    scoring both is how a tool talks a player out of the best square on the map.
+    """
+    ordered = sorted(threats, key=lambda t: (-t.max_damage, t.attacker.slot))
+    owner: Dict[Coord, int] = {}
+    by_index = {i: t.firing_tiles for i, t in enumerate(ordered)}
+
+    def assign(i: int, seen: set) -> bool:
+        for tile in by_index[i]:
+            if tile in seen:
+                continue
+            seen.add(tile)
+            if tile not in owner or assign(owner[tile], seen):
+                owner[tile] = i
+                return True
+        return False
+
+    placed = {i for i in range(len(ordered)) if assign(i, set())}
+    return ([t for i, t in enumerate(ordered) if i in placed],
+            [t for i, t in enumerate(ordered) if i not in placed])
+
+
+def _chain(dmg: _Damage, start_hp: int, order: Sequence[Threat], high: bool) -> int:
+    """Total damage from attacking in this order. Sequenced, because the
+    defence term reads current HP -- each hit lands into a weaker unit."""
+    hp, total = start_hp, 0
+    for th in order:
+        if hp <= 0:
+            break
+        outcome = dmg.outcome(th.attacker, hp)
+        if outcome is None:
+            continue
+        step = min(outcome.max_damage if high else outcome.min_damage, hp)
+        hp -= step
+        total += step
+    return total
+
+
+def focus_fire(board, defender, tile: Optional[Coord] = None, *,
+               co_ids: Optional[dict] = None, weather: Optional[str] = None,
+               ignore_acted: bool = True,
+               warnings: Optional[list] = None) -> FocusFire:
+    """Worst and best case for `defender` standing at `tile` over one enemy turn.
+
+    `worst_damage` is an upper bound: attackers are never weakened by the
+    counterattacks they would eat. See the module docstring.
+    """
+    tile = tile or (defender.x, defender.y)
+    warnings = warnings if warnings is not None else []
+    threats = threats_to(board, defender, tile, co_ids=co_ids, weather=weather,
+                         ignore_acted=ignore_acted, warnings=warnings)
+    delivered, crowded = _match_distinct_tiles(threats)
+
+    hypo, moved = _relocate(board, defender, tile)
+    dmg = _Damage(hypo, moved, tile, co_ids, warnings)
+
+    if not delivered:
+        return FocusFire(tile=tile, delivered=(), crowded_out=tuple(crowded),
+                         worst_damage=0, best_damage=0,
+                         worst_remaining=moved.hp, best_remaining=moved.hp,
+                         lethal=False, certain_death=False, exact=True)
+
+    exact = len(delivered) <= EXHAUSTIVE_ORDERINGS
+    if exact:
+        orders = list(itertools.permutations(delivered))
+    else:
+        # Big attacks want to land last, into the highest defence multiplier,
+        # so ascending is the shape of the worst case. Kept honest by reporting
+        # exact=False rather than by claiming the search was complete.
+        by_size = sorted(delivered, key=lambda t: t.max_damage)
+        orders = [tuple(by_size), tuple(reversed(by_size)), tuple(delivered)]
+
+    worst = max(_chain(dmg, moved.hp, o, True) for o in orders)
+    best = min(_chain(dmg, moved.hp, o, False) for o in orders)
+    return FocusFire(
+        tile=tile, delivered=tuple(delivered), crowded_out=tuple(crowded),
+        worst_damage=worst, best_damage=best,
+        worst_remaining=max(0, moved.hp - worst),
+        best_remaining=max(0, moved.hp - best),
+        lethal=worst >= moved.hp, certain_death=best >= moved.hp,
+        exact=exact,
+    )
+
+
+# --------------------------------------------------------------------------
+# the advisor-facing questions
+# --------------------------------------------------------------------------
+
+@dataclass(frozen=True)
+class TileRisk:
+    tile: Coord
+    move_cost: int
+    terrain: str
+    stars: int
+    focus: FocusFire
+
+
+def safety(board, unit, *, co_ids: Optional[dict] = None,
+           weather: Optional[str] = None, ignore_acted: bool = True,
+           warnings: Optional[list] = None) -> List[TileRisk]:
+    """Every tile this unit can end on, worst case first cheapest.
+
+    This is the question a player actually asks -- not "how much does that
+    trade cost" but "where can I put this thing down without losing it".
+    """
+    warnings = warnings if warnings is not None else []
+    move_type = pathing.unit_stats(unit.type)["move_type"]
+    out = []
+    for tile, cost in pathing.destinations(board, unit, weather).items():
+        ff = focus_fire(board, unit, tile, co_ids=co_ids, weather=weather,
+                        ignore_acted=ignore_acted, warnings=warnings)
+        out.append(TileRisk(
+            tile=tile, move_cost=cost,
+            terrain=board.terrain_name(*tile),
+            stars=board.defence_for(tile[0], tile[1], move_type),
+            focus=ff))
+    out.sort(key=lambda r: (r.focus.worst_damage, r.move_cost, r.tile))
+    return out
+
+
+def threat_map(board, player: int, *, unit_type: Optional[str] = None,
+               weather: Optional[str] = None,
+               ignore_acted: bool = True) -> Dict[Coord, List]:
+    """Tile -> the enemy units that could put a shot on it, as the board stands.
+
+    Coverage, not damage: what a tile costs you depends on what you park there.
+    Pass `unit_type` to count only enemies whose weapons can actually hurt that
+    kind of unit -- without it a Lander looks threatened by an Anti-Air.
+
+    Your own units are where they are, so this is the map for the board as it
+    is now. `safety()` is the one that re-runs the enemy searches against a
+    hypothetical placement.
+    """
+    out: Dict[Coord, List] = {}
+    for enemy in hostiles(board, player, ignore_acted):
+        if unit_type is not None and not damage.can_attack(
+                enemy.type, unit_type, enemy.ammo):
+            continue
+        for tile in covered_tiles(board, enemy, weather):
+            out.setdefault(tile, []).append(enemy)
+    return out

@@ -29,11 +29,13 @@ paid off — see "What got caught" below.
 - Calibrated against 14 exact-HP observations from a live game. Display rule
   determined as `floor_min1`; terrain stars confirmed; four of six formula
   variants refuted.
+- CO modifiers filled from the ROM record, and refused where a CO's strength
+  lives in header fields the damage path has never been shown to read.
 - **The formula is determined: `luck_after_hp`.** `resolve()` returns an exact
   range, not an envelope, so "cannot kill" is as reliable as "will kill".
   Settled by crossing two independent eliminations that neither could finish
   alone -- see `DERIVATION.md` 17.
-- 34 regression tests.
+- 39 regression tests.
 
 **Milestone 1 — the state reader. Done.**
 
@@ -137,6 +139,72 @@ terrain, or the damage path, which writes at a different moment and involves the
 RNG. So the rule is **every sweep ships a control case** — one extra iteration,
 and the only thing separating a measurement from a machine agreeing with itself.
 
+**Milestone 4 — threat projection. Composed, and not yet put in front of the
+game.**
+
+`engine/threat.py` answers the question a player actually asks before moving
+anything: *if I put this unit here, what happens to it on the enemy's next turn.*
+
+Every input is already verified — enemy movement is milestone 3's Dijkstra,
+legality is the ROM damage matrices, damage is the calibrated formula, cover is
+the terrain table including the sky substitution that stops aircraft inheriting
+a mountain's stars. What is new is only the **composition**, and the composition
+is the part no oracle has checked. That distinction is the whole status line;
+see "What cannot be checked" below.
+
+Not a single branch on unit type, same as pathing, and `tests/test_threat.py`
+asserts it the same way. Who threatens what falls out of three ROM fields:
+
+| field | what it decides |
+|---|---|
+| `armed` | transports threaten nothing, without being enumerated |
+| `can_move_and_fire` | direct units threaten around everywhere they may **stop**; indirects threaten the ring around where they **stand** |
+| `min_range` / `max_range` | the ring, as Manhattan distance — so the tile beside an Artillery is the safest square on the map |
+
+Four things turned out to matter more than the damage arithmetic:
+
+- **Simultaneity.** A tile can only be shot from by one unit at a time, so
+  attackers are matched to *distinct* firing tiles. Three tanks that can all
+  reach the single square beside a chokepoint are one attack, not three.
+  Counting all three is how a tool talks a player out of the best ground on the
+  map.
+- **Sequencing.** The defence term reads the defender's *current* displayed HP,
+  so each hit lands into a weaker unit and is worth more than the last. Two
+  Tanks into a Md Tank on a mountain deal 14 then 16, not 14 twice — summing
+  independent quotes understates a gang-up on cover, and the ordering is
+  searched rather than assumed.
+- **Blocking.** Asking "what if I stood at X" moves the unit there and re-runs
+  the enemy searches against *that* board. A tile you would plug scores as
+  plugged, and the tile you vacate opens back up. On the test fixture a Md Tank
+  is safe one square behind its own infantry screen and exposed the moment the
+  screen is what moves.
+- **Whose turn it is.** Enemy `acted` flags are ignored by default, because the
+  question spans the opponent's next whole turn, by which point every one of
+  their units has refreshed.
+
+**The state reader now carries CO identity.** `co_id` at army `+0x1D` was
+documented and confirmed — it is the field that named eleven of the twelve
+records — but `mgba_state.lua` was not dumping it, so every prediction off a
+live board was quietly assuming a neutral CO. Against Max that is wrong by half:
+on the fixture, a Tank quote moves from 15–24 to 22–31. Dumps that predate the
+field still load, and say so rather than defaulting silently.
+
+**What cannot be checked.** Unlike milestones 1–3 this has no ground truth in
+the game: Advance Wars never writes down what it *would* do to you next turn.
+Two thirds of it are still checkable and are not yet checked —
+
+- the reachability half is `path_diff`'s oracle applied to enemy units, which
+  the existing harness can already drive;
+- the damage half inherits milestone 2's calibration;
+- the *matching and ordering* on top is the genuinely new logic, and it is
+  covered only by unit tests whose expected values are worked from the formula
+  by hand rather than measured.
+
+So the numbers are stated as composition, not as measurement, and
+`worst_damage` is deliberately an **upper** bound: attackers are never weakened
+by the counterattacks they would eat. That fails safe for "can I die here" and
+is a real overstatement when your unit hits back hard.
+
 ## Layout
 
 ```
@@ -144,6 +212,7 @@ engine/damage.py          weapon selection, formula variants, damage envelopes
 engine/state.py           Board: terrain, defence, movement cost, units, cargo
 engine/pathing.py         one Dijkstra: reachable, destinations, path
 engine/co.py              CO modifiers, and what it refuses to model
+engine/threat.py          what the enemy can do to you next turn  <- the advisor
 harness/mgba_state.lua    dump the live board as JSON          <- the state reader
 harness/mgba_ramtool.lua  RAM search/diff, map and army inspection, unit records
                           reset/mark/chg/unc, tag+tagfilter (labelled states),
@@ -159,8 +228,10 @@ data/aw1_army_struct.json army record layout + open CO questions
 data/aw1_co.json          12 CO records; 4 names measured, 8 fingerprints only
 data/aw1_unit_stats.json  cost, move, move type, range, vision, fuel, ammo
 
-tests/test_damage.py      33 regression tests
+tests/test_damage.py      39 regression tests
 tests/test_pathing.py     22 regression tests, incl. "no unit-type branches"
+tests/test_threat.py      23 regression tests, incl. the same branch ban
+tools/threat_report.py    exposure, per-unit safety, and the coverage grid
 tools/path_diff.py        our reachable set vs the game's own flood fill
 harness/mgba_spike.lua    write state, drive input, sweep cases unattended
 tools/spike_check.py      sweep vs engine, and the write-vs-play control
@@ -223,6 +294,40 @@ Prints the damage envelope, whether the kill is guaranteed, and the counterattac
 Where the two surviving formula variants disagree at the top of the range, it
 says so explicitly rather than picking one.
 
+## Reading the threat
+
+```bash
+python tools/threat_report.py state.json
+```
+
+One line per unit: what the enemy can do to it where it stands, and which of
+your units can be killed outright this turn.
+
+```
+P1 exposure -- what the enemy can do on their next turn:
+  Infantry   #10  ( 7, 6) 10 bars on Road    100 dmg from 4 attackers  DIES
+  Infantry   #11  ( 6, 7)  7 bars on Plain   64 dmg from 1 attacker  DIES  [+2 crowded out]
+  MdTank     #12  ( 7, 7) 10 bars on Road    22-31 dmg from 1 attacker  survives on 7 bars
+  Artillery  #13  ( 6, 8) 10 bars on Plain   untouched
+```
+
+`crowded out` is the simultaneity rule showing its work: three units can reach
+that infantry and only one of them can find a tile to shoot from.
+
+```bash
+python tools/threat_report.py state.json --unit 12
+```
+
+Ranks every tile that unit can move to, safest first, re-running the enemy
+searches against each placement so blocking is real. Then:
+
+```bash
+python tools/threat_report.py state.json --map --for Infantry
+```
+
+prints the coverage grid — how many enemies can put a shot on each tile.
+`--for` matters: without it a Lander looks threatened by an Anti-Air.
+
 ## Re-extracting from the ROM
 
 ```bash
@@ -258,8 +363,16 @@ damage back into rolls and distinguishes "unlucky sample" from "wrong model".
 
 ## Known gaps
 
-None of these block milestone 3.
-
+- **Fog of war, and it is now a correctness problem rather than a missing
+  feature.** The reader reports true board state. Under fog, threat projection
+  would quote you danger from units you cannot legally see — confidently wrong
+  in the one direction this project refuses. Nothing in the dump reports fog, so
+  the model cannot currently even detect that it is in it. Either the visibility
+  mask gets read, or `threat` learns to refuse the way `co` refuses Kanbei.
+- **The composition itself is unmeasured.** Threat projection's inputs are all
+  verified; the matching and ordering built on top of them are covered by unit
+  tests and by nothing else. The reachability half is checkable with the
+  existing `path_diff` oracle pointed at enemy units, and has not been.
 - **Terrain array has no pointer.** Static address, verified stable across map
   switches and emulator restarts, sanity-checked on every read.
 - ~~**Missile Silo's terrain id**~~ — closed, see "What got caught". AW1 has no

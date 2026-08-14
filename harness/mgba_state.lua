@@ -151,9 +151,15 @@ function state(path)
     funds[p] = emu:read32(a)
     -- +0x20 is the CO power meter, cumulative from 0. Both the dealer and the
     -- receiver of damage charge. Scale and activation threshold unknown.
+    -- +0x1D is the CO id, 0..11, indexing the CO record table as co*292. It is
+    -- the field that named eleven of the twelve records by being written and
+    -- read back off the screen, so it is confirmed rather than inferred.
+    -- Without it every damage prediction quietly assumes a neutral CO, and Max
+    -- at 150/100 would make that wrong by half.
     rows[#rows + 1] = string.format(
-      '    {"player": %d, "funds": %d, "income": %d, "power": %d}',
-      p, emu:read32(a), emu:read32(a + 8), emu:read16(a + 0x20))
+      '    {"player": %d, "funds": %d, "income": %d, "power": %d, "co_id": %d}',
+      p, emu:read32(a), emu:read32(a + 8), emu:read16(a + 0x20),
+      emu:read8(a + 0x1D))
   end
   w_(table.concat(rows, ",\n"))
   w_("  ],")
