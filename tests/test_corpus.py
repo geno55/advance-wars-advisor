@@ -28,6 +28,18 @@ sys.path.insert(0, str(pathlib.Path(__file__).resolve().parent.parent))
 from engine.damage import (Attack, counter_damage, damage_for_luck,  # noqa: E402
                            LUCK_MAX, LUCK_MIN, resolve, select_weapon)
 
+# Sweeps whose attacker terrain is in doubt. A fixture sits at
+# target-select, and the city fixtures record the Tank on Road (0 stars)
+# while their counters fit only 1 star -- so the record is probably the
+# PRE-MOVE tile. Their openings are unaffected and still tested; only the
+# counter needs the tile the unit actually fired from. Re-sweep with a
+# harness that emits attacker_terrain_after, then delete this list.
+UNRESOLVED_ATTACKER_TERRAIN = ("city100.json", "city81.json")
+
+SWEEPS = ("counter.json", "att57.json", "def81.json", "def85.json",
+          "def65.json", "wood100.json", "wood81.json", "city100.json",
+          "city81.json")
+
 ROOT = pathlib.Path(__file__).resolve().parent.parent
 FIXTURES = pathlib.Path(__file__).resolve().parent / "fixtures"
 
@@ -170,29 +182,84 @@ class TestSeededSweeps(unittest.TestCase):
         self.assertEqual(sweep["hp_written"]["defender"], 65)
         self.assertEqual((min(observed), max(observed)), (54, 60))
 
-    def test_the_counter_is_constant_while_the_opening_varies(self):
-        """The shape of A9b's evidence, kept as a regression: if a future model
-        change reintroduces a luck term in the counter, this fails."""
-        for name in ("counter.json", "att57.json", "def81.json",
-                     "def85.json", "def65.json"):
+
+    def test_wood_and_city_confirm_ceil_off_the_mountain(self):
+        """Every earlier sweep was on a mountain. If `ceil` were an artifact of
+        4-star terrain, these would miss."""
+        for name, hp, rng in (("wood100.json", 100, (60, 67)),
+                              ("wood81.json", 81, (61, 68)),
+                              ("city100.json", 100, (52, 58)),
+                              ("city81.json", 81, (54, 61))):
+            sweep, observed = self._check(name)
+            self.assertEqual(sweep["defender_hp"], hp, name)
+            self.assertEqual((min(observed), max(observed)), rng, name)
+
+    def test_the_defender_term_is_a_product_across_the_STARS_axis(self):
+        """`terrain_stars * display_hp(defender)` is a product, and until Wood
+        and City existed every partial-defender observation was on a mountain --
+        so the stars factor had one value and could not be tested at all. At a
+        fixed display of 9, three terrains now pin it."""
+        for name, stars, rng in (("wood81.json", 2, (61, 68)),
+                                 ("city81.json", 3, (54, 61)),
+                                 ("def81.json", 4, (48, 53))):
             sweep = self._load(name)
-            openings = {c["damage"] for c in sweep["cases"]}
-            counters = {c["counter"] for c in sweep["cases"]
-                        if not c["attacker_destroyed"]}
-            self.assertGreater(len(openings), 1, f"{name}: opening did not vary")
-            self.assertEqual(len(counters), 1,
-                             f"{name}: the counter varied across seeds, which "
-                             "means it carries luck after all")
+            terr = json.loads((ROOT / "data" / "aw1_terrain.json")
+                              .read_text(encoding="utf-8"))
+            self.assertEqual(
+                terr["terrain"][str(sweep["defender_terrain"])]["stars"], stars,
+                name)
+            observed = {c["damage"] for c in sweep["cases"]
+                        if not c["destroyed"]}
+            self.assertEqual((min(observed), max(observed)), rng, name)
+
+    def test_the_counter_is_a_function_of_the_survivor(self):
+        """The no-luck claim, stated correctly.
+
+        The first version of this asserted the counter was CONSTANT across a
+        sweep, which held for every board that existed at the time and then
+        failed on wood100 -- where the survivor crosses a threshold and the
+        counter legitimately moves between 0 and 1. Constant was never the
+        claim. The claim is that the counter carries no roll of its OWN: equal
+        survivors must counter equally, however much the opening varies.
+        """
+        for name in SWEEPS:
+            sweep = self._load(name)
+            by_survivor = {}
+            for c in sweep["cases"]:
+                if c["attacker_destroyed"]:
+                    continue
+                survivor = sweep["defender_hp"] - c["damage"]
+                by_survivor.setdefault(survivor, set()).add(c["counter"])
+            self.assertGreater(len({c["damage"] for c in sweep["cases"]}), 1,
+                               f"{name}: opening did not vary, so this proves "
+                               "nothing")
+            for survivor, counters in sorted(by_survivor.items()):
+                self.assertEqual(
+                    len(counters), 1,
+                    f"{name}: survivor at {survivor} HP countered for "
+                    f"{sorted(counters)} on different seeds -- that is a luck "
+                    "roll in the counter")
 
     def test_the_model_reproduces_each_sweeps_counter(self):
+        skipped = []
         by_row = _units()
         terr = json.loads((ROOT / "data" / "aw1_terrain.json").read_text(encoding="utf-8"))
-        for name in ("counter.json", "att57.json", "def81.json",
-                     "def85.json", "def65.json"):
+        for name in SWEEPS:
             sweep = self._load(name)
             att = by_row[sweep["attacker_type"] - 1]
             dfn = by_row[sweep["defender_type"] - 1]
-            att_stars = terr["terrain"][str(sweep["attacker_terrain"])]["stars"]
+            # The tile it FOUGHT from, not the one the fixture recorded. A
+            # fixture sits at target-select; if the unit record still holds the
+            # pre-move tile, `attacker_terrain` names somewhere the unit never
+            # fired from. Sweeps predating that distinction are skipped rather
+            # than scored against a guess -- see A9b.
+            after = sweep.get("attacker_terrain_after",
+                              sweep["attacker_terrain"])
+            if name in UNRESOLVED_ATTACKER_TERRAIN and \
+                    "attacker_terrain_after" not in sweep:
+                skipped.append(name)
+                continue
+            att_stars = terr["terrain"][str(after)]["stars"]
             w = select_weapon(dfn, att)
             for c in sweep["cases"]:
                 if c["attacker_destroyed"]:
@@ -205,6 +272,11 @@ class TestSeededSweeps(unittest.TestCase):
                                    c["attacker_hp_before"]),
                     c["counter"],
                     f"{name} seed {c['seed']}: survivor {survivor}")
+        self.assertEqual(sorted(skipped),
+                         sorted(UNRESOLVED_ATTACKER_TERRAIN),
+                         "the set of sweeps with a disputed attacker tile "
+                         "changed -- if a re-sweep resolved one, drop it from "
+                         "UNRESOLVED_ATTACKER_TERRAIN")
 
 
 if __name__ == "__main__":

@@ -44,7 +44,22 @@ def main(path):
     by_row = {v["id"]: k for k, v in units.items()}
     att = by_row[sweep["attacker_type"] - 1]
     dfn = by_row[sweep["defender_type"] - 1]
-    att_stars = terrain[str(sweep["attacker_terrain"])]["stars"]
+    # Prefer the tile the attacker FOUGHT from. A fixture sits at target-select,
+    # and if the unit record still holds the pre-move tile then
+    # `attacker_terrain` names where it came from -- so the counterattack is
+    # scored against a tile it never stood on. Sweeps taken before the harness
+    # recorded both carry only the ambiguous one; say so rather than guessing.
+    att_after = sweep.get("attacker_terrain_after")
+    if att_after is None:
+        att_stars = terrain[str(sweep["attacker_terrain"])]["stars"]
+        stale_terrain = True
+    else:
+        att_stars = terrain[str(att_after)]["stars"]
+        stale_terrain = False
+        if att_after != sweep["attacker_terrain"]:
+            print(f"!! attacker moved on confirm: fixture tile "
+                  f"{sweep['attacker_terrain']}, fought from {att_after}. "
+                  "Scoring against the second.")
     def_stars = terrain[str(sweep["defender_terrain"])]["stars"]
     att_hp0 = sweep["attacker_hp"]
 
@@ -56,6 +71,11 @@ def main(path):
               "test the counter formula.")
         return 1
 
+    if stale_terrain:
+        print("!! This sweep predates attacker_terrain_after, so the attacker's")
+        print("!! terrain may be its PRE-MOVE tile. Counter results below are")
+        print("!! attributed to a tile it may never have stood on.")
+        print()
     print(f"{att} (hp {att_hp0}, {att_stars}-star terrain) attacks "
           f"{dfn} (hp {sweep['defender_hp']}, {def_stars}-star terrain)")
     print(f"counterattack is {dfn} -> {att}, base {base}, "

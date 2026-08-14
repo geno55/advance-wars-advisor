@@ -448,9 +448,23 @@ function dmg_seedsweep(fixture, att_slot, def_slot, outpath, nseeds, stride, add
     local dmg, _, died, counter, att_ammo, att_died =
       confirm_and_read(def_slot, d.hp, att_slot, a.hp)
     if dmg == nil then return nil end
+    -- Where the attacker was BEFORE the exchange, and where it ends up.
+    --
+    -- A fixture sits at target-select, after the move has been chosen and
+    -- before it is confirmed. If the unit record still holds the tile the unit
+    -- STARTED on rather than the one it will fire from, then the attacker
+    -- terrain this harness reports is the wrong tile -- and the counterattack
+    -- lands on a tile nobody recorded. That is checkable rather than
+    -- arguable: read the position again once the dust settles.
+    local a2 = readunit(att_slot)
+    local t0 = terrainat(a.x, a.y)
+    local t1 = att_died and t0 or terrainat(a2.x, a2.y)
     return { damage = dmg, destroyed = died, counter = counter,
              att_ammo = att_ammo, att_died = att_died,
-             def_hp = d.hp, att_hp = a.hp }
+             def_hp = d.hp, att_hp = a.hp,
+             att_x0 = a.x, att_y0 = a.y, att_t0 = t0,
+             att_x1 = a2.x, att_y1 = a2.y, att_t1 = t1,
+             moved = (a.x ~= a2.x or a.y ~= a2.y) and not att_died }
   end
 
   -- THE CONTROLS. The rule is that every sweep ships one, because a machine
@@ -489,6 +503,30 @@ function dmg_seedsweep(fixture, att_slot, def_slot, outpath, nseeds, stride, add
   end
   console:log("control passed: an hp write of the existing value changes nothing")
 
+  -- Did the attacker's record move when the attack was confirmed? If so, the
+  -- terrain read from the fixture is the tile it came FROM, not the one it
+  -- fought from -- and every attacker-terrain figure this file reports, past
+  -- and present, is attributed to the wrong tile.
+  if c_seed.moved then
+    console:error(string.format(
+      "ATTACKER TERRAIN IS THE PRE-MOVE TILE. The record read (%d,%d) terrain "
+      .. "%d before confirming and (%d,%d) terrain %d after. The counterattack "
+      .. "lands on terrain %d, not %d. Header values are the pre-move tile; "
+      .. "use attacker_terrain_after.",
+      c_seed.att_x0, c_seed.att_y0, c_seed.att_t0,
+      c_seed.att_x1, c_seed.att_y1, c_seed.att_t1,
+      c_seed.att_t1, c_seed.att_t0))
+  elseif c_seed.att_t0 ~= c_seed.att_t1 then
+    console:error(string.format(
+      "attacker terrain changed from %d to %d without the unit moving -- that "
+      .. "should not be possible; do not trust either value",
+      c_seed.att_t0, c_seed.att_t1))
+  else
+    console:log(string.format(
+      "attacker stands on terrain %d before and after confirming (%d,%d)",
+      c_seed.att_t0, c_seed.att_x0, c_seed.att_y0))
+  end
+
   local writes = nil
   if def_hp or att_hp then
     writes = {}
@@ -510,9 +548,12 @@ function dmg_seedsweep(fixture, att_slot, def_slot, outpath, nseeds, stride, add
     obs_att_hp, obs_def_hp = r.att_hp, r.def_hp
     rows[#rows + 1] = string.format(
       '    {"seed": %d, "damage": %d, "destroyed": %s, "attacker_hp_before": %d,'
-      .. ' "counter": %d, "attacker_ammo_after": %d, "attacker_destroyed": %s}',
+      .. ' "counter": %d, "attacker_ammo_after": %d, "attacker_destroyed": %s,'
+      .. ' "attacker_terrain_before": %d, "attacker_terrain_after": %d,'
+      .. ' "attacker_moved_on_confirm": %s}',
       seed, r.damage, r.destroyed and "true" or "false", r.att_hp, r.counter,
-      r.att_ammo, r.att_died and "true" or "false")
+      r.att_ammo, r.att_died and "true" or "false",
+      r.att_t0, r.att_t1, r.moved and "true" or "false")
     if not r.destroyed then seen[r.damage] = (seen[r.damage] or 0) + 1 end
     if not r.att_died then cseen[r.counter] = (cseen[r.counter] or 0) + 1 end
   end
@@ -576,8 +617,14 @@ function dmg_seedsweep(fixture, att_slot, def_slot, outpath, nseeds, stride, add
       .. ' "identity": {"damage": %d, "counter": %d}, "passed": true},',
       c_none.damage, c_none.counter, c_seed.damage, c_seed.counter,
       c_ident.damage, c_ident.counter),
+    -- attacker_terrain is the tile read FROM THE FIXTURE, which is the tile the
+    -- unit came from if the record has not yet been updated for the pending
+    -- move. attacker_terrain_after is where it actually fought. Consumers that
+    -- care about the counterattack want the second one.
     string.format('  "attacker_terrain": %d, "defender_terrain": %d,',
       att_terr, def_terr),
+    string.format('  "attacker_terrain_after": %d, "attacker_moved_on_confirm": %s,',
+      c_seed.att_t1, c_seed.moved and "true" or "false"),
     '  "cases": [',
     table.concat(rows, ",\n"),
     "  ]",

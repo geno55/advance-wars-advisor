@@ -428,11 +428,20 @@ deliberately asymmetric truth (attacker `floor`, defender `ceil`) exactly.
 - Whether the two operands are the same *function* or two copies that happen to
   agree. Every observation is consistent with either, and the ROM shows two
   separate instruction sequences.
-- **The product form across the STARS axis.** Every partial-defender
-  observation is on 4-star terrain. Stars 2 and 3 have never appeared in a
-  damage observation at any HP, and no test uses them. A partial defender on a
-  City (3 stars) would be the first evidence that the term is a product rather
-  than a table indexed by mountain.
+- ~~**The product form across the STARS axis.**~~ **CLOSED.** Two new fixtures
+  put the Infantry on Wood (2 stars) and City (3 stars). At a fixed display of
+  9, three terrains now pin the stars factor:
+
+  | terrain | stars | stars x display | linear predicts | observed |
+  |---|---|---|---|---|
+  | Wood | 2 | 18 | 61-68 | **61-68** |
+  | City | 3 | 27 | 54-61 | **54-61** |
+  | Mountain | 4 | 36 | 48-53 | **48-53** |
+
+  And at full HP: Wood 60-67 observed 60-67, City 52-58 observed 52-58. So
+  `terrain_stars * display_hp(defender)` is a product in both factors, and
+  `ceil` is confirmed on three terrains rather than one -- it was not an
+  artifact of the mountain.
 - Where the CO defence byte enters, since every observation is neutral.
 
 **A9b. A counterattack uses `base * raw_internal_hp / 100` — CLOSED, MEASURED.**
@@ -466,6 +475,38 @@ the counter path — every counter ever recorded was neutral on both sides, so
 for it. The target's display rule, because the target was at 100 HP in every
 observation, where all four rules agree. And whether the counter's weapon
 selection follows the same max-base rule as a strike (A1).
+
+### A10. The attacker's recorded tile at target-select may be its PRE-MOVE tile
+
+A damage fixture sits at target-select: the move has been chosen, the target
+cursor is on the defender, and A has not been pressed. The question is what the
+attacker's unit record holds at that moment -- the tile it started on, or the
+tile it will fire from.
+
+**It looks like the former, and it was caught by arithmetic rather than by
+looking.** The City fixtures record the attacker on terrain 5 (Road, 0 stars);
+the player who built them put it on Plains. The counterattacks decide it: across
+both City sweeps, all fifteen distinct survivor values reproduce exactly at
+1 star and **none** at 0 stars. The same check on Wood (recorded Plain, 1 star)
+fits at 1 star, and on the original mountain fixture (recorded Bridge, 0 stars)
+fits at 0 stars -- so the reader is not simply wrong everywhere. It is wrong
+where the unit moved onto different terrain before attacking.
+
+That is a reader fault, not a formula fault, and it is worth stating separately
+because the formula came out of it confirmed: the counter model predicted every
+City survivor correctly once given the tile the unit actually fought from.
+
+**What it affects:** `attacker_terrain` in every sweep header this harness has
+ever written, and anything that reads an attacker's position mid-move. Not
+`engine/damage.py`, which takes `attacker_stars` from its caller, and not
+`engine/threat.py`, which places units itself.
+
+**Kill it by:** `dmg_seedsweep` now reads the attacker's position again after
+the exchange and records `attacker_terrain_before`, `attacker_terrain_after` and
+`attacker_moved_on_confirm`, erroring loudly when they differ. One re-sweep of
+either City fixture settles it. Until then `tests/test_corpus.py` lists those
+two sweeps in `UNRESOLVED_ATTACKER_TERRAIN` and declines to score their
+counters, rather than scoring them against a tile chosen because it fit.
 
 ## Unknown — not modelled
 
