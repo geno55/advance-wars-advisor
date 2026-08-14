@@ -28,31 +28,46 @@ self-consistent with it being a sight radius -- Recon, Missiles and Sub at 5,
 the artillery family at 1 -- which is why the radius rule below is treated as
 near-certain while everything layered on it is not.
 
-WHAT IS ASSUMED, and none of it has been put in front of the game
+WHAT IS MEASURED
 
-Every rule below is a named entry in `RULES` with its own kill condition, so a
-disagreement can be traced to one switch instead of to "the fog model". The
-defaults are chosen for the CHEATING direction rather than the blind one: where
-a rule would let the advisor see more, it is off until measured.
+The game keeps its own answer in EWRAM: a byte per tile holding **how many of
+your units can see it**, not a boolean. Reading it turned every rule below from
+an assumption into a measurement, and `tools/fog_diff.py` reproduces that array
+exactly -- 150 tiles out of 150 -- with these rules:
 
-  radius          A tile is lit if some unit of yours is within `vision`
-                  Manhattan steps. Kill: stand a Recon alone on an empty map
-                  and count the lit ring; 5 steps means Manhattan, a 5x5 box
-                  means Chebyshev.
-  hiding_terrain  Units standing in Wood or Reef are invisible unless a viewer
-                  is directly adjacent. Kill: park an infantry in woods three
-                  tiles from a Recon and see whether it renders. ON by default
-                  because leaving it off makes the advisor see more.
-  property_vision An owned property lights its own tile even with nobody on it.
-                  Kill: own a city far from any unit and see if it is lit. OFF
-                  by default, which under-reports sight rather than over.
-  mountain_bonus  Units on a mountain see further. This is documented behaviour
-                  in later games in the series and may not be in this one at
-                  all. Kill: same Recon, on a mountain, count the ring. OFF.
+  radius           A unit sees every tile within `vision` MANHATTAN steps.
+                   `vision` is the ROM stat at record +0x0E.
+  mountain_bonus   A unit standing on a mountain sees +3 further. Not +1, which
+                   is what this file guessed while it was guessing.
+  property_vision  An owned property lights its OWN TILE and nothing more --
+                   radius 0, not a ring.
+  hiding_terrain   Wood and Reef are dark unless a viewer is within 1 step, and
+                   this applies to the TILE, not merely to units standing in
+                   it. That is the correction that mattered: the rule used to
+                   live in `can_see` only, so the model lit a wood tile it
+                   should not have and would have called it safe ground.
 
-Because `Board.fog` is None until the flag is found in RAM (see
-tools/fog_hunt.py), nothing here fires by accident: callers must say fog is on,
-or pass a board that knows it is.
+Three of the four defaults were wrong before the measurement -- two rules were
+off that should be on, and the mountain bonus was a third of its real value.
+The bias toward seeing less was the right instinct and still produced a model
+that disagreed with the game on 13 tiles.
+
+WHAT IS STILL NOT MEASURED
+
+  * Whether adjacency actually REVEALS concealing terrain. On the capture that
+    settled the rest, no unit stood within 1 of any wood tile, so "visible from
+    adjacent" and "never visible" fit the data identically. `can_see` keeps the
+    adjacency branch because it is the documented behaviour of the series, but
+    it is the one clause here with nothing behind it.
+  * Whether the mountain bonus is +3 for every unit class. One Mech on one
+    mountain produced it.
+  * Sonja's vision trait, and CO powers that reveal the map.
+  * Whether the count array's address is stable across maps. It was found at
+    0x0201763A on a 15x10 board, with an identical copy at 0x02017B42, and the
+    reader does NOT yet read it -- one capture is not an address.
+
+Because `Board.fog` is only known when the reader supplies it, nothing here
+fires by accident: callers must say fog is on, or pass a board that knows.
 """
 from __future__ import annotations
 
@@ -71,11 +86,16 @@ Coord = Tuple[int, int]
 # was not a code change.
 CONCEALING = ("wood", "woods", "reef")
 
+# How far a viewer must be to see into concealing terrain, and how much a
+# mountain adds. Both measured against the game's own count array.
+CONCEAL_RANGE = 1
+MOUNTAIN_BONUS = 3
+
 RULES: Dict[str, bool] = {
     "radius": True,
     "hiding_terrain": True,
-    "property_vision": False,
-    "mountain_bonus": False,
+    "property_vision": True,
+    "mountain_bonus": True,
 }
 
 
@@ -111,31 +131,53 @@ def _sight(board, unit, rule_set) -> int:
     st = pathing.unit_stats(unit.type)
     v = st["vision"]
     if rule_set["mountain_bonus"]:
-        # Unverified and off by default; kept as one lookup so that turning it
-        # on is a one-line experiment rather than a rewrite.
         if board.terrain_name(unit.x, unit.y).lower().startswith("mountain"):
-            v += 1
+            v += MOUNTAIN_BONUS
     return v
 
 
-def visible_tiles(board, player: int, rule_set: Optional[dict] = None) -> Set[Coord]:
-    """Every tile this player has line of sight on."""
+def viewer_count(board, player: int,
+                 rule_set: Optional[dict] = None) -> Dict[Coord, int]:
+    """How many of this player's units can see each tile.
+
+    This is the shape the GAME stores -- a byte per tile, a count and not a
+    flag -- so it is the form the oracle can be compared against directly.
+    Everything else here is derived from it, which keeps the thing we check
+    and the thing we use the same computation.
+    """
     rule_set = rule_set or RULES
-    lit: Set[Coord] = set()
+    counts: Dict[Coord, int] = {(x, y): 0
+                                for y in range(board.height)
+                                for x in range(board.width)}
     if not rule_set["radius"]:
-        return {(x, y) for y in range(board.height) for x in range(board.width)}
+        return {t: 1 for t in counts}
+
+    conceals = {t for t in counts
+                if rule_set["hiding_terrain"]
+                and board.terrain_name(*t).lower() in CONCEALING}
     for u in _viewers(board, player):
         r = _sight(board, u, rule_set)
         for dx in range(-r, r + 1):
             span = r - abs(dx)
             for dy in range(-span, span + 1):
                 x, y = u.x + dx, u.y + dy
-                if 0 <= x < board.width and 0 <= y < board.height:
-                    lit.add((x, y))
+                if not (0 <= x < board.width and 0 <= y < board.height):
+                    continue
+                # Concealing terrain is dark to anything further than one step,
+                # and that is a property of the TILE. Applying it only to units
+                # standing there lights ground the game keeps dark.
+                if (x, y) in conceals and abs(dx) + abs(dy) > CONCEAL_RANGE:
+                    continue
+                counts[(x, y)] += 1
     if rule_set["property_vision"]:
         for x, y, _ in board.properties_of(player):
-            lit.add((x, y))
-    return lit
+            counts[(x, y)] += 1          # its own tile only, radius 0
+    return counts
+
+
+def visible_tiles(board, player: int, rule_set: Optional[dict] = None) -> Set[Coord]:
+    """Every tile this player has line of sight on."""
+    return {t for t, n in viewer_count(board, player, rule_set).items() if n}
 
 
 def hidden_tiles(board, player: int, rule_set: Optional[dict] = None) -> Set[Coord]:
@@ -149,24 +191,16 @@ def hidden_tiles(board, player: int, rule_set: Optional[dict] = None) -> Set[Coo
 def can_see(board, player: int, unit, rule_set: Optional[dict] = None) -> bool:
     """Whether `player` can see `unit` right now.
 
-    Your own units are always visible, including passengers. Concealing terrain
-    hides its occupant from anything that is not directly adjacent, which is a
-    stricter test than the tile merely being lit.
+    Your own units are always visible, including passengers. Everything else
+    reduces to whether its tile is lit, because concealing terrain is now
+    handled where the game handles it -- on the tile.
     """
     rule_set = rule_set or RULES
     if unit.player == player:
         return True
     if unit.loaded:
         return False                    # inside a transport, not on the board
-    here = (unit.x, unit.y)
-    if here not in visible_tiles(board, player, rule_set):
-        return False
-    if rule_set["hiding_terrain"]:
-        terrain = board.terrain_name(unit.x, unit.y).lower()
-        if terrain in CONCEALING:
-            return any(abs(v.x - unit.x) + abs(v.y - unit.y) <= 1
-                       for v in _viewers(board, player))
-    return True
+    return (unit.x, unit.y) in visible_tiles(board, player, rule_set)
 
 
 def visible_units(board, player: int, rule_set: Optional[dict] = None) -> List:

@@ -114,6 +114,32 @@ def changed_offsets(on_blob, off_blob):
     return {i for i in range(n) if on_blob[i] != off_blob[i]}
 
 
+def unstable(blobs):
+    """Byte positions that differ between captures that should be identical.
+
+    Two fogged dumps of the same untouched board must agree wherever the game
+    stores visibility, so anything that moved between them is a counter, a
+    cursor or RNG -- and cannot be part of the mask. This is what the second
+    capture buys, and it removes roughly half the candidates.
+    """
+    if len(blobs) < 2:
+        return set()
+    n = min(len(b) for b in blobs)
+    first = blobs[0]
+    return {i for i in range(n) if any(b[i] != first[i] for b in blobs[1:])}
+
+
+def visible_at(blob, off, x, y, stride, msb_first, one_means_hidden, bits):
+    """Decode a single tile. Checking the handful of tiles that MUST be visible
+    before decoding all 150 is what keeps the sweep to minutes."""
+    if bits == 1:
+        bit = (7 - (x % 8)) if msb_first else (x % 8)
+        one = (blob[off + y * stride + x // 8] >> bit) & 1
+    else:
+        one = 1 if blob[off + y * stride + x] else 0
+    return one != one_means_hidden
+
+
 def nonzero_prefix(blob):
     """prefix[i] = how many of blob[0:i] are nonzero, so an all-zero span test
     is a subtraction instead of a scan. EWRAM is 256K and the start set runs to
@@ -127,22 +153,31 @@ def nonzero_prefix(blob):
     return pre
 
 
-def candidate_starts(changed, pre, blob_len, span):
+def candidate_starts(changed, span, blob_len):
     """Offsets a mask of exactly `span` bytes could BEGIN at.
 
     Not simply the changed bytes: a mask whose top row is entirely dark starts
     on a byte that never moved. What must hold is that the span CONTAINS a
-    changed byte and reads all-zero in the clear capture, so the start may sit
-    up to span-1 bytes earlier. The span is per-layout -- using the largest
-    possible one as a single bound demands an all-zero window no real capture
-    has, and finds nothing.
+    changed byte, so the start may sit up to span-1 bytes earlier. The span is
+    per-layout -- using the largest possible one as a single bound demands an
+    all-zero window no real capture has, and finds nothing.
     """
     starts = set()
     for c in changed:
-        lo = max(0, c - span + 1)
-        hi = min(c, blob_len - span)
-        starts.update(range(lo, hi + 1))
-    return [s for s in starts if pre[s + span] - pre[s] == 0]
+        starts.update(range(max(0, c - span + 1), min(c, blob_len - span) + 1))
+    return sorted(starts)
+
+
+def counting_prefix(flags):
+    """prefix[i] = how many of flags[0:i] are true, so a span test is a
+    subtraction rather than a scan."""
+    pre = [0] * (len(flags) + 1)
+    run = 0
+    for i, f in enumerate(flags):
+        if f:
+            run += 1
+        pre[i + 1] = run
+    return pre
 
 
 def local_enough(vis, own, properties, reach):
@@ -166,29 +201,44 @@ def local_enough(vis, own, properties, reach):
 
 def main():
     p = argparse.ArgumentParser()
-    p.add_argument("state", help="a FOGGED dump taken with state(path, true)")
-    p.add_argument("--off", help="a CLEAR dump of the same map, as a control. "
-                                 "Strongly recommended: without it the search "
-                                 "has no way to rule out regions fog never "
-                                 "touched, and the first run without one "
-                                 "produced 984 candidate layouts.")
+    p.add_argument("state", nargs="+",
+                   help="FOGGED dumps of one untouched board, taken with "
+                        "state(path, true). Two or more lets the search drop "
+                        "everything that moved between them, which cannot be "
+                        "the mask.")
+    p.add_argument("--off", nargs="+",
+                   help="CLEAR dump(s) of the SAME map, as a control. Strongly "
+                        "recommended: without one the search cannot rule out "
+                        "regions fog never touched, and the first run without "
+                        "one produced 984 candidate layouts.")
+    p.add_argument("--clear", choices=("any", "zero", "constant"),
+                   default="any",
+                   help="what the span must look like with fog OFF. 'zero' "
+                        "assumes the game blanks the array; 'constant' allows "
+                        "an all-visible fill too. Default 'any' assumes "
+                        "nothing -- requiring zero found nothing on the first "
+                        "real capture, and that may have been the assumption "
+                        "rather than the absence of a mask.")
     p.add_argument("--player", type=int)
     p.add_argument("--max", type=int, default=6)
     a = p.parse_args()
 
-    raw = json.loads(pathlib.Path(a.state).read_text(encoding="utf-8"))
-    probes = raw.get("probe") or {}
-    if not probes:
-        sys.exit("no probe in this dump -- re-dump with state(path, true)")
-    control = {}
-    if a.off:
-        craw = json.loads(pathlib.Path(a.off).read_text(encoding="utf-8"))
-        if craw.get("fog"):
-            sys.exit(f"{a.off} has fog ON -- the control must be a CLEAR capture")
-        control = craw.get("probe") or {}
-        if not control:
-            sys.exit(f"{a.off} has no probe block")
-    board = load(a.state)
+    def read(path, want_fog):
+        r = json.loads(pathlib.Path(path).read_text(encoding="utf-8"))
+        if r.get("fog") is not want_fog:
+            sys.exit(f"{path} has fog={r.get('fog')}, expected {want_fog}")
+        if not r.get("probe"):
+            sys.exit(f"{path} has no probe -- re-dump with state(path, true)")
+        return r
+
+    ons = [read(f, True) for f in a.state]
+    offs = [read(f, False) for f in (a.off or [])]
+    probes = ons[0]["probe"]
+    board = load(a.state[0])
+    for other in ons[1:] + offs:
+        if (other["width"], other["height"]) != (board.width, board.height):
+            sys.exit("captures are of different-sized maps -- the control must "
+                     "be the SAME map with only the fog toggle changed")
     player = a.player or board.active_player
     if not player:
         sys.exit("no active player in this dump; pass --player")
@@ -202,7 +252,9 @@ def main():
     print(f"{w}x{h} board, P{player}, {len(own)} own unit tile(s) as the anchor")
     print(f"a bit-per-tile mask would be {((w + 7) // 8) * h} bytes "
           f"(stride {(w + 7) // 8}); a byte-per-tile one {w * h} (stride {w})")
-    if not control:
+    print(f"{len(ons)} fogged capture(s), {len(offs)} clear, "
+          f"clear-span rule '{a.clear}'")
+    if not offs:
         print("!! no --off control given: every region is in scope and the "
               "anchor alone\n!! is far too weak to pin a layout. Expect "
               "hundreds of survivors.")
@@ -215,26 +267,52 @@ def main():
 
     # ---- step 1: pin the layout, using no rule from engine/fog.py -----------
     survivors = []
-    for region, pr in sorted(probes.items()):
-        blob = bytes.fromhex(pr["hex"])
-        base_addr = int(pr["base"], 16)
-        cpr = control.get(region)
-        off_blob = bytes.fromhex(cpr["hex"]) if cpr else None
-        if off_blob is not None:
-            changed = changed_offsets(blob, off_blob)
-            pre = nonzero_prefix(off_blob)
-            print(f"  {region}: {len(changed)} byte(s) changed off->on")
+    for region in sorted(probes):
+        on_blobs = [bytes.fromhex(o["probe"][region]["hex"]) for o in ons
+                    if region in o["probe"]]
+        off_blobs = [bytes.fromhex(o["probe"][region]["hex"]) for o in offs
+                     if region in o["probe"]]
+        blob = on_blobs[0]
+        base_addr = int(probes[region]["base"], 16)
+
+        # Anything that moved between captures that should agree is not the
+        # mask, whichever side it moved on.
+        noise = unstable(on_blobs) | unstable(off_blobs)
+        noise_pre = counting_prefix([i in noise for i in range(len(blob))])
+
+        if off_blobs:
+            changed = changed_offsets(blob, off_blobs[0]) - noise
+            zero_pre = counting_prefix([b != 0 for b in off_blobs[0]])
+            step_pre = counting_prefix(
+                [i > 0 and off_blobs[0][i] != off_blobs[0][i - 1]
+                 for i in range(len(off_blobs[0]))])
+            print(f"  {region}: {len(changed)} stable change(s) off->on, "
+                  f"{len(noise)} byte(s) dropped as noise")
+        else:
+            changed, zero_pre, step_pre = None, None, None
 
         for bits, stride, msb, hidden, span in shapes(w, h):
-            if off_blob is not None:
-                starts = candidate_starts(changed, pre, len(off_blob), span)
-            else:
-                starts = range(max(0, len(blob) - span))
+            starts = (candidate_starts(changed, span, len(blob))
+                      if changed is not None
+                      else range(max(0, len(blob) - span)))
             for off in starts:
-                vis = decode(blob, off, w, h, stride, msb, hidden, bits)
-                if vis is None or not own <= vis:
+                if off + span > len(blob):
                     continue
-                if not (0 < len(vis) < w * h):  # all-lit or all-dark is no mask
+                # Cheapest reject first: the tiles that MUST read visible.
+                if not all(visible_at(blob, off, x, y, stride, msb, hidden, bits)
+                           for x, y in own):
+                    continue
+                # The mask must be identical across the fogged captures.
+                if noise_pre[off + span] - noise_pre[off]:
+                    continue
+                if a.clear == "zero" and zero_pre is not None:
+                    if zero_pre[off + span] - zero_pre[off]:
+                        continue
+                if a.clear == "constant" and step_pre is not None:
+                    if step_pre[off + span] - step_pre[off + 1]:
+                        continue
+                vis = decode(blob, off, w, h, stride, msb, hidden, bits)
+                if vis is None or not (0 < len(vis) < w * h):
                     continue
                 if not local_enough(vis, own, props, reach):
                     continue
@@ -244,7 +322,7 @@ def main():
                 # leaves changed bytes outside itself is straddling the real
                 # structure rather than being it.
                 covered = (sum(1 for c in changed if off <= c < off + span)
-                           if off_blob is not None else 0)
+                           if changed is not None else 0)
                 survivors.append((region, base_addr, off, stride, msb, hidden,
                                   bits, vis, covered))
 

@@ -18,7 +18,7 @@ sys.path.insert(0, str(ROOT / "engine"))
 
 import fog                                                    # noqa: E402
 import threat                                                 # noqa: E402
-from state import Army, Board, Unit                           # noqa: E402
+from state import Board, Unit, load                           # noqa: E402
 
 PLAIN, RIVER, MOUNTAIN, WOOD, ROAD, CITY, SEA, REEF = 1, 2, 3, 4, 5, 6, 7, 19
 
@@ -75,7 +75,12 @@ class TestSightIsARadiusFromTheTable(unittest.TestCase):
 
 
 class TestConcealingTerrain(unittest.TestCase):
-    def test_a_unit_in_woods_is_hidden_from_a_distance(self):
+    def test_woods_darken_the_tile_itself_not_just_its_occupant(self):
+        """The correction the measurement forced. Concealment was modelled as
+        hiding the UNIT while leaving the tile lit; the game's count array
+        reads 0 on a wood tile no one is standing next to, so the TILE is
+        dark. Getting this wrong lit ground the advisor would have called
+        safe."""
         rows = [[PLAIN] * 8]
         b = board(rows, [unit("Recon", 0, 0, player=1, slot=1),
                          unit("Infantry", 3, 0, player=2, slot=2)])
@@ -84,8 +89,9 @@ class TestConcealingTerrain(unittest.TestCase):
         rows_wood = [[PLAIN, PLAIN, PLAIN, WOOD, PLAIN, PLAIN, PLAIN, PLAIN]]
         b2 = board(rows_wood, [unit("Recon", 0, 0, player=1, slot=1),
                                unit("Infantry", 3, 0, player=2, slot=2)])
-        self.assertIn((3, 0), fog.visible_tiles(b2, 1))   # the tile is lit
-        self.assertFalse(fog.can_see(b2, 1, b2.units[1]))  # the unit is not
+        self.assertNotIn((3, 0), fog.visible_tiles(b2, 1))
+        self.assertEqual(fog.viewer_count(b2, 1)[(3, 0)], 0)
+        self.assertFalse(fog.can_see(b2, 1, b2.units[1]))
 
     def test_adjacency_defeats_the_cover(self):
         rows = [[PLAIN, WOOD, PLAIN]]
@@ -113,23 +119,42 @@ class TestConcealingTerrain(unittest.TestCase):
             fog.rules(hidng_terrain=False)
 
 
-class TestOptionalRules(unittest.TestCase):
-    def test_property_vision_is_off_by_default(self):
+class TestMeasuredRules(unittest.TestCase):
+    """These four numbers came off the game's own count array, not off a guess.
+    Three of them contradict what this file asserted before it was measured."""
+
+    def test_a_property_lights_its_own_tile_and_no_further(self):
         rows = [[CITY] + [PLAIN] * 9]
         own = [[1] + [0] * 9]
         b = board(rows, [unit("Infantry", 9, 0)], owner=own)
-        self.assertNotIn((0, 0), fog.visible_tiles(b, 1))
-        self.assertIn((0, 0), fog.visible_tiles(
-            b, 1, fog.rules(property_vision=True)))
+        lit = fog.visible_tiles(b, 1)
+        self.assertIn((0, 0), lit)          # the property itself
+        self.assertNotIn((1, 0), lit)       # radius 0, not a ring
+        self.assertNotIn((0, 0), fog.visible_tiles(
+            b, 1, fog.rules(property_vision=False)))
 
-    def test_mountain_bonus_is_off_by_default(self):
+    def test_a_mountain_adds_three(self):
+        """+3, not the +1 this file guessed. An Infantry sees 2 normally and 5
+        from a mountain."""
         rows = [[MOUNTAIN] + [PLAIN] * 9]
         b = board(rows, [unit("Infantry", 0, 0)])
-        plain_reach = max(x for (x, _) in fog.visible_tiles(b, 1))
-        bonus_reach = max(x for (x, _) in fog.visible_tiles(
-            b, 1, fog.rules(mountain_bonus=True)))
-        self.assertEqual(plain_reach, 2)
-        self.assertEqual(bonus_reach, 3)
+        self.assertEqual(max(x for (x, _) in fog.visible_tiles(b, 1)), 5)
+        self.assertEqual(fog.MOUNTAIN_BONUS, 3)
+        self.assertEqual(max(x for (x, _) in fog.visible_tiles(
+            b, 1, fog.rules(mountain_bonus=False))), 2)
+
+    def test_the_count_is_what_the_game_stores(self):
+        """The game keeps a viewer COUNT per tile, not a flag, and matching it
+        exactly is what settled the other three rules."""
+        rows = [[PLAIN] * 7]
+        b = board(rows, [unit("Infantry", 0, 0, slot=1),
+                         unit("Infantry", 2, 0, slot=2)])
+        counts = fog.viewer_count(b, 1)
+        self.assertEqual(counts[(1, 0)], 2)     # both see it
+        self.assertEqual(counts[(4, 0)], 1)     # only the second
+        self.assertEqual(counts[(6, 0)], 0)     # neither
+        self.assertEqual(fog.visible_tiles(b, 1),
+                         {t for t, n in counts.items() if n})
 
 
 class TestOwnUnitsAndHiddenTiles(unittest.TestCase):
@@ -208,6 +233,48 @@ class TestThreatUnderFog(unittest.TestCase):
                          unit("Tank", 9, 0, player=2, slot=2)])
         self.assertTrue(threat.threat_map(b, 1, fog=False))
         self.assertEqual(threat.threat_map(b, 1, fog=True), {})
+
+
+class TestAgainstTheGame(unittest.TestCase):
+    """The oracle. A real fogged 15x10 board captured from mGBA, checked in
+    alongside the game's own per-tile viewer count read out of EWRAM.
+
+    Everything else in this file pins what the model DOES. This pins what the
+    game does, so if the two ever part company the test says so."""
+
+    def setUp(self):
+        path = ROOT / "tests" / "fixtures" / "fog_vision_15x10.json"
+        self.board = load(path)
+        raw = json.loads(path.read_text(encoding="utf-8"))
+        self.oracle = raw["vision_oracle"]
+
+    def test_viewer_count_matches_the_game_tile_for_tile(self):
+        got = fog.viewer_count(self.board, self.oracle["player"])
+        counts = self.oracle["counts"]
+        wrong = [(x, y, counts[y][x], got[(x, y)])
+                 for y in range(self.board.height)
+                 for x in range(self.board.width)
+                 if counts[y][x] != got[(x, y)]]
+        self.assertEqual(wrong, [], f"{len(wrong)} tile(s) disagree with the game")
+
+    def test_each_measured_rule_is_load_bearing(self):
+        """Turn any one of them off and the match breaks. Without this a rule
+        could be quietly wrong and still pass, because nothing on this board
+        exercised it."""
+        player = self.oracle["player"]
+        counts = self.oracle["counts"]
+
+        def mismatches(rule_set):
+            got = fog.viewer_count(self.board, player, rule_set)
+            return sum(1 for y in range(self.board.height)
+                       for x in range(self.board.width)
+                       if counts[y][x] != got[(x, y)])
+
+        self.assertEqual(mismatches(None), 0)
+        for name in ("hiding_terrain", "property_vision", "mountain_bonus"):
+            self.assertGreater(mismatches(fog.rules(**{name: False})), 0,
+                               f"{name} changes nothing on this board, so the "
+                               f"fixture does not actually test it")
 
 
 class TestNoUnitTypeBranches(unittest.TestCase):

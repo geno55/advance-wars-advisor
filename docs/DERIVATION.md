@@ -970,3 +970,84 @@ neighbouring offsets alias, it pinned one byte early and step 2 then reported
 rule disagreements that are artefacts of the mis-pin.
 
 Unrun against a real capture. No mask has been found.
+
+## 21. The vision oracle, and three rules that were wrong
+
+Section 20 left the visibility rules as four assumptions and the mask unfound.
+The mask exists. It is at **`0x0201763A`** on a 15x10 board, stride 15, one
+**byte per tile**, and it does not hold a boolean -- it holds **how many of
+your units can see that tile**, values 0 to 6.
+
+### Why the first search found nothing
+
+Two wrong assumptions, both mine, both baked into the search as hard filters.
+
+**"The array is zero when fog is off."** It is `01` everywhere. Of course it
+is: with fog off every tile is seen, and the natural encoding of that is a
+count of one, not a blank. Requiring an all-zero span rejected the real array
+on every offset. Relaxing that filter to "assume nothing about the clear
+capture" is what let it surface.
+
+**"A mask is a bitmap."** It is a byte per tile, the same shape as the terrain
+map it sits near. The bit-per-tile sweep would never have matched.
+
+The rest of the search held up. The control capture, the noise filter across
+two fogged captures, the locality requirement and the own-units anchor between
+them cut 262,144 bytes to seven candidate layouts, of which two were the array
+and its duplicate and three were row-shifted aliases.
+
+### Reading it
+
+```
+RAW ARRAY at 0x0201763A            P1 units at (0,6) (1,6) (2,6) (1,7)
+    012345678901234                (1,8) (0,9) and a Mech on the mountain
+ 4  122111000000000                at (4,8). Property at (4,1), HQ at (0,8).
+ 5  334311100000000
+ 6  564431110000000                The 6s sit on the unit cluster; the value
+ 7  665322111000000                falls off with distance. That is a count
+ 8  454222011100000                of viewers, not a visibility flag.
+ 9  333322101000000
+```
+
+An identical copy lives at `0x02017B42`. Double buffer or per-player slot, not
+yet established.
+
+### What it measures
+
+Modelling the count as "number of units within `vision` Manhattan steps" and
+sweeping the open rules gives an **exact match, 150 tiles out of 150**:
+
+| rule | measured | what the code assumed |
+|---|---|---|
+| radius | Manhattan, from the ROM `vision` stat | correct |
+| mountain bonus | **+3** | +1, and switched off |
+| property vision | own tile only, radius 0 | switched off |
+| concealing terrain | Wood and Reef dark beyond 1 step, **on the tile** | applied to the unit only, tile left lit |
+
+Three of four were wrong. The concealment one is the one that mattered:
+modelling it as "the unit is hidden but the tile is lit" meant the advisor lit
+ground the game keeps dark, and would have called a wood tile visible when
+nothing could see into it.
+
+The bias toward seeing less was the right instinct and still left the model
+disagreeing with the game on 13 tiles -- being conservative is not the same as
+being correct.
+
+`engine/fog.py` now exposes `viewer_count()` as the primitive and derives
+`visible_tiles()` from it, so the thing checked against the oracle and the
+thing the advisor uses are one computation.
+`tests/fixtures/fog_vision_15x10.json` carries the board and the game's array,
+and a test asserts each measured rule is load-bearing -- turn any one off and
+the match breaks -- so a rule cannot be quietly wrong and still pass because
+nothing on the board exercised it.
+
+### What this did NOT settle
+
+* **Whether adjacency reveals concealing terrain.** No unit stood within 1 of
+  any wood tile, so "visible from adjacent" and "never visible" fit the data
+  identically. `can_see` keeps the adjacency branch on the strength of series
+  convention alone.
+* **Whether the mountain bonus is +3 for every unit class.** One Mech, one
+  mountain.
+* **Whether `0x0201763A` is stable.** One capture is not an address. The reader
+  does not read it, and should not until a second map says where it lives.

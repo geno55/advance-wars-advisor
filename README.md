@@ -226,11 +226,25 @@ Infantry #10 ( 7, 6) 10 bars on Road   nothing VISIBLE can reach it  [131 unlit 
 which is "you are blind here", not "you are safe". A fogged report without that
 second half would be lying by omission.
 
-`vision` is a real ROM field and its values are strongly consistent with a
-sight radius — Recon, Missiles and Sub at 5, the artillery family at 1. That is
-where the established part stops. Every rule layered on it is a named switch in
-`fog.RULES` with its own kill condition (`ASSUMPTIONS.md` A6), defaulting toward
-seeing *less*, because an advisor that cheats is worse than one that is blind.
+**The visibility rules are measured, not assumed.** The game keeps its own
+answer in EWRAM: a byte per tile holding *how many of your units can see it*, a
+count and not a flag. `engine/fog.py` reproduces it exactly — 150 tiles of 150 —
+and the board plus the game's array are checked in as a regression oracle.
+
+Three of the four rules were wrong before that:
+
+| rule | measured | previously assumed |
+|---|---|---|
+| radius | Manhattan, from the ROM `vision` stat | correct |
+| mountain bonus | **+3** | +1, and switched off |
+| property vision | own tile only | switched off |
+| concealing terrain | Wood/Reef dark beyond 1 step, **on the tile** | applied to the unit, tile left lit |
+
+The concealment one is the one that mattered: treating it as "the unit is
+hidden but the tile is lit" meant the model lit ground the game keeps dark and
+would have called a wood tile visible when nothing could see into it. Erring
+toward seeing less was the right instinct and still left the model disagreeing
+with the game on 13 tiles — conservative is not the same as correct.
 
 **Detection is done.** Fog is the **u8 at `0x0300431D`** — battle settings
 `+0x0D`, 0 clear and 1 fogged — so `Board.fog` is real and the reader reports
@@ -256,35 +270,30 @@ boolean read patterns. **Both were refuted** — neither byte moved. The tally
 did put the answer in the top three of a 32K space, but it was not evidence,
 and `fog_hunt` now prints failed priors as REFUTED rather than dropping them.
 
-**The remaining question is the oracle — and the first candidate was a dud.**
-The same diff turned up `0x03007910`, all zero with fog off and bitmask-shaped
-with it on. It is not a mask. Read as words it is `0x030053C0`, `0x0823066C`,
-`0x080780FD` — IWRAM and ROM pointers, one odd and therefore a THUMB function
-pointer. It is a handler table the game fills in when fog switches on, and the
-"bitmask" bytes were the low halves of pointers. A bitmask and a pointer are
-the same bytes; only alignment separates them, and a hex dump hides alignment.
+**Finding the oracle took two wrong turns**, both worth keeping.
 
-The probe was also looking in the wrong place: IWRAM only, while the terrain
-map is at `0x02016C2A` in **EWRAM**, which is where a per-tile array would
-actually sit. It now covers both work RAMs in full.
+The first candidate, `0x03007910`, looked bitmask-shaped in a hex dump. Read as
+words it is `0x030053C0`, `0x0823066C`, `0x080780FD` — IWRAM and ROM pointers,
+one odd and therefore a THUMB function pointer. A handler table the game fills
+in when fog switches on. A bitmask and a pointer are the same bytes; only
+alignment separates them, and a hex dump hides alignment.
 
-If a per-tile mask exists, the four assumed rules become *measurable*:
+The second was the search itself. It assumed the array would be **zero** with
+fog off and would be a **bitmap** — and it is `01` everywhere (of course: every
+tile seen) and a **byte per tile**. Both assumptions were hard filters, so the
+search confidently returned nothing. Relaxing them found it immediately.
 
 ```bash
-python tools/fog_diff.py fog_on.json --off fog_off.json
+python tools/fog_diff.py fog_on.json fog_on2.json --off fog_off.json
 ```
 
-It searches both RAMs for both plausible shapes — bit-per-tile, and
-byte-per-tile like the terrain map next door — and pins the layout **before**
+It sweeps both work RAMs for both shapes and pins a layout **before**
 consulting `fog.py`, since pinning it with our own rules would launder the
-assumptions into their own test. Three rule-independent constraints do the
-work: own units must read as visible; the span must be all-zero in the clear
-control and contain bytes fog changed; and every lit tile must be near a unit
-or a property, because fog means sight is local. Without those the first run
-survived 984 layouts and top-ranked the pointer table.
-
-Validated against planted masks of both shapes. **No mask has been found in a
-real capture yet.**
+assumptions into their own test. The constraints are rule-independent: own
+units must read as visible; a second fogged capture drops everything that
+moved between them; the span must contain bytes fog changed; and every lit tile
+must be near a unit or property, because fog means sight is local. Together
+those cut 262,144 bytes to seven candidate layouts.
 
 ## Layout
 
@@ -313,10 +322,10 @@ data/aw1_unit_stats.json  cost, move, move type, range, vision, fuel, ammo
 tests/test_damage.py      39 regression tests
 tests/test_pathing.py     22 regression tests, incl. "no unit-type branches"
 tests/test_threat.py      23 regression tests, incl. the same branch ban
-tests/test_fog.py         21 regression tests, incl. the same branch ban
+tests/test_fog.py         24 tests, incl. the game-array oracle and branch ban
 tools/threat_report.py    exposure, per-unit safety, and the coverage grid
 tools/fog_hunt.py         pin the fog flag by diffing labelled RAM probes
-tools/fog_diff.py         our predicted visibility vs the game's own mask
+tools/fog_diff.py         our predicted visibility vs the game's own count array
 tools/path_diff.py        our reachable set vs the game's own flood fill
 harness/mgba_spike.lua    write state, drive input, sweep cases unattended
 tools/spike_check.py      sweep vs engine, and the write-vs-play control
@@ -448,10 +457,13 @@ damage back into rolls and distinguishes "unlucky sample" from "wrong model".
 
 ## Known gaps
 
-- **Fog visibility rules are unmeasured.** The flag is found and the reader
-  reports it, but *what you can see* rests on four assumed rules
-  (`ASSUMPTIONS.md` A6). The candidate mask at `0x03007910` would settle them;
-  `tools/fog_diff.py` is written and has never seen a real capture.
+- **The vision array's address is not established.** The rules are measured,
+  but `0x0201763A` comes from one capture on one map, so the reader does not
+  read it and `fog.py` computes visibility instead. A second map settles
+  whether it moves.
+- **Two fog clauses remain unmeasured**: whether adjacency actually *reveals*
+  wood and reef (no unit stood next to one on the capture that settled the
+  rest), and whether the mountain bonus is +3 for every unit class.
 - **The composition itself is unmeasured.** Threat projection's inputs are all
   verified; the matching and ordering built on top of them are covered by unit
   tests and by nothing else. The reachability half is checkable with the

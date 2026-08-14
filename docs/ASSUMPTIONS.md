@@ -188,7 +188,30 @@ of the observations doing the work in "2 of 24 hypotheses survive".
 `calibrate.py` reports `display rule (1): floor_min1 (determined)` and
 `engine/damage.py` sets `DEFAULT_DISPLAY = "floor_min1"`.
 
-### A6. The fog-of-war visibility rules — **modelled, none of it measured**
+### A6. The fog-of-war visibility rules — **CLOSED, measured against the game**
+
+The game keeps a byte per tile holding **how many of your units can see it**,
+at `0x0201763A` on a 15x10 board. `engine/fog.py` reproduces it exactly, 150
+tiles of 150, and `tests/fixtures/fog_vision_15x10.json` checks it in as a
+regression oracle. Measured:
+
+| rule | measured value | what was assumed below |
+|---|---|---|
+| radius | Manhattan, from the ROM `vision` stat | correct |
+| mountain bonus | **+3** | +1, and off |
+| property vision | own tile only | off |
+| concealing terrain | Wood/Reef dark beyond 1 step, **on the tile** | applied to the unit, tile left lit |
+
+Three of four were wrong. Still open: whether adjacency *reveals* concealing
+terrain (no unit stood within 1 of any wood tile, so "adjacent reveals" and
+"never visible" fit identically); whether +3 holds for every unit class; Sonja's
+trait; and whether that address is stable across maps — the reader does not read
+it, because one capture is not an address. See `DERIVATION.md` 21.
+
+The original text follows, kept because it is the record of what was assumed
+and how wrong being careful can still be.
+
+### A6 (history). The rules while they were assumptions
 
 `vision` is a real ROM field (stats record `+0x0E`, extracted with 152
 structural assertions), and its values are strongly consistent with a sight
