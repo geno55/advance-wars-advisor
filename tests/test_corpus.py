@@ -158,10 +158,23 @@ class TestSeededSweeps(unittest.TestCase):
         self.assertEqual(sweep["hp_written"]["defender"], 85)
         self.assertEqual((min(observed), max(observed)), (48, 53))
 
+    def test_defender_at_65_tests_the_product_form(self):
+        """The defender term is `terrain_stars * display_hp(defender)` -- a
+        PRODUCT, and two points can only fit a line rather than test one. This
+        is the third point on the display axis at 4 stars: display 10, 9 and
+        now 7, giving 45-50, 48-53 and 54-60. All three match the linear form.
+
+        It also re-refutes floor_min1 independently of att57: that rule reads 65
+        as display 6 and predicts 57-63, and the game said 54-60."""
+        sweep, observed = self._check("def65.json")
+        self.assertEqual(sweep["hp_written"]["defender"], 65)
+        self.assertEqual((min(observed), max(observed)), (54, 60))
+
     def test_the_counter_is_constant_while_the_opening_varies(self):
         """The shape of A9b's evidence, kept as a regression: if a future model
         change reintroduces a luck term in the counter, this fails."""
-        for name in ("counter.json", "att57.json", "def81.json", "def85.json"):
+        for name in ("counter.json", "att57.json", "def81.json",
+                     "def85.json", "def65.json"):
             sweep = self._load(name)
             openings = {c["damage"] for c in sweep["cases"]}
             counters = {c["counter"] for c in sweep["cases"]
@@ -174,7 +187,8 @@ class TestSeededSweeps(unittest.TestCase):
     def test_the_model_reproduces_each_sweeps_counter(self):
         by_row = _units()
         terr = json.loads((ROOT / "data" / "aw1_terrain.json").read_text(encoding="utf-8"))
-        for name in ("counter.json", "att57.json", "def81.json", "def85.json"):
+        for name in ("counter.json", "att57.json", "def81.json",
+                     "def85.json", "def65.json"):
             sweep = self._load(name)
             att = by_row[sweep["attacker_type"] - 1]
             dfn = by_row[sweep["defender_type"] - 1]

@@ -399,10 +399,41 @@ no write at all — so the numbers are a measurement rather than the machine
 agreeing with itself. Sweeps are checked in under `tests/fixtures/` and replayed
 by `tests/test_corpus.py`.
 
-**Still open:** whether the two operands are the same *function* or two copies
-that happen to agree — every observation so far is consistent with either, and
-the ROM shows two separate instruction sequences. Nothing depends on the answer
-today.
+A fourth sweep tests the shape of the term rather than the rounding. The
+defender factor is `terrain_stars * display_hp(defender)`, a **product**, and
+two points can only fit a line -- they cannot test one. Writing the defender to
+65 gives a third point on the display axis at 4 stars:
+
+| defender HP | display | stars x display | linear predicts | observed |
+|---|---|---|---|---|
+| 100 | 10 | 40 | 45-50 | **45-50** |
+| 81 | 9 | 36 | 48-53 | **48-53** |
+| 65 | 7 | 28 | 54-60 | **54-60** |
+
+Three for three, multiplicities included. `def65` also re-refutes `floor_min1`
+by itself: that rule reads 65 as display 6 and predicts 57-63.
+
+**`calibrate.py` can now express an asymmetric rule.** It applied a *single*
+display rule to both operands, so "the attacker rounds one way and the defender
+another" was not in its search space -- it could be neither eliminated nor
+confirmed, and the tool reported a confident single answer either way. The rule
+is now two parameters. Against the real corpus it reports the attacker slot with
+three survivors and the defender slot with four, which is the honest picture: the
+Infantry-at-9 row constrains the attacker side and *nothing* constrains the
+defender side. The selftest was strengthened to match, and now recovers a
+deliberately asymmetric truth (attacker `floor`, defender `ceil`) exactly.
+
+**Still open, and the sweeps do not touch it:**
+
+- Whether the two operands are the same *function* or two copies that happen to
+  agree. Every observation is consistent with either, and the ROM shows two
+  separate instruction sequences.
+- **The product form across the STARS axis.** Every partial-defender
+  observation is on 4-star terrain. Stars 2 and 3 have never appeared in a
+  damage observation at any HP, and no test uses them. A partial defender on a
+  City (3 stars) would be the first evidence that the term is a product rather
+  than a table indexed by mountain.
+- Where the CO defence byte enters, since every observation is neutral.
 
 **A9b. A counterattack uses `base * raw_internal_hp / 100` — CLOSED, MEASURED.**
 

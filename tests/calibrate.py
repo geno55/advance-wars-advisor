@@ -21,6 +21,7 @@ Usage:
 from __future__ import annotations
 
 import csv
+import dataclasses
 import functools
 import itertools
 import json
@@ -73,9 +74,36 @@ class Obs:
                 f"on {self.terrain}: {self.mode}={self.observed}")
 
 
+@dataclasses.dataclass
+class Hypothesis:
+    """One candidate model. Named fields, not a tuple.
+
+    It was a tuple, with shared-luck mode distinguished by `len(h) > 3` and the
+    display rule read as `h[2]` at eight separate sites. Adding the fourth field
+    below to a positional tuple would have silently shifted every one of them,
+    and the failure would have looked like a calibration result rather than a
+    bug. So: attributes.
+    """
+    variant: str
+    stars: dict                       # terrain name -> stars
+    att_display: str
+    def_display: str
+    luck: int = None                  # set only in shared-luck mode
+
+    def rules(self):
+        return self.att_display, self.def_display
+
+    def __repr__(self):
+        d = (f"{self.att_display}" if self.att_display == self.def_display
+             else f"att={self.att_display}/def={self.def_display}")
+        return (f"<{self.variant} {d} "
+                + " ".join(f"{k}={v}" for k, v in sorted(self.stars.items()))
+                + (f" luck={self.luck}" if self.luck is not None else "") + ">")
+
+
 @functools.lru_cache(maxsize=None)
 def _predict(attacker, defender, att_hp, def_hp, mode, co_atk, co_def,
-             variant, stars, display=None):
+             variant, stars, att_display=None, def_display=None):
     """All outcomes this hypothesis considers possible, over the luck range.
 
     Memoised on primitives: the recording protocol repeats each matchup ~10x,
@@ -89,8 +117,8 @@ def _predict(attacker, defender, att_hp, def_hp, mode, co_atk, co_def,
     fn = VARIANTS[variant]
     out = set()
     for luck in range(LUCK_MIN, LUCK_MAX + 1):
-        raw = fn(w.base, display_hp(att_hp, display), co_atk, co_def,
-                 stars, display_hp(def_hp, display), luck)
+        raw = fn(w.base, display_hp(att_hp, att_display), co_atk, co_def,
+                 stars, display_hp(def_hp, def_display), luck)
         dmg = max(0, min(raw, def_hp))
         if mode == "exact":
             out.add(dmg)
@@ -103,20 +131,22 @@ def _predict(attacker, defender, att_hp, def_hp, mode, co_atk, co_def,
     return frozenset(out)
 
 
-def predict(obs, variant, stars, display=None):
+def predict(obs, variant, stars, att_display=None, def_display=None):
     return _predict(obs.attacker, obs.defender, obs.att_hp, obs.def_hp,
-                    obs.mode, obs.co_atk, obs.co_def, variant, stars, display)
+                    obs.mode, obs.co_atk, obs.co_def, variant, stars,
+                    att_display, def_display)
 
 
 @functools.lru_cache(maxsize=None)
 def _outcome(attacker, defender, att_hp, def_hp, mode, co_atk, co_def,
-             variant, stars, luck, display=None):
+             variant, stars, luck, att_display=None, def_display=None):
     """The single outcome for one specific luck roll."""
     w = select_weapon(attacker, defender)
     if w is None:
         return None
-    raw = VARIANTS[variant](w.base, display_hp(att_hp, display), co_atk, co_def,
-                            stars, display_hp(def_hp, display), luck)
+    raw = VARIANTS[variant](w.base, display_hp(att_hp, att_display),
+                            co_atk, co_def, stars,
+                            display_hp(def_hp, def_display), luck)
     dmg = max(0, min(raw, def_hp))
     if mode == "exact":
         return dmg
@@ -125,33 +155,45 @@ def _outcome(attacker, defender, att_hp, def_hp, mode, co_atk, co_def,
     return screen_bars(max(0, def_hp - dmg))
 
 
-def outcome(obs, variant, stars, luck, display=None):
+def outcome(obs, variant, stars, luck, att_display=None, def_display=None):
     return _outcome(obs.attacker, obs.defender, obs.att_hp, obs.def_hp,
                     obs.mode, obs.co_atk, obs.co_def, variant, stars, luck,
-                    display)
+                    att_display, def_display)
 
 
-def consistent(obs, variant, star_map, display=None):
-    return obs.observed in predict(obs, variant, star_map[obs.terrain], display)
+def consistent(obs, h):
+    return obs.observed in predict(obs, h.variant, h.stars[obs.terrain],
+                                   h.att_display, h.def_display)
 
 
 def enumerate_hypotheses(terrains):
-    """A hypothesis is (formula variant, star map, display rule).
+    """A hypothesis is (formula variant, star map, ATTACKER display rule,
+    DEFENDER display rule).
 
-    The display rule is a free parameter because assuming it was ceil() produced
-    a model the emulator refuted. Nothing about the arithmetic is asserted here;
-    the data eliminates.
+    The two display rules are separate parameters, and that is the whole point
+    of this function. They used to be one, applied to both operands -- which
+    meant the hypothesis "the attacker rounds one way and the defender another"
+    did not exist in the search space and could not be eliminated OR confirmed.
+    Worse, a single rule made the corpus look decisive when it was not: the
+    defender was at 100 internal HP in every row, where all four rules agree, so
+    the defender slot carried no information at all and the attacker slot got
+    all the credit for a fit that was really about neither.
+
+    Nothing about the arithmetic is asserted here; the data eliminates. If both
+    slots come back with the same survivor set, that is a result rather than an
+    assumption.
     """
     terrains = sorted(terrains)
     options = [star_options(t) for t in terrains]
     for variant in VARIANTS:
-        for disp in DISPLAY_VARIANTS:
+        for att_disp, def_disp in itertools.product(DISPLAY_VARIANTS, repeat=2):
             for combo in itertools.product(*options):
-                yield variant, dict(zip(terrains, combo)), disp
+                yield Hypothesis(variant, dict(zip(terrains, combo)),
+                                 att_disp, def_disp)
 
 
 def survivors(observations, shared_luck=False):
-    """Surviving hypotheses as tuples: (variant, star_map[, luck]).
+    """Surviving hypotheses, as Hypothesis objects.
 
     shared_luck=False treats each observation independently -- it only asserts
     that SOME roll in 0..9 explains it. Correct when the roll actually varies.
@@ -164,14 +206,15 @@ def survivors(observations, shared_luck=False):
     """
     terrains = {o.terrain for o in observations}
     alive = []
-    for variant, star_map, disp in enumerate_hypotheses(terrains):
+    for h in enumerate_hypotheses(terrains):
         if shared_luck:
             for luck in range(LUCK_MIN, LUCK_MAX + 1):
-                if all(outcome(o, variant, star_map[o.terrain], luck, disp)
-                       == o.observed for o in observations):
-                    alive.append((variant, star_map, disp, luck))
-        elif all(consistent(o, variant, star_map, disp) for o in observations):
-            alive.append((variant, star_map, disp))
+                if all(outcome(o, h.variant, h.stars[o.terrain], luck,
+                               h.att_display, h.def_display) == o.observed
+                       for o in observations):
+                    alive.append(dataclasses.replace(h, luck=luck))
+        elif all(consistent(o, h) for o in observations):
+            alive.append(h)
     return alive
 
 
@@ -201,12 +244,12 @@ def agreement(alive):
                 for stars in range(5):
                     sets = []
                     for h in alive:
-                        disp = h[2]
-                        lucks = ([h[3]] if len(h) > 3
+                        lucks = ([h.luck] if h.luck is not None
                                  else range(LUCK_MIN, LUCK_MAX + 1))
-                        vals = {max(0, min(VARIANTS[h[0]](
-                            w.base, display_hp(ahp, disp), 100, 100, stars,
-                            display_hp(dhp, disp), lk), dhp)) for lk in lucks}
+                        vals = {max(0, min(VARIANTS[h.variant](
+                            w.base, display_hp(ahp, h.att_display), 100, 100,
+                            stars, display_hp(dhp, h.def_display), lk),
+                            dhp)) for lk in lucks}
                         sets.append(frozenset(vals))
                     scen += 1
                     if len(set(sets)) > 1:
@@ -297,8 +340,9 @@ def report(observations, alive):
         print("Both are worth knowing; do not 'fix' this by widening the luck range.")
         return
 
-    vs = sorted({h[0] for h in alive})
-    ds = sorted({h[2] for h in alive})
+    vs = sorted({h.variant for h in alive})
+    att_ds = sorted({h.att_display for h in alive})
+    def_ds = sorted({h.def_display for h in alive})
     print(f"formula variants still possible ({len(vs)}): {', '.join(vs)}")
     if len(vs) > 1:
         # This tool asks only "does SOME luck value reproduce each observation".
@@ -310,40 +354,80 @@ def report(observations, alive):
               "variants whose ranges nest, which these do.")
         print("  The formula was settled by a seeded sweep instead "
               "(tools/rng_fit.py, DERIVATION.md 17): luck_after_hp.")
-    print(f"display rule ({len(ds)}): {', '.join(ds)}"
-          + ("  (determined)" if len(ds) == 1 else ""))
-    if len(ds) > 1:
-        # Do not let this read as "unsettled". This corpus cannot settle it at
-        # any sample size, because every first strike in it has the attacker at
-        # 100 or 9 internal HP -- the values where the candidates agree. It was
-        # settled elsewhere, by writing HP to a value where they disagree.
-        print("  This corpus CANNOT narrow this further: every first strike in "
-              "it has the\n  attacker at 100 or 9 internal HP, where these "
-              "rules all return the same\n  number. Settled instead by seeded "
-              "sweeps at written HP (ASSUMPTIONS A9a,\n  fixtures in "
-              "tests/fixtures/, replayed by tests/test_corpus.py): ceil.")
+    # Report the two slots SEPARATELY. Collapsing them is what made a
+    # corpus carrying no defender-side information look like it had
+    # settled both.
+    for label, ds, blind in (("attacker", att_ds, "attacker at 100 or 9"),
+                             ("defender", def_ds, "defender at 100")):
+        print(f"{label} display rule ({len(ds)}): {', '.join(ds)}"
+              + ("  (determined)" if len(ds) == 1 else ""))
+        if len(ds) > 1:
+            # Do not let this read as "unsettled". This corpus cannot
+            # settle it at any sample size, because every row sits on
+            # values where the candidates agree. It was settled elsewhere,
+            # by WRITING HP to a value where they differ.
+            print(f"  This corpus CANNOT narrow this: every row has the "
+                  f"{blind} internal HP,")
+            print("  where these rules return the same number. No sample "
+                  "size fixes that. Settled")
+            print("  instead by seeded sweeps at written HP -- "
+                  "ASSUMPTIONS A9a, fixtures in")
+            print("  tests/fixtures/, replayed by tests/test_corpus.py: "
+                  "ceil.")
+    if att_ds != def_ds:
+        print("  NOTE: the two slots have different survivor sets, so "
+              "this corpus does")
+        print("  constrain them asymmetrically. That is a result, not a "
+              "bug -- but check it")
+        print("  against A9a before believing it.")
+
     for t in terrains:
-        vals = sorted({h[1][t] for h in alive})
+        vals = sorted({h.stars[t] for h in alive})
         star = "determined" if len(vals) == 1 else "ambiguous"
         print(f"  {t:10s} stars: {vals}  ({star})")
-    if len(alive[0]) > 3:
-        lucks = sorted({h[3] for h in alive})
+    if alive[0].luck is not None:
+        lucks = sorted({h.luck for h in alive})
         print(f"  shared luck roll: {lucks}"
               + ("  (determined)" if len(lucks) == 1 else ""))
 
     print("\n" + describe_agreement(alive))
 
-    stars_pinned = len({tuple(sorted(h[1].items())) for h in alive}) == 1
+    stars_pinned = len({tuple(sorted(h.stars.items())) for h in alive}) == 1
     print(f"terrain stars fully determined: {stars_pinned}")
 
     _, dmg, kill, _ = agreement(alive)
     if stars_pinned and kill == 0 and dmg == 0:
-        v, dp = alive[0][0], alive[0][2]
+        h = alive[0]
         print("\nDONE. Set provenance.verified_against_emulator=true in "
               "data/aw1_damage.json,")
-        print(f"DEFAULT_VARIANT='{v}' and DEFAULT_DISPLAY='{dp}' in "
-              "engine/damage.py")
-        print("(any survivor will do -- they are equivalent).")
+        print(f"DEFAULT_VARIANT='{h.variant}' in engine/damage.py")
+        if len(att_ds) == 1 and len(def_ds) == 1 and att_ds == def_ds:
+            print(f"DEFAULT_DISPLAY='{h.att_display}' -- both operands are "
+                  "pinned, and to the same rule")
+        elif len(att_ds) == 1 and len(def_ds) == 1:
+            # Both pinned, to DIFFERENT rules. A real result, and one the
+            # engine cannot currently express: _terms() applies a single
+            # display_hp to both operands. Say that rather than quietly
+            # reporting the pair as though it could be configured.
+            print(f"  attacker rule: {att_ds[0]}   defender rule: {def_ds[0]}")
+            print("  BOTH PINNED, AND THEY DIFFER. engine/damage.py cannot "
+                  "express this today --")
+            print("  _terms() applies one display_hp to both operands. Split "
+                  "it before setting")
+            print("  anything, or the model cannot represent what was measured.")
+        else:
+            # This is the message that once said "any survivor will do -- they
+            # are equivalent" and named a single display rule. They are
+            # equivalent ON THE OBSERVATIONS, which is not the same as being
+            # equivalent, and picking one arbitrarily is how a rule the corpus
+            # never constrained ended up hardcoded for months.
+            print(f"  attacker rule survivors: {', '.join(att_ds)}")
+            print(f"  defender rule survivors: {', '.join(def_ds)}")
+            print("  DO NOT pick one. The survivors agree on every observation "
+                  "you have, which")
+            print("  is not the same as agreeing. Measure a board where they "
+                  "differ -- write the")
+            print("  HP and sweep the seed -- or carry the ambiguity.")
     else:
         print("\nNot done. Run with --suggest for the most informative next test.")
 
@@ -378,7 +462,8 @@ def suggest(alive, terrains, mode="display_after", top=8):
                      "mode": mode, "observed": "0"}, 0)
         buckets = {}
         for h in alive:
-            key = frozenset(predict(probe, h[0], h[1][terr], h[2]))
+            key = frozenset(predict(probe, h.variant, h.stars[terr],
+                                    h.att_display, h.def_display))
             buckets.setdefault(key, []).append(h)
         if len(buckets) < 2:
             continue
@@ -413,7 +498,13 @@ def selftest():
     import random
     rng = random.Random(1234)
     truth_variant = "floor_each_step"
-    truth_display = "floor"
+    # DELIBERATELY DIFFERENT rules for the two operands. The point of this
+    # selftest is now to prove the machinery can recover an asymmetric truth --
+    # a hypothesis that did not exist in the search space until the display rule
+    # was split, and therefore one the tool would previously have missed while
+    # reporting a confident answer.
+    truth_att_display = "floor"
+    truth_def_display = "ceil"
     truth_stars = {"plains": 1, "woods": 2, "mountain": 4, "road": 0}
 
     obs = []
@@ -422,23 +513,47 @@ def selftest():
         if select_weapon(att, dfn) is None:
             continue
         for terr in truth_stars:
-            for ahp in (100, 70, 50):
-                line += 1
-                probe = Obs({"attacker": att, "defender": dfn, "att_hp": str(ahp),
-                             "def_hp": "100", "terrain": terr,
-                             "mode": "display_after", "observed": "0"}, line)
-                outcomes = sorted(predict(probe, truth_variant,
-                                          truth_stars[terr], truth_display))
-                probe.observed = rng.choice(outcomes)
-                obs.append(probe)
+            # 100 is degenerate on the attacker side too -- and 70 and 50, and
+            # every other multiple of ten. The first draft of this selftest used
+            # (100, 70, 50) and left the attacker rule four-way ambiguous while
+            # reporting success, which is the same blind spot that put a refuted
+            # rule in DEFAULT_DISPLAY. 57 splits floor/floor_min1 from
+            # ceil/round; 7 splits floor from floor_min1.
+            for ahp in (100, 57, 7):
+                # The defender HP must VARY, or the defender slot carries no
+                # information and the selftest would pass while proving nothing
+                # about the half it exists to check. 100 is the degenerate value
+                # where every rule agrees; 81 and 65 are where they part.
+                for dhp, mode in ((100, "display_after"), (81, "exact"),
+                                  (65, "exact")):
+                    line += 1
+                    probe = Obs({"attacker": att, "defender": dfn,
+                                 "att_hp": str(ahp), "def_hp": str(dhp),
+                                 "terrain": terr, "mode": mode,
+                                 "observed": "0"}, line)
+                    outcomes = sorted(predict(probe, truth_variant,
+                                              truth_stars[terr],
+                                              truth_att_display,
+                                              truth_def_display))
+                    if not outcomes:
+                        continue
+                    probe.observed = rng.choice(outcomes)
+                    obs.append(probe)
 
-    print(f"selftest: truth variant={truth_variant} display={truth_display} "
+    print(f"selftest: truth variant={truth_variant} "
+          f"att_display={truth_att_display} def_display={truth_def_display} "
           f"stars={truth_stars}")
     print(f"generated {len(obs)} synthetic observations")
     alive = survivors(obs)
     report(obs, alive)
-    ok = any(h[0] == truth_variant and h[1] == truth_stars
-             and h[2] == truth_display for h in alive)
+    ok = any(h.variant == truth_variant and h.stars == truth_stars
+             and h.att_display == truth_att_display
+             and h.def_display == truth_def_display for h in alive)
+    asym = any(h.att_display != h.def_display for h in alive)
+    print(f"asymmetric hypotheses reachable at all: {asym}")
+    if not asym:
+        sys.exit("SELFTEST FAILED: the search space has no asymmetric "
+                 "hypothesis, so splitting the display rule did nothing")
     print(f"\ntruth retained in survivor set: {ok}")
     if not ok:
         sys.exit("SELFTEST FAILED: calibration eliminated the true hypothesis")
