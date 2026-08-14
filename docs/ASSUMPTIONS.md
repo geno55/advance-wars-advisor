@@ -214,9 +214,15 @@ and `model_disagreement()` re-tests them on every dump that carries the array.
 They still do the work for hypothetical placements, where no observed array can
 exist. See `DERIVATION.md` 21 and 22.
 
-Still open: whose view the array holds (it matched P1 on every capture and P1
-was active every time, so `observed_count` refuses to answer for anyone else);
-what the identical copy at `0x02017B42` is for; and Sonja's vision trait.
+The array holds the **active player's** view — settled on a three-player board
+where P1/P2/P3 own 8/7/9 properties and nobody has units, so the lit count
+alone names the owner and it follows whoever is to move (`DERIVATION.md` 23).
+There is no second array, so an opponent's visibility is not observable and
+must be modelled; that and hypothetical placement are what keep the rules
+load-bearing.
+
+Still open: what the identical copy at `0x02017B42` is for, and Sonja's vision
+trait.
 
 The original text follows, kept because it is the record of what was assumed
 and how wrong being careful can still be.

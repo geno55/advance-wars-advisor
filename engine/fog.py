@@ -72,12 +72,12 @@ stands. Ask what you could see from a tile you have not moved to yet and only
 the model can answer -- which is why `threat._relocate` drops the array rather
 than carrying a photograph of the wrong position forward.
 
+The array holds the ACTIVE player's view -- settled on a three-player board,
+see `observed_count`. So it answers for whoever is to move and nobody else, and
+an opponent's sight lines are always modelled rather than read.
+
 WHAT IS STILL NOT MEASURED
 
-  * Whose view the array holds. It matched P1 on every capture and P1 was the
-    active player on every capture, so "P1's" and "the active player's" are
-    indistinguishable. `observed_count` therefore refuses to answer for anyone
-    but the active player. No second array for another player was found.
   * What the identical copy at 0x02017B42 is for. Dumped as a cross-check only.
   * Sonja's vision trait, and CO powers that reveal the map.
 
@@ -154,10 +154,12 @@ def _sight(board, unit, rule_set) -> int:
 def observed_count(board, player: int) -> Optional[Dict[Coord, int]]:
     """The game's own answer, if the reader supplied it.
 
-    Only for the ACTIVE player: the array matched P1 on every capture and P1
-    was active on every capture, so "P1's view" and "the active player's view"
-    are not yet distinguishable. Returning it for anyone else would be reading
-    one of those two guesses as fact.
+    The array holds the ACTIVE player's view, and only theirs. Settled on a
+    three-player board where P1, P2 and P3 own 8, 7 and 9 properties and
+    nobody has any units: the array reads 8, 7 or 9 lit tiles depending purely
+    on whose turn it is, matching that player's properties exactly and the
+    other two not at all. There is no second array for anyone else, so an
+    opponent's visibility is not observable and has to be modelled.
     """
     if not board.vision or player != board.active_player:
         return None

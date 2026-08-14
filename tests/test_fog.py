@@ -3,10 +3,16 @@
 Same discipline as the other suites: hand-built boards, one rule per test, and
 no unit names in the module under test.
 
-The rules here are ASSUMPTIONS, not measurements -- see engine/fog.py. These
-tests pin what the code does so a future measurement produces a visible
-disagreement instead of a silent drift. A test passing here is not evidence the
-game agrees; it is evidence the model is the one we think we wrote.
+Two kinds of test live here and they carry very different weight.
+
+The hand-built boards pin what the MODEL does: they are evidence the code is
+the one we think we wrote, and nothing more. That is all they were when the
+rules were guesses, and this file used to say so.
+
+`TestAgainstTheGame` and `TestWhoseViewTheArrayHolds` pin what the GAME does.
+They run against real captures checked in under fixtures/, each carrying the
+game's own per-tile viewer count read out of EWRAM. Those are measurements, and
+they are what turned three of the four visibility rules from wrong to right.
 """
 import json
 import pathlib
@@ -235,7 +241,13 @@ class TestThreatUnderFog(unittest.TestCase):
         self.assertEqual(threat.threat_map(b, 1, fog=True), {})
 
 
-FIXTURES = ("fog_vision_15x10", "fog_vision_15x10_mtn", "fog_vision_19x16_props")
+FIXTURES = ("fog_vision_15x10", "fog_vision_15x10_mtn", "fog_vision_19x16_props",
+            "fog_vision_19x16_p2", "fog_vision_19x16_p3")
+
+# The same three-player board captured on three different turns. Nothing about
+# it changes between them except whose move it is.
+TURN_TRIPLE = ("fog_vision_19x16_props", "fog_vision_19x16_p2",
+               "fog_vision_19x16_p3")
 
 
 class TestAgainstTheGame(unittest.TestCase):
@@ -313,6 +325,39 @@ class TestAgainstTheGame(unittest.TestCase):
                 self.assertGreater(wrong, 0, f"+{bonus} also matches")
 
 
+class TestWhoseViewTheArrayHolds(unittest.TestCase):
+    """One board, three turns. P1, P2 and P3 own 8, 7 and 9 properties and
+    nobody has a single unit, so the count of lit tiles alone names the owner
+    of the array -- and it follows whoever is to move."""
+
+    def test_the_array_follows_the_active_player(self):
+        seen = {}
+        for name in TURN_TRIPLE:
+            board = load(ROOT / "tests" / "fixtures" / f"{name}.json")
+            lit = sum(1 for row in board.vision for v in row if v)
+            seen[board.active_player] = lit
+            # It is that player's own visibility, and nobody else's.
+            for other in (1, 2, 3):
+                got = fog.computed_count(board, other)
+                matches = all(board.vision[y][x] == got[(x, y)]
+                              for y in range(board.height)
+                              for x in range(board.width))
+                self.assertEqual(matches, other == board.active_player,
+                                 f"{name}: P{other} "
+                                 f"{'should' if other == board.active_player else 'should not'}"
+                                 f" match the array")
+        self.assertEqual(seen, {1: 8, 2: 7, 3: 9})
+
+    def test_an_opponents_view_is_never_observable(self):
+        """There is no second array. An enemy's sight lines have to be
+        modelled, which matters because that is what fog-aware threat
+        projection would need to reason about what they can see of you."""
+        board = load(ROOT / "tests" / "fixtures" / "fog_vision_19x16_p2.json")
+        self.assertIsNotNone(fog.observed_count(board, 2))
+        for other in (1, 3, 4):
+            self.assertIsNone(fog.observed_count(board, other))
+
+
 class TestObservedBeatsComputed(unittest.TestCase):
     def test_a_board_carrying_the_array_uses_it(self):
         board = load(ROOT / "tests" / "fixtures" / "fog_vision_15x10.json")
@@ -321,9 +366,8 @@ class TestObservedBeatsComputed(unittest.TestCase):
                          fog.observed_count(board, board.active_player))
 
     def test_it_is_only_offered_for_the_active_player(self):
-        """The array matched P1 on every capture and P1 was active on every
-        capture, so whose view it is cannot be told apart yet. Handing it back
-        for anyone else would be reading one of those guesses as fact."""
+        """Measured, not cautious: the array is the active player's and there
+        is no second one. See TestWhoseViewTheArrayHolds."""
         board = load(ROOT / "tests" / "fixtures" / "fog_vision_15x10.json")
         other = 3 - board.active_player
         self.assertIsNone(fog.observed_count(board, other))

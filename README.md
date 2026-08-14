@@ -255,7 +255,11 @@ on its own, with nothing else in frame.
 **The reader now reads the array rather than reproducing it.** The address is
 static — same `0x0201763A` on both map sizes, stride following the map width —
 so `Board.vision` carries the game's own numbers and `viewer_count()` prefers
-them. The rules stay load-bearing for the advisor's central question, *what
+them. It holds the **active player's** view: on a three-player board where
+P1/P2/P3 own 8/7/9 properties and nobody has units, the array reads 8, 7 or 9
+lit tiles purely according to whose turn it is, matching that player exactly
+and the other two not at all. There is no second array, so an opponent's sight
+lines are always modelled. The rules stay load-bearing for the advisor's central question, *what
 could I see from a tile I have not moved to yet*, which is about a board that
 does not exist; `threat` drops the observed array when it relocates a unit, or
 every candidate placement would be scored with the sight lines of where the
@@ -338,7 +342,7 @@ data/aw1_unit_stats.json  cost, move, move type, range, vision, fuel, ammo
 tests/test_damage.py      39 regression tests
 tests/test_pathing.py     22 regression tests, incl. "no unit-type branches"
 tests/test_threat.py      23 regression tests, incl. the same branch ban
-tests/test_fog.py         30 tests, incl. three real-board oracles and branch ban
+tests/test_fog.py         32 tests, incl. five real-board oracles and branch ban
 tools/threat_report.py    exposure, per-unit safety, and the coverage grid
 tools/fog_hunt.py         pin the fog flag by diffing labelled RAM probes
 tools/fog_diff.py         our predicted visibility vs the game's own count array
@@ -473,11 +477,12 @@ damage back into rolls and distinguishes "unlucky sample" from "wrong model".
 
 ## Known gaps
 
-- **Whose view the vision array holds.** It matched P1 on every capture and P1
-  was the active player on every capture, so "P1's" and "the active player's"
-  are indistinguishable. `observed_count()` refuses to answer for anyone else
-  rather than pick. No second array for another player was found, and the
-  identical copy at `0x02017B42` has no known purpose.
+- **An opponent's visibility is not observable.** The array holds the active
+  player's view and there is no second one, so what the *enemy* can see of you
+  is modelled, never read. That is the natural next question for fog-aware
+  threat projection.
+- **The identical copy at `0x02017B42`** has no known purpose; it is dumped
+  only as a cross-check.
 - **Sonja's vision trait**, and CO powers that reveal the map.
 - **The composition itself is unmeasured.** Threat projection's inputs are all
   verified; the matching and ordering built on top of them are covered by unit

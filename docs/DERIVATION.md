@@ -1101,3 +1101,41 @@ array, and pass no matter how wrong the rules were.
 One test asserts each rule is load-bearing on at least one fixture. That exists
 because `mountain_bonus` spent its whole assumed life switched off and wrong
 without a single test noticing -- nothing on the board exercised it.
+
+## 23. Whose view the array holds
+
+The last thing section 22 could not settle. The array had matched P1 on every
+capture, but P1 had been the active player on every capture, so "P1's view" and
+"the active player's view" fit the evidence equally.
+
+A three-player map decides it, and does so without needing a single unit on the
+board. P1, P2 and P3 own **8, 7 and 9** properties; with no units anywhere,
+property ownership is the only vision source, so each player's expected array
+is a different number of lit tiles. Capture the same board on three consecutive
+turns and the array reads:
+
+| turn | lit tiles | matches |
+|---|---|---|
+| P1 | 8 | P1's properties exactly; P2's and P3's not at all |
+| P2 | 7 | P2's exactly |
+| P3 | 9 | P3's exactly |
+
+Nothing about the board changes between the three captures except whose move it
+is. **The array is the active player's view.** `fog.observed_count()` answers
+for the active player and returns None for anyone else -- which was already the
+behaviour, adopted as a hedge and now justified.
+
+Three consequences worth stating.
+
+**An opponent's visibility is not observable.** There is no second array
+anywhere in EWRAM; the P2-predicted and P3-predicted arrays appear nowhere on
+P1's turn. Anything that needs to reason about what the ENEMY can see of you --
+which is the natural next question for fog-aware threat projection -- has to
+model it. That is now the load-bearing use of the rules, alongside hypothetical
+placement.
+
+**The rules were re-confirmed for three different players.** Every previous
+check was P1. The same computation reproduces P2's and P3's arrays exactly.
+
+**Property vision got a third independent measurement**, on a board where it is
+the only thing happening. It lights the property's own tile and nothing else.
