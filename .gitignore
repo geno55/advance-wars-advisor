@@ -10,6 +10,22 @@
 *.srm
 *.ss[0-9]
 
+# EXCEPT the measurement fixtures, which are checked in deliberately.
+#
+# Every seeded sweep under tests/fixtures/ was taken on one of these boards, and
+# the tests replay those sweeps on every run. Without the save states the
+# measurements are unreproducible: you could read the numbers but never re-take
+# them, and A10 is the standing proof that these boards carry properties nobody
+# thought to write down. A recipe only reproduces what someone remembered to
+# record.
+#
+# They are not ROM data and do not weaken the rule above. An mGBA save state is
+# a PNG: a 240x160 screenshot of the frame, plus gbAs/gbAx chunks holding a
+# compressed snapshot of the console's RAM. 83 KB against a 4 MB ROM, and the
+# ROM is not in there -- you still have to supply your own for any of this to
+# run.
+!harness/fixtures/*.ss[0-9]
+
 # Emulator binaries and archives -- download mGBA yourself, don't vendor it.
 *.7z
 emulator/
