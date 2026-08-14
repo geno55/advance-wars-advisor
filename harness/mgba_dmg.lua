@@ -247,6 +247,27 @@ local function confirm_and_read(def_slot, hp_before, att_slot, att_hp_before)
   return nil, DMG_TIMEOUT_FRAMES, false         -- nothing happened
 end
 
+-- List a fixture's units WITHOUT saving over it. dmg_save() prints the same
+-- table but writes the state as a side effect, which is the wrong tool when you
+-- have a fixture already and just need its slot numbers and terrain.
+function dmg_units(fixture)
+  if not loadfixture(fixture) then return end
+  local ubase = emu:read32(UNIT_BASE_PTR)
+  console:log("units in " .. tostring(fixture) .. ":")
+  for i = 0, 255 do
+    local t = emu:read8(ubase + i * UNIT_STRIDE)
+    if t >= 1 and t <= 24 then
+      local u = readunit(i)
+      console:log(string.format("  slot %3d  P%d  type %2d at (%2d,%2d)  hp %3d"
+        .. "  ammo %d  fuel %3d  on terrain %d",
+        i, math.floor(i / ARMY_SLOTS) + 1, u.type, u.x, u.y, u.hp, u.ammo,
+        u.fuel, terrainat(u.x, u.y)))
+    end
+  end
+  console:log("terrain ids: 1 Plain, 2 River, 3 Mountain, 12 Bridge -- see "
+    .. "data/aw1_terrain.json for the rest")
+end
+
 -- One attack, loudly. Run this before sweeping.
 function dmg_probe(fixture, att_slot, def_slot)
   if not loadfixture(fixture) then return end
