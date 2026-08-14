@@ -232,23 +232,45 @@ where the established part stops. Every rule layered on it is a named switch in
 `fog.RULES` with its own kill condition (`ASSUMPTIONS.md` A6), defaulting toward
 seeing *less*, because an advisor that cheats is worse than one that is blind.
 
-**What is missing is detection.** `Board.fog` is `None` — UNKNOWN, deliberately
-not collapsed to off — because the flag's address is unknown, and `threat`
-warns rather than assuming clear. VS mode can toggle fog per map, which makes
-this a controlled experiment rather than a search:
+**Detection is done.** Fog is the **u8 at `0x0300431D`** — battle settings
+`+0x0D`, 0 clear and 1 fogged — so `Board.fog` is real and the reader reports
+it. Dumps predating the field still read `None`, carried as UNKNOWN rather than
+collapsed to off.
+
+Finding it was a controlled experiment rather than a search, because VS mode
+toggles fog per map: build the same map twice, dump each with
+`state(path, true)` for the IWRAM probe, and diff.
 
 ```bash
 python tools/fog_hunt.py --off off1.json off2.json --on on1.json on2.json
 ```
 
-Dump each with `state("C:/tmp/off1.json", true)` to include the IWRAM probe. A
-byte is a candidate only if it is constant across captures sharing a label and
-differs between labels — two captures per side, so a frame counter cannot
-masquerade as the flag. Static analysis of the settings struct at `0x03004310`
-predicts **`+0x32` (`0x03004342`)**, whose reads are 80 of 81
-compare-against-zero. That is a prior for the hunt to confirm or bury; this
-project's own history is mostly confident inferences that measurement
-overturned.
+Two captures per side, because 3,735 bytes differed between the labels and
+3,678 of those also varied *within* a label. One capture per side cannot tell a
+frame counter from the flag. That left 57 candidates, exactly one of them a
+clean `0 → 1` inside a known structure — and writing it mid-match turned fog
+on, which is the step that makes it causal rather than correlated.
+
+Static analysis had predicted `+0x32` and `+0x08` on their overwhelmingly
+boolean read patterns. **Both were refuted** — neither byte moved. The tally
+did put the answer in the top three of a 32K space, but it was not evidence,
+and `fog_hunt` now prints failed priors as REFUTED rather than dropping them.
+
+**The remaining question is the oracle.** The same diff turned up
+`0x03007910..0x0300792C`: all zero with fog off, bitmask-shaped with it on
+(`192, 83, 3, 232, 253, 128`). That is what a per-tile hidden mask looks like.
+If it is one, the four assumed rules above become *measurable*:
+
+```bash
+python tools/fog_diff.py fogged.json
+```
+
+It pins the mask layout first, using only the fact that your own units must
+stand on visible tiles — an anchor that owes nothing to `fog.py`, because
+pinning the layout with our own rules would launder the assumptions into the
+test meant to check them. Only then does it score the rules, and a tie is
+reported as *unexercised on this board* rather than as agreement. Validated
+against a synthetic planted mask; **not yet run against a real capture.**
 
 ## Layout
 
@@ -280,6 +302,7 @@ tests/test_threat.py      23 regression tests, incl. the same branch ban
 tests/test_fog.py         21 regression tests, incl. the same branch ban
 tools/threat_report.py    exposure, per-unit safety, and the coverage grid
 tools/fog_hunt.py         pin the fog flag by diffing labelled RAM probes
+tools/fog_diff.py         our predicted visibility vs the game's own mask
 tools/path_diff.py        our reachable set vs the game's own flood fill
 harness/mgba_spike.lua    write state, drive input, sweep cases unattended
 tools/spike_check.py      sweep vs engine, and the write-vs-play control
@@ -411,10 +434,10 @@ damage back into rolls and distinguishes "unlucky sample" from "wrong model".
 
 ## Known gaps
 
-- **Fog of war — modelled, and the flag not yet found.** `engine/fog.py` exists
-  and `threat` honours it, but `Board.fog` is `None` until the RAM flag is
-  located, so nothing fires automatically. See "Fog of war" above for where
-  that stands and how to finish it.
+- **Fog visibility rules are unmeasured.** The flag is found and the reader
+  reports it, but *what you can see* rests on four assumed rules
+  (`ASSUMPTIONS.md` A6). The candidate mask at `0x03007910` would settle them;
+  `tools/fog_diff.py` is written and has never seen a real capture.
 - **The composition itself is unmeasured.** Threat projection's inputs are all
   verified; the matching and ordering built on top of them are covered by unit
   tests and by nothing else. The reachability half is checkable with the

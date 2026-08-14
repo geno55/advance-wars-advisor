@@ -48,6 +48,14 @@ DIM_TABLE = 0x03003600
 MAP_ADDR = 0x02016C2A
 TURN_ADDR = 0x03004420
 WEATHER_ADDR = 0x0300433C
+-- FOG OF WAR, u8 at battle settings +0x0D, 0 clear / 1 fogged. Found by
+-- building the same VS map twice with the fog toggle flipped and diffing
+-- labelled IWRAM probes (tools/fog_hunt.py), then CONFIRMED by writing 1 to it
+-- mid-match and watching fog come on. The diff only ever showed correlation --
+-- 57 bytes tracked the toggle -- and the write is what made it causal.
+-- Two static predictions (+0x32 and +0x08, both overwhelmingly read as
+-- booleans) were refuted: neither moved at all.
+FOG_ADDR = 0x0300431D
 -- The game's own list of every capturable property: 8-byte records of
 -- {terrain type, x, y, ...}, sorted by y then x, terminated by 0xFF.
 -- Reached from the ROM pointer at 0x08282CC4. This is the cross-check that
@@ -170,6 +178,11 @@ function state(path, probe)
   w_(string.format('  "day": %d, "active_player": %d, "active_raw": %d,',
     day, active, active_raw))
   w_(string.format('  "weather_index": %d,', weather))
+  -- Ships the raw byte alongside the boolean: an unrecognised value stays
+  -- visible instead of being flattened into "not 1, therefore clear".
+  local fogv = emu:read8(FOG_ADDR)
+  w_(string.format('  "fog": %s, "fog_raw": %d,',
+    (fogv ~= 0) and "true" or "false", fogv))
 
   -- armies: 1-indexed, record 0 is a dummy
   w_('  "armies": [')
@@ -303,6 +316,7 @@ function state(path, probe)
   -- wrong and we want to know immediately rather than average them.
   local turn_ok = (day >= 1) and (active_raw % 32 == 0)
     and (active >= 1) and (active <= 4) and (weather >= 0) and (weather <= 2)
+    and (fogv == 0 or fogv == 1)
   local funded = {}
   for p = 1, 4 do
     if funds[p] and funds[p] > 0 then funded[#funded + 1] = p end

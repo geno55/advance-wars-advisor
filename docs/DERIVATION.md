@@ -846,3 +846,87 @@ fixture, seed the RNG so luck is held constant, and compare:
   * ~20% apart -> they do, and the ratio names the combination rule
 
 Until then the refusal is the honest answer.
+
+## 20. The fog-of-war flag, and two refuted predictions
+
+`vision` had been sitting in the extracted stats table since section 12, but
+nothing could use it, because the reader could not tell a fogged board from a
+clear one. Without that, an advisor under fog answers with units the player
+cannot see.
+
+### The static pass, which was wrong
+
+Weather is read as `[0x03004310 + 0x2C]`, so `0x03004310` is a battle-settings
+struct and a per-battle fog flag plausibly lives in the same blob. Every
+literal-pool reference to that base was disassembled and the byte offsets it
+loads were tallied, scoring each by how often the load is followed by
+`cmp #0` -- the shape of a boolean:
+
+```
+  +0x08   257 reads, 223 boolean
+  +0x32    81 reads,  80 boolean
+  +0x0D    51 reads,  19 boolean
+  +0x2C    52 reads,   0 boolean   <- weather, an index, so never a boolean
+```
+
+That predicted `+0x32`, with `+0x08` as runner-up. **Both were wrong.** Neither
+byte moved between fog off and fog on. The flag is `+0x0D`, which the same pass
+ranked third on a much weaker signal.
+
+The scoring was not useless -- it put the real answer in the top three of a
+32,768-byte space, and the weather row confirms the method separates indices
+from booleans. It just was not evidence, and the two predictions are recorded
+here as refuted rather than quietly replaced.
+
+### The measurement
+
+VS mode lets the same map be built twice with fog toggled, which makes this a
+controlled experiment rather than a search. `mgba_state.lua` grew a probe that
+dumps 32K of IWRAM into the JSON, and `tools/fog_hunt.py` diffs labelled
+captures: a byte is a candidate only if it is constant across every capture
+sharing a label and differs between labels.
+
+Two captures per side, not one. 3,735 bytes differed between the labels and
+3,678 of those also varied *within* a label -- frame counters, cursor state,
+RNG. One capture per side could not have told those from the flag.
+
+That left 57. Weather and both map dimensions were checked as controls and had
+not moved, so the captures differed by fog rather than by setup. Of the 57,
+exactly one was a clean `0 -> 1` inside a known structure:
+
+```
+  0x0300431D   0 -> 1   battle settings +0x0D
+```
+
+### Confirmation, which is the part that matters
+
+The diff shows correlation. 57 bytes correlated. Writing `1` to `0x0300431D`
+mid-match with fog off turned fog **on**, which is causation and is what
+settles it.
+
+**Fog of war is the u8 at `0x0300431D`**, battle settings `+0x0D`, 0 clear and
+1 fogged. The reader ships the raw byte alongside the boolean so an
+unrecognised value stays visible, and the turn-block sanity check now rejects
+anything that is not 0 or 1.
+
+### What the same diff turned up for free
+
+`0x03007910..0x0300792C` is **all zero with fog off** and bitmask-shaped with
+it on -- `192, 83, 3, 232, 253, 128`. That is what a per-tile hidden mask looks
+like when there is nothing to hide.
+
+If it is one, it is an oracle, and the four assumed visibility rules in
+`engine/fog.py` stop being assumptions. `tools/fog_diff.py` pins the layout
+first -- sweeping base, stride, bit order and polarity, keeping only layouts
+where every one of the player's own units stands on a tile the mask calls
+visible. That anchor holds in any fog implementation and owes nothing to
+`fog.py`, which is the point: pinning the layout with our own rules would
+launder the assumptions into the test meant to check them.
+
+Only with the layout pinned independently does it score the rules, and a tie
+between rule combinations is reported as *unexercised on this board* rather
+than as agreement. Validated against a synthetic dump with a planted mask and a
+deliberately non-default rule set: it recovers the layout and names the rule.
+
+This is unrun against a real capture. The mask is a hypothesis with a good
+shape and nothing more.

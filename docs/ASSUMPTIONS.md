@@ -212,15 +212,21 @@ a real game.
 Also unmodelled and not currently switchable: Sonja's vision trait, and CO
 powers that reveal the map.
 
-**The bigger gap is upstream.** None of this can fire automatically, because
-the reader cannot yet tell a fogged board from a clear one — `Board.fog` is
-`None` until the flag is located. `None` is carried as UNKNOWN rather than
-collapsed to off, and `threat` warns on it, so the failure is loud. **Kill it
-by:** building the same VS map twice with the fog toggle flipped, dumping each
-with `state(path, true)`, and running `tools/fog_hunt.py`. Static analysis of
-the settings struct at `0x03004310` predicts `+0x32` (`0x03004342`), whose reads
-are 80-of-81 compare-against-zero; that prediction is a prior for the hunt to
-confirm or bury, not a substitute for it.
+**Detection is CLOSED.** Fog is the u8 at `0x0300431D`, battle settings
+`+0x0D`, 0 clear and 1 fogged — found by diffing labelled probes across a VS
+fog toggle and confirmed by writing it mid-match. `Board.fog` is now real, and
+`None` survives only for dumps that predate the field. Static analysis had
+predicted `+0x32` and `+0x08`; both were refuted, neither moved. See
+`DERIVATION.md` 20.
+
+**The oracle is the open question.** The same diff turned up
+`0x03007910..0x0300792C`, all zero with fog off and bitmask-shaped with it on —
+the shape of a per-tile hidden mask. If it is one, every rule in the table
+above becomes measurable and stops being an assumption. `tools/fog_diff.py`
+pins the layout using only the player's own unit positions as an anchor, so the
+rules cannot launder themselves into their own test, and scores them only
+afterwards. It is validated against a synthetic planted mask and has not been
+run against a real capture.
 
 ## Unknown — not modelled
 

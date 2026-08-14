@@ -102,12 +102,11 @@ class Board:
     # to those tables are still inferred, so `weather_index` is the value to
     # trust and `weather` is a convenience over a label that may yet move.
     weather_index: Optional[int] = None
-    # Fog of war. None means UNKNOWN, not off -- the flag's RAM address has not
-    # been found yet (tools/fog_hunt.py is the way in), so the reader cannot
-    # currently tell a clear board from a fogged one. Anything that would give
-    # different advice under fog has to treat None as "ask" rather than "no",
-    # because defaulting to off is exactly how the advisor would end up quoting
-    # units the player cannot see. See engine/fog.py.
+    # Fog of war, from battle settings +0x0D (0x0300431D) -- located by diffing
+    # labelled probes across a VS fog toggle and confirmed by writing it
+    # mid-match. None still means UNKNOWN rather than off, for dumps taken
+    # before the field existed: defaulting those to clear is exactly how the
+    # advisor would end up quoting units the player cannot see.
     fog: Optional[bool] = None
     warnings: list = field(default_factory=list)
 
@@ -294,6 +293,10 @@ def summarise(b: Board) -> str:
         head += f", day {b.day}, P{b.active_player} to move"
     if b.weather_index is not None:
         head += f", weather {b.weather} (index {b.weather_index})"
+    if b.fog:
+        head += ", FOG"
+    elif b.fog is None:
+        head += ", fog unknown"
     out = [head]
     for w in b.warnings:
         out.append(f"  !! {w}")
