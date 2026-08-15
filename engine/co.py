@@ -37,22 +37,25 @@ Andy on the same fixture, seed the RNG, and compare the damage -- identical
 means the header pairs do not reach the damage path. **That test is broken and
 would have produced exactly the wrong answer.**
 
-Writing +0x1D at a target-select fixture does not change damage AT ALL, not
-even for a CO whose effect is not in doubt. Max is 150/100 on Tank and should
-move a Tank -> Infantry-in-woods attack from 60-67 to 90-97; written mid-
-fixture he lands on 60-67, the same as Andy. The byte is written and reads back
-correctly, and the game's intel screen believes it -- which is how all twelve
-records were named -- but the damage path does not consult it, presumably
-because it was resolved earlier, when Fire was chosen.
+Writing +0x1D alone does not change damage, not even for a CO whose effect is
+not in doubt. Max is 150/100 on Tank and should move a Tank -> Infantry-in-
+woods attack from 60-67 to 90-97; written mid-fixture he lands on 60-67, the
+same as Andy.
+
+The reason is a gate, not a cache. DERIVATION 24 traces the fetch: both the
+attacker's and the defender's modifier lookups do read [army+0x1D] and index
+the record at a 292-byte stride -- but each first tests [0x03004318], and when
+that byte is clear they branch to a hardcoded `292 * 1`, record 1, ANDY, for
+both sides. It reads 0 in every VS capture taken so far, so those matches
+compute every unit as Andy whatever +0x1D says.
 
 So the old test could only ever return "identical", and the conclusion drawn
 from that would have been "Kanbei's header fields do not reach the damage
 path". A test that cannot fail is worse than no test.
 
-HOW TO SETTLE IT: build the fixture with the CO chosen for real. VS mode picks
-COs at match setup, so a Kanbei match and an Andy match, each saved at
-target-select on the same matchup, differ in the CO and nothing else. Then
-`co_written` stays null and `co_in_fixture` carries the truth.
+HOW TO SETTLE IT: write 0x03004318 = 1 alongside +0x1D, or build the fixture in
+a match where CO abilities are already on. Either way, check it with Max first
+-- his 90-97 is the control that says the CO reached the damage path at all.
 """
 from __future__ import annotations
 

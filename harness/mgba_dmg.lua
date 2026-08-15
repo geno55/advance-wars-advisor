@@ -68,6 +68,9 @@ RNG_MUL, RNG_ADD = 20077, 12345
 -- against the observed before/after pair). That does not matter for the
 -- experiment: to make luck an input we only need to WRITE it.
 RNG_STATE = 0x03001D30
+-- Battle settings +0x08. Clear means the damage path ignores every CO and
+-- computes both sides as record 1, Andy. See DERIVATION.md 24.
+CO_ENABLE_ADDR = 0x03004318
 
 function rng_read(addr) return emu:read32(addr or RNG_STATE) end
 function rng_write(v, addr)
@@ -406,6 +409,8 @@ function dmg_seedsweep(fixture, att_slot, def_slot, outpath, nseeds, stride, add
   addr = addr or opts.addr or RNG_STATE
   co = co or opts.co
   co_player = co_player or opts.co_player or 1
+  -- Gates the CO lookup in the damage path; 0 means "everyone is Andy".
+  local co_abilities = opts.co_abilities
   local def_hp, att_hp = opts.def_hp, opts.att_hp
   if not loadfixture(fixture) then return end
   local a0, d0 = readunit(att_slot), readunit(def_slot)
@@ -420,20 +425,20 @@ function dmg_seedsweep(fixture, att_slot, def_slot, outpath, nseeds, stride, add
     end
     console:log(string.format("P%d CO: fixture had %d, writing %d each case",
       co_player, co_in_fixture, co))
-    -- MEASURED, and it is a trap: at a target-select fixture this write does
-    -- not reach the damage path. Max (150/100 on Tank) written here produced
-    -- 60-67 on Tank -> Infantry in woods, identical to Andy, where his own
-    -- modifiers demand 90-97. The byte takes, and the intel screen agrees --
-    -- that is how the twelve records were named -- but combat has already
-    -- resolved its CO by the time Fire is chosen.
+    -- This alone does NOT change damage while [0x03004318] is clear. The
+    -- damage path reads +0x1D (DERIVATION 24) but gates it on that byte, and
+    -- falls back to a hardcoded record 1 -- Andy -- for both attacker and
+    -- defender when it is zero. It read zero in every VS capture so far, and
+    -- Max written here produced Andy's 60-67 instead of his own 90-97.
     --
-    -- Left in because it still swaps the identity for anything that reads
-    -- +0x1D live. Do not use it to measure a CO's effect on damage: it will
-    -- return "no difference" for every CO, including ones whose effect is not
-    -- in doubt. Build the fixture with the CO chosen in VS setup instead.
-    console:log("  !! WARNING: a written CO does NOT change damage from a")
-    console:log("  !! target-select fixture -- verified with Max, who should")
-    console:log("  !! move the band and does not. See engine/co.py.")
+    -- So pass co_abilities = 1 as well, or take the fixture in a match where
+    -- they are already on. Either way check Max first: his band moving is the
+    -- control that says the CO reached the damage path at all.
+    if emu:read8(CO_ENABLE_ADDR) == 0 then
+      console:log("  !! WARNING: [0x03004318] is 0, so the damage path will")
+      console:log("  !! use Andy for BOTH sides whatever CO is written. Pass")
+      console:log("  !! {co_abilities = 1} to force it. See DERIVATION 24.")
+    end
   else
     console:log(string.format("P%d CO: %d (from the fixture, not written)",
       co_player, co_in_fixture))
@@ -453,6 +458,7 @@ function dmg_seedsweep(fixture, att_slot, def_slot, outpath, nseeds, stride, add
       end
     end
     if co then coid(co_player, co) end       -- every case, after every reload
+    if co_abilities then emu:write8(CO_ENABLE_ADDR, co_abilities) end
     if writes then
       for slot, v in pairs(writes) do
         if unithp(slot, v) == nil then return nil end

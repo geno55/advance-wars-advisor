@@ -1139,3 +1139,77 @@ check was P1. The same computation reproduces P2's and P3's arrays exactly.
 
 **Property vision got a third independent measurement**, on a board where it is
 the only thing happening. It lights the property's own tile and nothing else.
+
+## 24. Where the damage path gets its CO, and the flag that switches it off
+
+Section A12 recorded a measurement — four seed sweeps, four COs written to army
+`+0x1D`, one damage band — and drew the wrong conclusion from it: that the
+damage path does not read `+0x1D`. It reads it. There is a gate in front of it,
+and the gate was shut.
+
+`0x08284A0C` is the CO modifier pointer array. It has 96 literal references;
+one sits at `0x022EA4`, immediately after the damage routine. The attacker's
+modifier fetch reads:
+
+```
+08022E40  adds r4, r0, r1        ; r4 = the attacker's army record
+08022E42  ldrb r1, [r4, #0x1e]   ; +0x1E, the stat sub-block index
+08022E44  lsls r0, r1, #7        ; * 128
+08022E46  adds r3, r3, r0
+08022E48  ldr  r0, = 0x03004310  ; the battle-settings struct
+08022E4A  ldrb r1, [r0, #8]      ; +0x08
+08022E4C  cmp  r1, #0
+08022E4E  beq  #0x8022e70        ; <- clear: skip the CO lookup entirely
+08022E50  ldrb r1, [r4, #0x1d]   ; +0x1D, the CO id
+08022E52  lsls r0, r1, #3        ; co*8
+08022E54  adds r0, r0, r1        ; co*9
+08022E56  lsls r0, r0, #3        ; co*72
+08022E58  adds r0, r0, r1        ; co*73
+08022E5A  lsls r0, r0, #2        ; co*292   <- the record stride from section 11
+08022E5C  adds r1, r3, r0
+08022E5E  b    #0x8022e76
+08022E70  movs r2, #0x92
+08022E72  lsls r2, r2, #1        ; 0x92 * 2 = 292
+08022E74  adds r1, r3, r2        ; <- record 1. ANDY, hardcoded.
+08022E76  ...
+08022E7C  ldr  r0, [r0]          ; -> the per-unit modifier struct
+08022E7E  ldrb r0, [r0, #5]      ; the modifier byte
+08022E80  muls r0, r5, r0
+08022E82  movs r1, #0x64
+08022E84  bl   0x0807B488        ; __divsi3, truncating
+```
+
+The defender's fetch at `0x08022F3E` is the same shape with the same gate,
+falling back to the same `292 * 1`.
+
+**So `[0x03004318]` decides whether COs exist at all.** Clear, and every unit on
+both sides is computed as Andy — neutral 100/100 — no matter what `+0x1D` says.
+Set, and the CO id is read per attack, which means writing it works after all.
+
+### The flag was already in front of us
+
+Section 20's static pass over the settings struct tallied which byte offsets are
+read as `cmp #0`, looking for the fog flag. `+0x08` topped it at **223 of 257
+reads boolean**, and was dismissed in one line as "probably a more general flag"
+because it also appears in the movement-cost path at `0x0803A758`. It is a more
+general flag. It is *this* flag, and the movement path gates the CO's movement
+table on it for exactly the same reason.
+
+The tally was right, the ranking was right, and the note attached to it treated
+generality as a reason to look elsewhere rather than as the finding.
+
+### What this changes
+
+A12's measurement stands: four COs, one band. Its conclusion does not. The
+correct statement is that the sweeps were taken in matches where CO abilities
+are disabled, so they measured Andy four times.
+
+That makes the sweep method viable again, including for Kanbei, provided the
+flag is set. Two ways: write `0x03004318 = 1` alongside `+0x1D`, or find the
+setup option that turns CO abilities on and build the fixture there. The write
+is the cheap test and predicts a specific result — Max on Tank → Infantry in
+woods should move from 60-67 to **90-97**.
+
+**Not yet established:** which option sets it, and whether writing it
+mid-fixture is enough or whether the game latches CO state earlier. Reading 0 in
+four VS captures says only that those matches had it clear.

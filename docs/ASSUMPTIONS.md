@@ -553,8 +553,8 @@ and that asymmetry is the reason this is a correctness fix rather than a
 refinement.
 
 **Kill it by:** `tools/luck_range_check.py` on a seed sweep taken with the CO
-**chosen in VS setup**, not written. Writing army `+0x1D` mid-fixture does not
-reach the damage path -- see the note under Kanbei below, and A12. Four sweeps
+**chosen in VS setup**, or written alongside `0x03004318 = 1`. Writing
+`+0x1D` alone does nothing while that flag is clear -- see A12. Four sweeps
 were taken that way (Andy, Nell, Sonja, Max) and all four returned the same
 60-67 band, which measured nothing. It inverts each observed damage back to the
 roll that produced it and reports what was *witnessed*, not what fits. The bar
@@ -595,7 +595,7 @@ and witness nothing.
 - Whether the RNG can be read and predicted. Explicitly out of scope for now;
   the model deals in damage *ranges*.
 
-### A12. Writing army `+0x1D` does not change damage — **MEASURED, and it broke two kill conditions**
+### A12. A written CO changes nothing while `0x03004318` is clear — **TRACED**
 
 The CO id at army `+0x1D` is real and confirmed: writing it swaps the CO the
 intel screen reports, which is how all twelve records were named. It does not
@@ -617,13 +617,30 @@ write itself is fine — the harness reads the byte back and it holds. Combat ha
 simply already resolved its CO by the time the cursor is on the target,
 presumably when Fire was chosen.
 
-**What this cost.** Two documented kill conditions ran through this mechanism —
+**Why, and the first answer here was wrong.** This entry originally concluded
+that the damage path does not read `+0x1D`. It does. `DERIVATION.md` 24 traces
+the fetch: both the attacker's and the defender's modifier lookups read
+`[army+0x1D]`, multiply by the 292-byte record stride, and index
+`0x08284A0C` — but each is gated on `[0x03004318]`, and when that byte is clear
+they branch to a hardcoded `292 * 1`, **record 1, Andy**, for both sides.
+
+That byte reads 0 in all four VS captures. So the sweeps did not fail to change
+the CO; they ran four times in a match where COs are switched off, and measured
+Andy each time. The write was never the problem.
+
+The flag was in the file already. Section 20's tally of the settings struct
+ranked `+0x08` top for boolean-shaped reads, 223 of 257, and dismissed it in a
+line as "probably a more general flag" because it also appears in the
+movement-cost path. It is general — it gates the CO's movement table for the
+same reason — and that generality was the finding, not a reason to look
+elsewhere.
+
+**What it cost.** Two documented kill conditions ran through this mechanism —
 A11's, and the long-standing plan to settle Kanbei by writing `+0x1D` and
-comparing damage. Both would have returned "no difference" for *any* CO, and
-the conclusion drawn from Kanbei's would have been "the header fields do not
-reach the damage path", which is precisely the wrong answer arrived at
-confidently. A test that cannot fail is worse than no test, and this one had
-been sitting in the file as the recommended next step.
+comparing damage. Both are usable again *provided the flag is set*, and both
+were unusable as written, because with it clear they return "no difference" for
+every CO. The Kanbei one would have concluded "the header fields do not reach
+the damage path" — confidently, and backwards.
 
 **What it did not cost.** Nothing measured. Every checked-in sweep has
 `co_written: null` and all 75 corpus rows are neutral, so no shipped number
@@ -634,9 +651,10 @@ interpretation — untested, not refuted.
 identity for anything reading `+0x1D` live, but it now prints a warning, and
 `tools/luck_range_check.py` refuses to interpret a sweep that used it.
 
-**The open question this leaves:** where the damage path gets its CO. The
-movement-cost path at `0x0803A73E` demonstrably reads `[army+0x1D]` and
-`[army+0x1E]`; the damage path's modifier lookup is documented as
-`[co * 128 + unit_type * 4]` without `co`'s provenance ever being traced. That
-trace is now worth doing, because it would also say whether a written CO could
-be made to work by writing whatever it caches instead.
+**The open question this leaves:** what sets `0x03004318`, and whether writing
+it mid-fixture is enough or the game latches CO state earlier. Reading 0 in four
+VS captures says only that those matches had it clear — not which setup option
+clears it. The cheap test writes `0x03004318 = 1` alongside `+0x1D` and predicts
+Max on Tank → Infantry in woods moves from 60-67 to **90-97**; a null there
+means the flag is latched earlier and the fixture has to be built with CO
+abilities already on.

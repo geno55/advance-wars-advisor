@@ -106,13 +106,13 @@ def main():
     print(f"  {len(live)} usable case(s) of {len(s['cases'])}")
 
     if s.get("co_written") is not None:
-        print("\n  !! THIS SWEEP WROTE THE CO, AND THAT DOES NOT WORK.")
-        print("  !! A CO written at a target-select fixture does not reach the")
-        print("  !! damage path -- verified with Max, whose 150/100 on Tank")
-        print("  !! should move the band from 60-67 to 90-97 and does not.")
-        print("  !! Whatever follows describes the FIXTURE's CO, not the")
-        print("  !! written one. Build the fixture with the CO chosen in VS")
-        print("  !! setup. See engine/co.py.\n")
+        print("\n  !! THIS SWEEP WROTE THE CO. That only counts if it also set")
+        print("  !! [0x03004318]. While that byte is clear the damage path")
+        print("  !! substitutes record 1 -- ANDY -- for BOTH sides whatever")
+        print("  !! +0x1D says (DERIVATION 24), and it read 0 in every VS")
+        print("  !! capture so far. Unless this sweep forced it, everything")
+        print("  !! below describes Andy. Re-take with {co_abilities = 1} and")
+        print("  !! check Max moves 60-67 -> 90-97 as the control.\n")
     elif s.get("co_written") is None and a.expect_co is not None:
         print("  !! the sweep records no co_written -- if the fixture was not "
               "already\n  !! this CO, the rolls below belong to a different one")
