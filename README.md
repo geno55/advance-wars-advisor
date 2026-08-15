@@ -337,11 +337,16 @@ data/aw1_army_struct.json army record layout + open CO questions
 data/aw1_co.json          12 CO records, all 12 names measured (Sturm has two)
 data/aw1_unit_stats.json  cost, move, move type, range, vision, fuel, ammo
 
-tests/test_damage.py      39 regression tests
+tests/test_damage.py      50 regression tests
 tests/test_pathing.py     22 regression tests, incl. "no unit-type branches"
 tests/test_threat.py      23 regression tests, incl. the same branch ban
 tests/test_fog.py         32 tests, incl. five real-board oracles and branch ban
-tests/fixtures/           five captured boards + the game's own vision array
+tests/test_corpus.py      13 tests: replay every recorded measurement against
+                          the engine, strikes and counters kept apart
+tests/fixtures/           captured boards, seeded sweeps, and the game's own
+                          vision array
+harness/fixtures/         mGBA save states parked at target-select, so a sweep
+                          is reproducible rather than re-played by hand
 tools/threat_report.py    exposure, per-unit safety, and the coverage grid
 tools/fog_hunt.py         pin the fog flag by diffing labelled RAM probes
 tools/fog_diff.py         our predicted visibility vs the game's own count array
@@ -350,6 +355,7 @@ harness/mgba_spike.lua    write state, drive input, sweep cases unattended
 tools/spike_check.py      sweep vs engine, and the write-vs-play control
 tools/dmg_ingest.py       damage sweep -> observations.csv, with survival report
 tools/rng_fit.py          seed sweep -> the luck distribution it implies
+tools/counter_check.py    the two counterattack hypotheses against a seed sweep
 tests/calibrate.py        hypothesis elimination: --suggest, --explain,
                           --shared-luck, --selftest. Diagnosis is automatic
                           when nothing survives; there is no --diagnose.
