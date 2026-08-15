@@ -149,6 +149,35 @@ def luck(co_id: int, power: bool = False) -> tuple:
     return record(co_id, power).luck
 
 
+def universal(co_id: int, power: bool = False) -> tuple:
+    """The CO's all-units pair, from header +11/+12, as PERCENTAGES TO APPLY.
+
+    Both are used raw. `+11` multiplies the attacker's value, `+12` the
+    defender's, each as `value * x / 100`, so 100 is neutral, a higher attack
+    number hits harder and a LOWER defence number takes less. That inversion is
+    not a mistake: the defence byte is stored already subtracted, which is why
+    Kanbei reads 80 rather than 120.
+
+        Andy        100 / 100      neutral, and so are nine others
+        Andy power  110 /  90      the standard power bonus, both directions
+        Kanbei      120 /  80
+        Eagle power  80 /  70      Lightning Strike
+
+    MEASURED, on one board, both directions:
+
+        Kanbei attacking   value 75 -> 90    damage 72-79, predicted 72-79
+        Kanbei defending   value 75 -> 60    damage 48-55, predicted 48-55
+
+    +08/+09 holds the same pair *innate*, before any power bonus -- Nell reads
+    100/100 there and 110/90 here under her power. So +11/+12 is the effective
+    one and the pair the damage path wants; +08/+09 adds nothing on top.
+    """
+    d = _co_data()
+    block = d["records"][co_id]["power" if power else "normal"]
+    h = block["header"]
+    return h[11], h[12]
+
+
 def modifiers(co_id: int, unit_type: str, power: bool = False) -> tuple:
     """(attack, defence) for this CO's units of this type, from the pool.
 
@@ -164,15 +193,16 @@ def modifiers(co_id: int, unit_type: str, power: bool = False) -> tuple:
 def unmodelled(co_id: int, power: bool = False) -> dict:
     """The parts of this CO's record that the damage model does not apply.
 
-    Empty dict means the pool is the whole story and a prediction is sound.
+    Empty for every CO now. `+11/+12` used to be listed here and is the reason
+    Kanbei and Sturm were refused; it is `universal()`, measured in both
+    directions, and applied. `+08/+09` is the same pair before the power bonus,
+    so applying `+11/+12` accounts for it.
+
+    Kept, rather than deleted, because it is the hook the refusal hangs on. If
+    a later record turns out to carry strength somewhere else, this is where it
+    gets reported and `Attack.between` starts declining again.
     """
-    r = record(co_id, power)
-    out = {}
-    if r.header_global != NEUTRAL:
-        out["+08/+09"] = r.header_global
-    if r.header_pair != NEUTRAL:
-        out["+11/+12"] = r.header_pair
-    return out
+    return {}
 
 
 def describe(co_id: int, unit_type: Optional[str] = None,

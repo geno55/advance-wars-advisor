@@ -254,18 +254,46 @@ class TestEngineBehaviour(unittest.TestCase):
         self.assertEqual(a.co_defense, 100)    # Sami's Tank, defending
         self.assertNotEqual(a.co_defense, 90)  # would be her Infantry's defence
 
-    def test_cos_whose_strength_is_unmodelled_refuse_to_predict(self):
-        """Kanbei has no per-unit modifiers at all -- his 120/120 lives in the
-        record header, which the damage path has never been shown to read. A
-        prediction would silently omit it, so it raises instead."""
+    def test_the_header_pair_is_no_longer_unmodelled(self):
+        """This test used to assert the opposite, and was right to.
+
+        Kanbei has no per-unit modifiers at all -- every entry is 100/100 --
+        and his strength is entirely in header +11/+12, which the damage path
+        had never been shown to read. A quote built from the pool alone would
+        have been neutral, so `Attack.between` refused.
+
+        It is read now, and measured in both directions: Kanbei attacking
+        multiplies the value by 120/100, Kanbei defending by 80/100. So nothing
+        is unmodelled and nothing refuses. See A14."""
         from engine import co as co_mod
         for cid in (6, 10, 11):                     # Kanbei, Sturm, Sturm
-            self.assertTrue(co_mod.unmodelled(cid), cid)
-            with self.assertRaises(co_mod.UnmodelledCO):
-                Attack.between("Tank", "Infantry", attacker_co=cid, defender_co=1)
-        # ...and an explicit override is still allowed, for deliberate work.
+            self.assertEqual(co_mod.unmodelled(cid), {}, cid)
+            a = Attack.between("Tank", "Infantry", attacker_co=cid,
+                               defender_co=1)
+            self.assertNotEqual(a.co_attack, 100,
+                                f"CO {cid} should carry a real attack modifier")
+        # Kanbei specifically: 100 per-unit folded with 120 universal.
+        kanbei = Attack.between("Tank", "Infantry", attacker_co=6, defender_co=1)
+        self.assertEqual(kanbei.co_attack, 120)
+        # ...and defending, his +12 of 80 comes through as the value multiplier.
+        into_kanbei = Attack.between("Tank", "Infantry", attacker_co=1,
+                                     defender_co=6)
+        self.assertEqual(into_kanbei.co_defense, 80)
+        # An explicit override is still allowed, for deliberate work.
         forced = Attack("Tank", "Infantry", co_attack=120, co_defense=100)
         self.assertEqual(forced.co_attack, 120)
+
+    def test_kanbei_matches_the_board_he_was_measured_on(self):
+        """Both directions, against the sweeps. Tank -> Infantry in woods,
+        where a neutral CO is confined to 60-67."""
+        att = resolve(Attack.between("Tank", "Infantry", attacker_co=6,
+                                     defender_co=1, terrain_stars=2),
+                      verified=True)
+        self.assertEqual((att.min_damage, att.max_damage), (72, 79))
+        dfn = resolve(Attack.between("Tank", "Infantry", attacker_co=1,
+                                     defender_co=6, terrain_stars=2),
+                      verified=True)
+        self.assertEqual((dfn.min_damage, dfn.max_damage), (48, 55))
 
     def test_cos_that_are_fully_modelled_do_not_refuse(self):
         from engine import co as co_mod

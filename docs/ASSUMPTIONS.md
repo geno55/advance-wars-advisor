@@ -714,3 +714,56 @@ foot units, Eagle 90 on air — with `co_abilities = 1` set.
 `tests/test_corpus.py` replays it. The replay had to learn the gate from A12:
 it computes the CO the game *actually used*, which is Andy for any sweep that
 wrote a CO without also setting `0x03004318`.
+
+### A14. The universal pair at +11/+12, and where the defence modifier lands — **MEASURED**
+
+Two sweeps on one board, Tank → Infantry in woods, where a neutral CO is
+confined to 60–67. Both with `co_abilities = 1`, without which the damage path
+uses Andy regardless (A12).
+
+| | value | predicted | observed |
+|---|---|---|---|
+| Kanbei attacking (`+11` = 120) | 75 → **90** | 72–79 | **72–79** |
+| Kanbei defending (`+12` = 80) | 75 → **60** | see below | **48–55** |
+
+**The attacking half lifts the refusal.** Kanbei's per-unit entries are all
+100/100 and his strength is entirely in the header, so `Attack.between` used to
+decline rather than quote him as neutral. `+11/+12` is now read as a pair of
+percentages applied raw — `value * x / 100` — so 100 is neutral, a higher
+attack number hits harder, and a *lower* defence number takes less, because the
+defence byte is stored already subtracted. `unmodelled()` returns empty for
+every CO and the refusal is gone. `+08/+09` holds the same pair before any
+power bonus, so applying `+11/+12` accounts for it.
+
+**The defending half changed the formula's shape**, which was not the point of
+the experiment. Three candidates existed:
+
+| where the defence modifier goes | predicts |
+|---|---|
+| nowhere, ignored | 60–67 |
+| added inside the terrain bracket, `200 − (co_def + stars·hp)` | 45–50 |
+| **multiplying the value, before luck** | **48–55** |
+
+The engine had used the second form since the beginning. It is wrong, and no
+measurement could have said so: at `co_def = 100` it is arithmetically
+identical to the third, and all 75 corpus rows and all twelve earlier sweeps
+were neutral on defence. Kanbei is the first defender that separates them.
+
+So the strike is now two truncating multiplies on the value — attacker's side,
+then defender's — exactly the "twice in sequence, attack then defence" that
+`DERIVATION.md` 7 read off `__divsi3` years ago, with the terrain bracket
+reduced to `(100 − stars·hp_d)/100`. `counter_damage` gets the same correction
+for the same reason.
+
+**Measured for the universal half only.** The per-unit defence value is assumed
+to be a multiplier in the same convention — so Max's 110 on indirect defence
+means taking 10% *more*, not less — because it comes from the same table and is
+applied at the same point. No sweep has yet used a CO with a non-100 per-unit
+defence. **Kill it by:** sweeping against Sami's Infantry (90 on foot) or
+Eagle's air (90), with `co_abilities = 1`. If the convention is inverted there,
+the sign of every per-unit defence modifier is wrong.
+
+Also still open: the counter path under a non-neutral CO. `counterattack()`
+raises `CounterModifiersUnknown` rather than guess, because the ROM folds the
+defence byte in at a different point there and every counter ever recorded was
+neutral on both sides.

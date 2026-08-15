@@ -37,7 +37,8 @@ from engine.damage import (Attack, counter_damage, damage_for_luck,  # noqa: E40
 # both tiles recorded.
 UNRESOLVED_ATTACKER_TERRAIN = ("city100.json", "city81.json")
 
-WIDE_LUCK = ("nell_wood_luck.json", "sonja_wood_luck.json")
+WIDE_LUCK = ("nell_wood_luck.json", "sonja_wood_luck.json", "kanbei_att_wood.json",
+          "kanbei_def_wood.json")
 
 SWEEPS = ("counter.json", "att57.json", "def81.json", "def85.json",
           "def65.json", "wood100.json", "wood81.json", "city100.json",
@@ -46,6 +47,27 @@ SWEEPS = ("counter.json", "att57.json", "def81.json", "def85.json",
 
 ROOT = pathlib.Path(__file__).resolve().parent.parent
 FIXTURES = pathlib.Path(__file__).resolve().parent / "fixtures"
+
+
+def _sweep_cos(sweep):
+    """(P1 co id, P2 co id) as the GAME saw them for this sweep.
+
+    co_in_fixture records the CO of the player that was WRITTEN, not P1's, so
+    it cannot fill in the other side. The fixture's own P1 is Andy, id 1, which
+    every sweep that wrote P1 records directly.
+    """
+    if not sweep.get("co_abilities"):
+        return 1, 1                     # gate shut: record 1 for both sides
+    written = sweep.get("co_player", 1)
+    return (sweep["co_written"] if written == 1 else 1,
+            sweep["co_written"] if written == 2 else 1)
+
+
+def _effective_co_defense(sweep, unit_type):
+    """The defender-side multiplier: per-unit defence folded with universal."""
+    from engine import co as co_mod
+    _, p2 = _sweep_cos(sweep)
+    return co_mod.modifiers(p2, unit_type)[1] * co_mod.universal(p2)[1] // 100
 
 
 def _effective_co_attack(sweep, unit_type):
@@ -58,12 +80,8 @@ def _effective_co_attack(sweep, unit_type):
     for the right reason in the wrong place.
     """
     from engine import co as co_mod
-    if not sweep.get("co_abilities"):
-        return 100                      # record 1, neutral on every unit
-    co_id = sweep.get("co_written")
-    if co_id is None:
-        co_id = sweep.get("co_in_fixture", 1)
-    return co_mod.modifiers(co_id, unit_type)[0]
+    p1, _ = _sweep_cos(sweep)
+    return co_mod.modifiers(p1, unit_type)[0] * co_mod.universal(p1)[0] // 100
 
 
 def _effective_luck(sweep):
@@ -72,10 +90,7 @@ def _effective_luck(sweep):
     from engine import co as co_mod
     if not sweep.get("co_abilities"):
         return (LUCK_MIN, LUCK_MAX)
-    co_id = sweep.get("co_written")
-    if co_id is None:
-        co_id = sweep.get("co_in_fixture", 1)
-    return co_mod.luck(co_id)
+    return co_mod.luck(_sweep_cos(sweep)[0])
 
 
 def _stars():
@@ -169,6 +184,7 @@ class TestSeededSweeps(unittest.TestCase):
         lo, hi = _effective_luck(sweep)
         a = Attack(att, dfn, sweep["attacker_hp"], sweep["defender_hp"],
                    def_stars, co_attack=_effective_co_attack(sweep, att),
+                   co_defense=_effective_co_defense(sweep, dfn),
                    luck_min=lo, luck_max=hi)
         model = {damage_for_luck(a, lk) for lk in range(lo, hi + 1)}
         observed = Counter(c["damage"] for c in sweep["cases"]
@@ -292,6 +308,32 @@ class TestSeededSweeps(unittest.TestCase):
         self.assertEqual(bands["wood100.json"], (60, 67))          # Andy
         self.assertEqual(bands["nell_wood_luck.json"], (60, 75))   # Nell
         self.assertEqual(bands["sonja_wood_luck.json"], (48, 67))  # Sonja
+
+    def test_kanbei_attacking_applies_the_universal_pair(self):
+        """Kanbei's per-unit entries are all 100/100; everything he has is in
+        header +11/+12. A model reading only the pool quotes him as Andy at
+        60-67, which is why he was refused rather than answered. He lands
+        72-79: the value multiplied by 120/100 before luck."""
+        sweep, observed = self._check("kanbei_att_wood.json")
+        self.assertEqual((sweep["co_written"], sweep["co_player"]), (6, 1))
+        self.assertEqual((min(observed), max(observed)), (72, 79))
+        self.assertEqual(_effective_co_attack(sweep, "Tank"), 120)
+
+    def test_kanbei_defending_multiplies_the_value_not_the_bracket(self):
+        """The one that changed the formula's shape.
+
+        His +12 reads 80. Three candidates: ignore it (60-67), add it inside
+        the terrain bracket as the engine used to (45-50), or multiply the
+        value before luck (48-55). The game said 48-55.
+
+        That matters beyond Kanbei. `co_def` had sat inside the bracket since
+        the beginning and no measurement could object, because at 100 the two
+        forms are identical and every observation before this one was
+        neutral."""
+        sweep, observed = self._check("kanbei_def_wood.json")
+        self.assertEqual((sweep["co_written"], sweep["co_player"]), (6, 2))
+        self.assertEqual((min(observed), max(observed)), (48, 55))
+        self.assertEqual(_effective_co_defense(sweep, "Infantry"), 80)
 
     def test_defender_at_85_agrees(self):
         sweep, observed = self._check("def85.json")

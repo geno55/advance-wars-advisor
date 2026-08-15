@@ -189,14 +189,24 @@ def _terms(base, hp_a, co_atk, co_def, stars, hp_d):
     # time -- "with a neutral CO the truncation is a no-op" -- and it took the
     # first non-neutral measurement to make the difference visible.
     #
-    # The DEFENCE modifier is folded into `dfn` below and is NOT truncated
-    # separately. The disassembly applies its divide twice in sequence, so it
-    # probably should be, but co_def has been 100 in every measurement so far,
-    # so there is nothing to fit and this stays as it is rather than guessing
-    # a second truncation point. See ASSUMPTIONS A13.
+    # The DEFENCE modifier is the second of the two divides the disassembly
+    # does in sequence -- on the VALUE, before luck, not inside the terrain
+    # bracket where this used to put it.
+    #
+    # Measured with Kanbei defending, whose +12 reads 80: value 75 -> 60, and
+    # damage 48..55. The old additive form predicted 45..50 and a product of
+    # separate factors outside the luck term predicted 48..53. Neither. What
+    # fits is the multiply landing on the value alongside the attacker's, so
+    # luck is added AFTER it and then scaled by terrain alone.
+    #
+    # `co_def` is therefore a percentage to apply, not a defence stat: 100 is
+    # neutral and LOWER takes less damage, because the byte is stored already
+    # subtracted. At 100 this is identical to the old bracket, which is why 75
+    # corpus rows and twelve sweeps could not tell the two apart.
     atk = base * co_atk // 100
+    atk = atk * co_def // 100
     hp = Fraction(hp_a, 10)
-    dfn = Fraction(200 - (co_def + stars * hp_d), 100)
+    dfn = Fraction(100 - stars * hp_d, 100)
     return atk, hp, dfn
 
 
@@ -346,9 +356,23 @@ class Attack:
         lo, hi = _co.luck(attacker_co, attacker_power)
         kw.setdefault("luck_min", lo)
         kw.setdefault("luck_max", hi)
+        # Each side is its per-unit modifier folded with its all-units pair.
+        # Kanbei is the reason: his per-unit entries are all 100/100 and his
+        # strength is entirely in +11/+12, so a quote built from the pool alone
+        # was neutral and this class used to refuse rather than say so.
+        #
+        # Measured for the universal half in both directions. The PER-UNIT half
+        # being a multiplier in the same convention -- so Max's 110 on indirect
+        # defence means taking 10% MORE, not less -- follows the same table and
+        # the same application point, but no sweep has yet used a CO with a
+        # non-100 per-unit DEFENCE value. See A14.
+        a_uni, d_uni = _co.universal(attacker_co, attacker_power)[0], \
+            _co.universal(defender_co, defender_power)[1]
         return cls(attacker=attacker, defender=defender,
-                   co_attack=modifiers(attacker_co, attacker, attacker_power)[0],
-                   co_defense=modifiers(defender_co, defender, defender_power)[1],
+                   co_attack=modifiers(attacker_co, attacker,
+                                       attacker_power)[0] * a_uni // 100,
+                   co_defense=modifiers(defender_co, defender,
+                                        defender_power)[1] * d_uni // 100,
                    **kw)
 
 
@@ -468,10 +492,14 @@ def counter_damage(base: int, survivor_hp: int, co_defense: int,
     would have countered for 3). The recorded Mech at 57 HP: raw internal gives
     (55*57/100)*90/100 = 27 against the observed 27, where a `floor` display
     rule gives 24. And the ROM instruction sequence says raw internal directly.
+
+    The defence modifier is applied the way the strike path applies it -- a
+    truncating multiply on the value, then the terrain bracket -- rather than
+    added inside the bracket. Identical at co_defense=100, which is every
+    counter ever recorded; see A14 for the measurement that separated them.
     """
-    return max(0, min((base * survivor_hp // 100)
-                      * (200 - (co_defense + target_stars * display_hp(target_hp)))
-                      // 100,
+    v = (base * survivor_hp // 100) * co_defense // 100
+    return max(0, min(v * (100 - target_stars * display_hp(target_hp)) // 100,
                       target_hp))
 
 

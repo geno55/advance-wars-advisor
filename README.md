@@ -39,8 +39,15 @@ paid off — see "What got caught" below.
   blind to the question: every first strike in it has the attacker at 100 or 9
   internal HP, where all four candidate rules agree. It read `floor_min1` for
   months on the strength of two rows that were counterattacks. See A5.
-- CO modifiers filled from the ROM record, and refused where a CO's strength
-  lives in header fields the damage path has never been shown to read.
+- CO modifiers filled from the ROM record: the per-unit pool **and** the
+  all-units pair at header `+11/+12`, both applied as truncating multiplies on
+  the value. Measured with Kanbei in both directions — attacking 72–79,
+  defending 48–55, where a neutral CO is confined to 60–67. That lifted the
+  refusal: **every CO now quotes**, Kanbei and both Sturms included.
+- **The defence modifier multiplies the value before luck**, it is not added
+  inside the terrain bracket. The engine had it in the bracket from the start
+  and nothing could object, because the two forms are identical at 100 and
+  every measurement before Kanbei was neutral on defence. A14.
 - **The CO attack modifier truncates** before anything else touches the value,
   as `__divsi3` in the damage path always said. The engine carried it as an
   exact fraction for the project's whole life and no test could tell, because
@@ -58,7 +65,7 @@ paid off — see "What got caught" below.
   range, not an envelope, so "cannot kill" is as reliable as "will kill".
   Settled by crossing two independent eliminations that neither could finish
   alone -- see `DERIVATION.md` 17.
-- 57 regression tests, plus 18 replaying the measurements.
+- 58 regression tests, plus 20 replaying the measurements.
 
 **Milestone 1 — the state reader. Done.**
 
@@ -350,11 +357,11 @@ data/aw1_army_struct.json army record layout + open CO questions
 data/aw1_co.json          12 CO records, all 12 names measured (Sturm has two)
 data/aw1_unit_stats.json  cost, move, move type, range, vision, fuel, ammo
 
-tests/test_damage.py      57 regression tests
+tests/test_damage.py      58 regression tests
 tests/test_pathing.py     22 regression tests, incl. "no unit-type branches"
 tests/test_threat.py      23 regression tests, incl. the same branch ban
 tests/test_fog.py         32 tests, incl. five real-board oracles and branch ban
-tests/test_corpus.py      18 tests: replay every recorded measurement against
+tests/test_corpus.py      20 tests: replay every recorded measurement against
                           the engine, strikes and counters kept apart
 tests/fixtures/           captured boards, seeded sweeps, and the game's own
                           vision array
