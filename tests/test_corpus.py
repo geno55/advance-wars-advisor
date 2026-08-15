@@ -37,9 +37,12 @@ from engine.damage import (Attack, counter_damage, damage_for_luck,  # noqa: E40
 # both tiles recorded.
 UNRESOLVED_ATTACKER_TERRAIN = ("city100.json", "city81.json")
 
+WIDE_LUCK = ("nell_wood_luck.json", "sonja_wood_luck.json")
+
 SWEEPS = ("counter.json", "att57.json", "def81.json", "def85.json",
           "def65.json", "wood100.json", "wood81.json", "city100.json",
-          "city81.json", "max_wood_co.json")
+          "city81.json", "max_wood_co.json", "nell_wood_luck.json",
+          "sonja_wood_luck.json")
 
 ROOT = pathlib.Path(__file__).resolve().parent.parent
 FIXTURES = pathlib.Path(__file__).resolve().parent / "fixtures"
@@ -61,6 +64,18 @@ def _effective_co_attack(sweep, unit_type):
     if co_id is None:
         co_id = sweep.get("co_in_fixture", 1)
     return co_mod.modifiers(co_id, unit_type)[0]
+
+
+def _effective_luck(sweep):
+    """The luck range the GAME rolled for this sweep. Same gate as the
+    modifiers: no flag, no CO, so the standard 0..9."""
+    from engine import co as co_mod
+    if not sweep.get("co_abilities"):
+        return (LUCK_MIN, LUCK_MAX)
+    co_id = sweep.get("co_written")
+    if co_id is None:
+        co_id = sweep.get("co_in_fixture", 1)
+    return co_mod.luck(co_id)
 
 
 def _stars():
@@ -151,22 +166,48 @@ class TestSeededSweeps(unittest.TestCase):
         att = by_row[sweep["attacker_type"] - 1]
         dfn = by_row[sweep["defender_type"] - 1]
         def_stars = terr["terrain"][str(sweep["defender_terrain"])]["stars"]
+        lo, hi = _effective_luck(sweep)
         a = Attack(att, dfn, sweep["attacker_hp"], sweep["defender_hp"],
-                   def_stars, co_attack=_effective_co_attack(sweep, att))
-        model = {damage_for_luck(a, lk) for lk in range(LUCK_MIN, LUCK_MAX + 1)}
+                   def_stars, co_attack=_effective_co_attack(sweep, att),
+                   luck_min=lo, luck_max=hi)
+        model = {damage_for_luck(a, lk) for lk in range(lo, hi + 1)}
         observed = Counter(c["damage"] for c in sweep["cases"]
                            if not c["destroyed"])
         return model, observed
 
-    def _check(self, name):
+    def _check(self, name, exact=True):
+        """`exact` asserts the model's damage set and the game's are equal.
+
+        That is the right test at 64 seeds over a 10-wide roll: every roll is
+        near-certain to come up, so a value the model predicts and the game
+        never produced is a real disagreement. It is the WRONG test once a CO
+        widens the roll. Nell rolls 20 values and Sonja 25, so a given roll is
+        missed with probability (19/20)^64 = 3.8% and (24/25)^64 = 7.3%, and
+        with several singletons in the band a gap is likelier than not.
+
+        What holds either way, and is asserted either way, is that the game
+        never produced a damage the model cannot: an EXTRA is always a failure,
+        a missing singleton in a wide band is arithmetic about sampling.
+        """
         sweep = self._load(name)
         self.assertTrue(sweep["controls"]["passed"], f"{name}: control failed")
         self.assertEqual(sweep["controls"]["seed"], sweep["controls"]["identity"],
                          f"{name}: the identity write changed the result, so "
                          "nothing measured with it means anything")
         model, observed = self._replay(sweep)
-        self.assertEqual(set(observed), model,
-                         f"{name}: the model's damage set and the game's differ")
+        extra = set(observed) - model
+        self.assertEqual(extra, set(),
+                         f"{name}: the game produced {sorted(extra)}, which the "
+                         f"model cannot")
+        if exact:
+            self.assertEqual(set(observed), model,
+                             f"{name}: the model's damage set and the game's differ")
+        else:
+            missing = model - set(observed)
+            self.assertLessEqual(
+                len(missing), 2,
+                f"{name}: {len(missing)} model values unrolled ({sorted(missing)}), "
+                f"too many to be sampling")
         return sweep, observed
 
     def test_attacker_at_57_says_ceil(self):
@@ -215,6 +256,42 @@ class TestSeededSweeps(unittest.TestCase):
         no_flag = dict(sweep, co_abilities=None)
         self.assertEqual(_effective_co_attack(no_flag, "Tank"), 100)
         self.assertEqual(_effective_co_attack(sweep, "Tank"), 150)
+
+    def test_nells_roll_reaches_19(self):
+        """The measurement that turned A11 from a reading of two bytes into a
+        fact. Nell carries +06=10, which the rule reads as 0..19; on this board
+        that is damage 60..75 where a standard CO caps at 67. The sweep saw 75,
+        which requires a roll of 19 and no standard CO can produce."""
+        sweep, observed = self._check("nell_wood_luck.json", exact=False)
+        self.assertEqual((sweep["co_written"], sweep["co_abilities"]), (0, 1))
+        self.assertEqual(max(observed), 75)
+        above = {d for d in observed if d > 67}
+        self.assertTrue(above, "no damage above the standard band's 67")
+
+    def test_sonjas_roll_goes_negative(self):
+        """The half that actually mattered. Sonja's symmetric +06=15/+07=15
+        reads as -15..9 -- a window the same width as everyone else's, slid
+        down -- and a negative roll lowers the MINIMUM, which is what made
+        quoting her as a standard CO report kills that will not land. Damage
+        below 60 requires it, and the sweep went to 48."""
+        sweep, observed = self._check("sonja_wood_luck.json", exact=False)
+        self.assertEqual((sweep["co_written"], sweep["co_abilities"]), (7, 1))
+        self.assertEqual(min(observed), 48)
+        below = {d for d in observed if d < 60}
+        self.assertTrue(below, "no damage below the standard band's 60")
+
+    def test_the_three_cos_separate_on_one_board(self):
+        """Same fixture, same seeds, three COs: the bands barely overlap and
+        each is exactly what its record predicts. Nothing but +0x1D and the
+        gate differed."""
+        bands = {}
+        for name in ("wood100.json", "nell_wood_luck.json",
+                     "sonja_wood_luck.json"):
+            _, observed = self._replay(self._load(name))
+            bands[name] = (min(observed), max(observed))
+        self.assertEqual(bands["wood100.json"], (60, 67))          # Andy
+        self.assertEqual(bands["nell_wood_luck.json"], (60, 75))   # Nell
+        self.assertEqual(bands["sonja_wood_luck.json"], (48, 67))  # Sonja
 
     def test_defender_at_85_agrees(self):
         sweep, observed = self._check("def85.json")

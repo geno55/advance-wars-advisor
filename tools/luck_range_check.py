@@ -70,11 +70,16 @@ def main():
                  "frame-delay sweep, whose rolls are clustered rather than "
                  "controlled")
 
+    # The CO the GAME used, not the one that was asked for. With [0x03004318]
+    # clear the damage path substitutes record 1, Andy, for both sides whatever
+    # +0x1D holds (DERIVATION 24), so a sweep that wrote a CO without also
+    # forcing that flag measured Andy and must not be read as anything else.
+    gated_out = s.get("co_written") is not None and not s.get("co_abilities")
     co_id = a.expect_co
     if co_id is None:
-        co_id = s.get("co_written")
+        co_id = 1 if gated_out else s.get("co_written")
     if co_id is None:
-        co_id = s.get("co_in_fixture")
+        co_id = s.get("co_in_fixture") if s.get("co_abilities") else 1
     if co_id is None:
         sys.exit("no CO recorded in the sweep and none given; pass --expect-co")
 
@@ -105,14 +110,14 @@ def main():
     print(f"  ROM-derived prediction: {predicted[0]}..{predicted[1]}")
     print(f"  {len(live)} usable case(s) of {len(s['cases'])}")
 
-    if s.get("co_written") is not None:
-        print("\n  !! THIS SWEEP WROTE THE CO. That only counts if it also set")
-        print("  !! [0x03004318]. While that byte is clear the damage path")
-        print("  !! substitutes record 1 -- ANDY -- for BOTH sides whatever")
-        print("  !! +0x1D says (DERIVATION 24), and it read 0 in every VS")
-        print("  !! capture so far. Unless this sweep forced it, everything")
-        print("  !! below describes Andy. Re-take with {co_abilities = 1} and")
-        print("  !! check Max moves 60-67 -> 90-97 as the control.\n")
+    if gated_out:
+        print("\n  !! THIS SWEEP WROTE A CO BUT DID NOT SET [0x03004318], so")
+        print("  !! the damage path used record 1 -- ANDY -- for both sides")
+        print("  !! whatever +0x1D held (DERIVATION 24). Scored as Andy, which")
+        print("  !! is what it measured. Re-take with {co_abilities = 1}.\n")
+    elif s.get("co_written") is not None:
+        print(f"  CO written and the gate forced, so the game used record "
+              f"{s['co_written']}")
     elif s.get("co_written") is None and a.expect_co is not None:
         print("  !! the sweep records no co_written -- if the fixture was not "
               "already\n  !! this CO, the rolls below belong to a different one")
@@ -179,11 +184,18 @@ def main():
               f"extension\nis real and not an artefact of reading two bytes. "
               f"Witnessed {lo}..{hi}\nagainst a predicted "
               f"{predicted[0]}..{predicted[1]}.")
-        if lo > predicted[0] or hi < predicted[1]:
-            print(f"\nThe ends are not pinned: nothing was seen at "
-                  f"{predicted[0]} or {predicted[1]}. More seeds would "
-                  f"narrow\nthat, though a uniform draw makes the extremes the "
-                  f"rarest thing to see.")
+        unseen = ([str(predicted[0])] if lo > predicted[0] else []) + \
+                 ([str(predicted[1])] if hi < predicted[1] else [])
+        if unseen:
+            print(f"\nEnd(s) not pinned: nothing was seen at "
+                  f"{' or '.join(unseen)}, so the range is confirmed to EXTEND "
+                  f"past\n0..9 without its exact limit being witnessed. More "
+                  f"seeds would narrow that;\na uniform draw makes the "
+                  f"extremes the rarest thing to see.")
+        else:
+            print(f"\nBoth ends witnessed: {predicted[0]} and {predicted[1]} "
+                  f"each appeared, so the range is\npinned exactly, not merely "
+                  f"shown to extend.")
         return 0
 
     print(f"NOT SETTLED. Every witnessed roll ({lo}..{hi}) falls inside the "

@@ -51,14 +51,14 @@ paid off — see "What got caught" below.
   `uniform(0, 9 + good) - bad`. Ten records carry 0/0 and roll 0..9; Nell reads
   0..19 (0..59 powered) and Sonja **-15..9**. Sonja's is a correctness fix, not
   a refinement: a negative roll lowers the *minimum*, so quoting her as a
-  standard CO reported guaranteed kills that will not land. ROM-derived and
-  community-corroborated, **not yet witnessed in a sweep** — the obvious way to
-  test it turned out not to work, see A12. Kill conditions A11, A12.
+  standard CO reported guaranteed kills that will not land. **Measured**: on one
+  board, Nell reached damage 75 (a roll of 19) and Sonja 48 (a roll of −13),
+  where a standard CO is confined to 60–67. A11.
 - **The formula is determined: `luck_after_hp`.** `resolve()` returns an exact
   range, not an envelope, so "cannot kill" is as reliable as "will kill".
   Settled by crossing two independent eliminations that neither could finish
   alone -- see `DERIVATION.md` 17.
-- 57 regression tests, plus 15 replaying the measurements.
+- 57 regression tests, plus 18 replaying the measurements.
 
 **Milestone 1 — the state reader. Done.**
 
@@ -354,7 +354,7 @@ tests/test_damage.py      57 regression tests
 tests/test_pathing.py     22 regression tests, incl. "no unit-type branches"
 tests/test_threat.py      23 regression tests, incl. the same branch ban
 tests/test_fog.py         32 tests, incl. five real-board oracles and branch ban
-tests/test_corpus.py      15 tests: replay every recorded measurement against
+tests/test_corpus.py      18 tests: replay every recorded measurement against
                           the engine, strikes and counters kept apart
 tests/fixtures/           captured boards, seeded sweeps, and the game's own
                           vision array

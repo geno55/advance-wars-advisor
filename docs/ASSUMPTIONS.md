@@ -516,7 +516,7 @@ somewhere later in the animation. Nothing here depends on it -- the reads are
 taken after the exchange has settled -- but a live reader polling mid-move would
 need to know.
 
-### A11. Per-CO luck comes from the record's +06/+07 bytes
+### A11. Per-CO luck comes from the record's +06/+07 bytes — **CONFIRMED**
 
 `engine/damage.py` rolled a flat 0..9 for every CO. Two of the twelve records
 say otherwise, at header `+06` and `+07`:
@@ -540,13 +540,32 @@ as everybody else's, slid downward — which is what a luck penalty should look
 like. The rule then reproduces Nell's two ranges for free.
 
 Those are also exactly the ranges the community documents. Two sources agreeing
-on a rule that neither states outright is worth a great deal, but note what it
-is not: nobody has yet seen the game produce a roll outside 0..9. The bytes are
-ROM-extracted; the *rule mapping bytes to rolls* is interpretation.
+on a rule that neither states outright was worth a great deal, and the game has
+now been seen to agree with both.
 
-**Applied anyway, deliberately.** For Sonja the alternative is worse than being
-unverified: a −15 roll lowers the minimum, so treating her as standard reports
-guaranteed kills that will not land. On Tank → Infantry alone there are 15
+**Measured.** One fixture, Tank → Infantry in woods, three COs written with
+`co_abilities = 1` so the write actually reaches the damage path (A12):
+
+| CO | predicted damage | observed | witness |
+|---|---|---|---|
+| Andy | 60–67 | 60–67 | — |
+| Nell | 60–75 | **60–75** | damage 75 needs a roll of **19** |
+| Sonja | 48–67 | **48–67** | damage 48 needs a roll of **−13** or lower |
+
+A standard CO cannot exceed 67 on this board or fall below 60, so each result
+is outside the band by construction, not by inference. Nell's top is pinned
+exactly — a roll of 19 was witnessed. Sonja's floor is not: the lowest roll
+seen was −13, so her range is confirmed to extend below zero without −15 itself
+being observed.
+
+One model value went unrolled in each sweep (63 for Nell, 55 for Sonja). At 64
+seeds over 20 and 25 rolls a given roll is missed 3.8% and 7.3% of the time, so
+that is sampling. What matters is that neither sweep produced a damage the
+model *cannot*, which is the direction that would refute it.
+
+**Why it was applied before it was measured.** For Sonja the alternative was
+worse than being unverified: a negative roll lowers the minimum, so treating her
+as standard reports guaranteed kills that will not land. On Tank → Infantry alone there are 15
 defender-HP values where the old model said KILL and hers does not. Nell's error
 ran the safe way — understating her maximum — but Sonja's ran the dangerous way,
 and that asymmetry is the reason this is a correctness fix rather than a
