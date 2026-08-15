@@ -411,6 +411,39 @@ function dmg_seedsweep(fixture, att_slot, def_slot, outpath, nseeds, stride, add
   co_player = co_player or opts.co_player or 1
   -- Gates the CO lookup in the damage path; 0 means "everyone is Andy".
   local co_abilities = opts.co_abilities
+
+  -- BOTH sides at once. A single `co` sets one player and leaves the other on
+  -- whatever the fixture holds. That is fine while only one side carries a
+  -- modifier, and it is not fine for the counter path: the counter-ATTACKER's
+  -- attack modifier and its TARGET's defence modifier sit on opposite armies,
+  -- so isolating either one means pinning the other rather than inheriting it.
+  -- The wood fixture holds P1 Andy and P2 Max, so "wrote nothing to P2" is not
+  -- the same as "P2 was neutral" -- exactly the confound A12 is about.
+  --
+  --   dmg_seedsweep(fix, 7, 66, out, {cos = {[1] = 4, [2] = 1},
+  --                                   co_abilities = 1})
+  --
+  -- `co`/`co_player` still works and folds into the same table.
+  local cos = nil
+  if opts.cos then
+    cos = {}
+    for p, v in pairs(opts.cos) do
+      if type(p) ~= "number" or (p ~= 1 and p ~= 2) then
+        console:error("cos keys are players 1 and 2; got " .. tostring(p))
+        return
+      end
+      cos[p] = v
+    end
+  end
+  if co then
+    cos = cos or {}
+    if cos[co_player] and cos[co_player] ~= co then
+      console:error(string.format("cos[%d]=%d contradicts co=%d; pass one or "
+        .. "the other", co_player, cos[co_player], co))
+      return
+    end
+    cos[co_player] = co
+  end
   local def_hp, att_hp = opts.def_hp, opts.att_hp
   if not loadfixture(fixture) then return end
   local a0, d0 = readunit(att_slot), readunit(def_slot)
@@ -418,13 +451,20 @@ function dmg_seedsweep(fixture, att_slot, def_slot, outpath, nseeds, stride, add
   console:log(string.format("seeding 0x%08X (reads 0x%08X in the fixture)",
     addr, rng_read(addr)))
   local co_in_fixture = coid(co_player)
-  if co then
-    coid(co_player, co)
-    if coid(co_player) ~= co then
-      console:error("CO write did not take"); return
+  -- Both sides, always, written or not. A sweep that reports only the player it
+  -- wrote cannot be replayed: the reader has to assume the other army, and the
+  -- fixture's P2 is Max, not Andy.
+  local fix_p1, fix_p2 = coid(1), coid(2)
+  console:log(string.format("fixture COs: P1 = %d, P2 = %d", fix_p1, fix_p2))
+  if cos then
+    for p, v in pairs(cos) do
+      coid(p, v)
+      if coid(p) ~= v then
+        console:error(string.format("CO write did not take for P%d", p)); return
+      end
+      console:log(string.format("P%d CO: fixture had %d, writing %d each case",
+        p, p == 1 and fix_p1 or fix_p2, v))
     end
-    console:log(string.format("P%d CO: fixture had %d, writing %d each case",
-      co_player, co_in_fixture, co))
     -- This alone does NOT change damage while [0x03004318] is clear. The
     -- damage path reads +0x1D (DERIVATION 24) but gates it on that byte, and
     -- falls back to a hardcoded record 1 -- Andy -- for both attacker and
@@ -444,8 +484,16 @@ function dmg_seedsweep(fixture, att_slot, def_slot, outpath, nseeds, stride, add
         emu:read8(CO_ENABLE_ADDR)))
     end
   else
-    console:log(string.format("P%d CO: %d (from the fixture, not written)",
-      co_player, co_in_fixture))
+    console:log("no CO written; both sides keep the fixture's own")
+    -- Not a neutral sweep. With the gate forced and nothing written, the
+    -- fixture's OWN COs go live -- and P2 is Max here. Silence would read as
+    -- "neutral" to anyone scoring this later.
+    if co_abilities and (fix_p1 ~= 1 or fix_p2 ~= 1) then
+      console:log(string.format("  !! the gate is being forced and the fixture "
+        .. "is not neutral (P1 = %d, P2 = %d), so those COs are LIVE in this "
+        .. "sweep. Pass cos = {[1]=1,[2]=1} if you meant neutral.",
+        fix_p1, fix_p2))
+    end
   end
 
   -- One case, from a clean reload. Everything below goes through this, so a
@@ -461,7 +509,9 @@ function dmg_seedsweep(fixture, att_slot, def_slot, outpath, nseeds, stride, add
         return nil
       end
     end
-    if co then coid(co_player, co) end       -- every case, after every reload
+    if cos then                              -- every case, after every reload
+      for p, v in pairs(cos) do coid(p, v) end
+    end
     if co_abilities then emu:write8(CO_ENABLE_ADDR, co_abilities) end
     if writes then
       for slot, v in pairs(writes) do
@@ -596,6 +646,12 @@ function dmg_seedsweep(fixture, att_slot, def_slot, outpath, nseeds, stride, add
     if not r.att_died then cseen[r.counter] = (cseen[r.counter] or 0) + 1 end
   end
 
+  -- The COs and the gate the last case actually ran with, read back out of RAM
+  -- rather than restated from the arguments. A write that stopped taking
+  -- partway through the sweep is otherwise invisible.
+  local ran_p1, ran_p2 = coid(1), coid(2)
+  local ran_gate = emu:read8(CO_ENABLE_ADDR)
+
   local vals = {}
   for v in pairs(seen) do vals[#vals + 1] = v end
   table.sort(vals)
@@ -642,6 +698,13 @@ function dmg_seedsweep(fixture, att_slot, def_slot, outpath, nseeds, stride, add
       co_abilities and tostring(co_abilities) or "null"),
     string.format('  "co_written": %s, "co_player": %d, "co_in_fixture": %d,',
       co and tostring(co) or "null", co_player, co_in_fixture),
+    -- Both armies, read back after the last case, plus the gate byte. These are
+    -- what a replay should score against: `co_written` names one player and
+    -- leaves the other to be assumed, and the assumption "the other side is
+    -- Andy" is false on this fixture.
+    string.format('  "co_p1": %d, "co_p2": %d, "co_gate_after": %d,',
+      ran_p1, ran_p2, ran_gate),
+    string.format('  "co_fixture_p1": %d, "co_fixture_p2": %d,', fix_p1, fix_p2),
     string.format('  "attacker_slot": %d, "defender_slot": %d,', att_slot, def_slot),
     -- The HP the cases actually ran at, read back AFTER the write. Reporting
     -- a0/d0 here would stamp the fixture's values onto every row of a sweep

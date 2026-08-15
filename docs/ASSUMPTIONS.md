@@ -28,9 +28,12 @@ file is that nothing gets to sit in the middle state quietly.
   match ceil's 2:2:1:2:1:2 collapse, not just its endpoints. `display_hp()` and
   `screen_bars()` are kept as separate functions because they answer separate
   questions, but nothing measured separates their values. See A5 and A9a.
-- **The counterattack formula** is `base * raw_internal_hp / 100`, then the
-  defence multiplier -- no display quantisation and no luck roll. Measured: a
-  64-seed sweep held the counter at 2 while the opening ranged 45-50. See A9b.
+- **The counterattack formula** is the strike's arithmetic on the survivor's
+  RAW internal HP, with no display quantisation and no luck roll: both CO
+  modifiers multiply the base, each truncating, then `* survivor / 100`, then
+  the terrain bracket. Measured twice over -- a 64-seed sweep held the counter
+  at 2 while the opening ranged 45-50, and four more located the CO pair across
+  256 cases. See A9b.
 - **Terrain defence stars**, all 20 slots, from the ROM struct array at
   `0x284170` byte `+8` (stored as stars × 10). Asserted against the 14 values
   read off the in-game display. See A3.
@@ -469,12 +472,74 @@ is, and the lower bound is finally a real lower bound. And **A5 is reopened**:
 the two counter rows that refuted `ceil` were fitted with arithmetic the game
 does not use for them, so they never constrained the strike rule at all.
 
-**Still open, and the sweep was blind to all of it.** Where CO modifiers enter
-the counter path — every counter ever recorded was neutral on both sides, so
-`counterattack()` now refuses a non-neutral CO rather than inventing a position
-for it. The target's display rule, because the target was at 100 HP in every
-observation, where all four rules agree. And whether the counter's weapon
-selection follows the same max-base rule as a strike (A1).
+**The CO half — CLOSED, MEASURED.** Both modifiers multiply the **base**, before
+the survivor's HP, each truncating:
+
+    counter = ((base * co_atk // 100) * co_def // 100) * survivor // 100
+              then the terrain bracket on the target's DISPLAY hp
+
+Which is `_terms()` from the strike path, unchanged. The counter is not a
+different formula for the CO pair after all: it is the strike's arithmetic with
+the display-HP term swapped for the survivor's **raw internal** HP and the luck
+roll dropped, and that is the whole of the difference.
+
+**How.** Twelve positions were in play — the attack modifier entering nowhere,
+on the base, or after the survivor's HP, crossed with the defence modifier
+entering nowhere, on the base, after the HP, or inside the terrain bracket. No
+played fixture could separate any of them: every one is Tank → Infantry, so the
+counter is an Infantry's base 5 and lands on 1 or 2 whatever the CO says —
+`sami_def_wood.json` carries Sami's 120 on the counter-attacker and all twelve
+positions still predict 1. Turning the pair round makes the counter a Tank's
+base 75, which separates them.
+
+Four 64-seed sweeps, Infantry → Tank on wood, counter landing on plain, both
+armies written every case with `co_abilities = 1`:
+
+| sweep | counter-attacker | target | observed | what it excludes |
+|---|---|---|---|---|
+| baseline | Andy 100 | Andy 100 | **59–64** | nothing — it fixes the band the others move from |
+| attack | Max 150 | Andy 100 | **89–96** | *no attack modifier* (predicts 59–64, misses all 64) and *attack after the HP term* (89–97, misses 21) |
+| defence | Andy 100 | Sami 90 | **52–57** | *no defence modifier* (59–64), *inside the bracket* (66–72), and **defence after the HP term (53–57, misses 26)** |
+| both | Max 150 | Sami 90 | **79–86** | confirms the pair jointly; cannot separate base-first from value-first, which is why the defence sweep exists |
+
+Only one position survives all four. `tools/counter_check.py` takes several
+sweeps and intersects them, because no single board answers it: the attack sweep
+cannot place the defence modifier and the joint sweep cannot tell the two
+defence orders apart.
+
+**The defence modifier moved, and A14 is why it was in the wrong place.** A14
+located it "on the value" for the strike path — correctly, but the strike's
+value *is* the base, because its HP term is 1 at full health and every
+measurement behind A14 was at full health. Nothing there could tell base from
+value. A counter's HP term is the survivor's raw HP and never 1, so the orders
+separate, and the game reads one point *below* the value-first prediction on
+three survivors in nine. `tests/test_corpus.py` asserts it both ways: the base
+order reproduces all 256 cases and each superseded order visibly fails.
+
+**The defence-side truncation, independently.** A14 already settled it on the
+strike path with the same CO — `75 * 90 // 100 = 67`, not 67.5. The counter says
+it again from the other end: an exact 67.5 predicts 53 where the game says 52.
+Not new, but it is the same constant reached by a different route, which is
+worth more than a second sweep of the same kind.
+
+**Consequences, applied.** `counter_damage()` takes `co_attack`, and
+`counterattack()` no longer raises for a non-neutral CO — it still does when the
+CO ids were never passed, because `a.co_attack`/`a.co_defense` are the opening's
+two fields and the counter needs the other two. `tools/quote.py` now answers
+Max's and Sami's counters instead of refusing them.
+
+**Still open, and these sweeps were blind to it.** The target's display rule,
+because the target was at 100 HP in every observation, where all four rules
+agree. Whether the counter's weapon selection follows the same max-base rule as
+a strike (A1). And whether the CO pair is two truncating divides or one combined
+one — `75*150//100*90//100 = 100` and `75*150*90//10000 = 101` predict the same
+counter on every survivor this board produced.
+
+**The fixture is derived, not played** — `atk_inf_v_tank_wood.ss1` is the wood
+fixture with two unit records rewritten. That it is a real board rather than a
+cached one is a reading, not an argument: the opening came back 4–12, which is
+an Infantry hitting a Tank, where the pre-rewrite matchup gives 60–67. See
+`harness/fixtures/README.md`.
 
 ### A10. A fixture's attacker tile IS the pre-move tile — **CLOSED, MEASURED**
 
@@ -702,13 +767,13 @@ Both the range and the shape. The other six damages appeared 5–8 times each, s
 the two doubled values are unambiguous, and they are the pair only truncation
 produces. `engine/damage.py` now computes `base * co_atk // 100`.
 
-**Not settled: the defence modifier.** The disassembly applies its divide twice
-in sequence, attack then defence, so it very likely truncates too — but the
-engine folds `co_def` into a single combined defence term and `co_def` has been
-100 in every measurement taken. There is nothing to fit, so the second
-truncation point stays unmodelled rather than guessed. **Kill it by:** a sweep
-against a defender whose CO carries a non-100 defence modifier — Sami is 90 on
-foot units, Eagle 90 on air — with `co_abilities = 1` set.
+**The defence modifier: settled since, twice.** This entry left it open because
+`co_def` was 100 in every measurement, so there was nothing to fit, and named
+the kill condition — a sweep against a defender whose CO carries a non-100
+defence modifier, with `co_abilities = 1`. Both halves of that were then run.
+A14's Sami strike sweep gives `75 * 90 // 100 = 67` against an exact 67.5, and
+A9b's counter sweeps reach the same 67 from the other side. **Both modifiers
+truncate**, which is what `__divsi3` said in DERIVATION 7 all along.
 
 `tests/fixtures/max_wood_co.json` is the sweep, checked in, and
 `tests/test_corpus.py` replays it. The replay had to learn the gate from A12:
@@ -768,7 +833,16 @@ an exact 67.5 gives 54–61, and the doubled pair moves with it — 56 and 60
 truncated, 54 and 58 exact, observed 56 (×11) and 60 (×14). **Both sides
 truncate**, which is what `__divsi3` said all along.
 
-Also still open: the counter path under a non-neutral CO. `counterattack()`
-raises `CounterModifiersUnknown` rather than guess, because the ROM folds the
-defence byte in at a different point there and every counter ever recorded was
-neutral on both sides.
+**"On the value" is really "on the base", and this entry could not have seen
+it.** The strike's HP term is the attacker's *display* HP over 10, which is 1 at
+full health — and every measurement behind this entry was at full health. So
+applying the CO pair to the base and applying it to the base×HP product give the
+same number here, always. A9b separated them on the counter path, where the HP
+term is a survivor's raw internal HP and never 1: the pair lands on the **base**.
+The strike formula is unchanged by that — `_terms()` already multiplies the base
+— but the description "two truncating multiplies on the value" was reading more
+into these sweeps than they contain.
+
+The counter path under a non-neutral CO is no longer open either; A9b measured
+it. The guess this entry passed on — that the ROM folds the defence byte in at a
+different point for counters — turned out to be false. It is the same point.

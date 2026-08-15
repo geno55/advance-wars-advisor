@@ -348,7 +348,10 @@ harness/mgba_ramtool.lua  RAM search/diff, map and army inspection, unit records
                           clusters (group survivors into runs)
 harness/record.py         interactive battle recorder with live convergence
 harness/mgba_dmg.lua      damage sweeps: frame-delay and written-seed, plus
-                          RNG read/write/trace
+                          RNG read/write/trace. `cos = {[1]=..,[2]=..}` writes
+                          both armies; every sweep records co_p1/co_p2
+harness/mgba_counter_co.lua  the Infantry-v-Tank board and the four sweeps that
+                          locate the CO modifiers in the COUNTER path
 harness/observations.csv  75 recorded battles (14 by hand, 61 swept)
 
 data/aw1_damage.json      damage matrices + provenance + resolved questions
@@ -379,7 +382,9 @@ tools/dmg_ingest.py       damage sweep -> observations.csv, with survival report
 tools/rng_fit.py          seed sweep -> the luck distribution it implies
 tools/luck_range_check.py invert a sweep to the rolls it witnessed, and
                           score the record's predicted range against them
-tools/counter_check.py    the two counterattack hypotheses against a seed sweep
+tools/counter_check.py    counterattack hypotheses against a seed sweep: the
+                          shape (settled) and where the CO modifiers enter
+                          (open). --predict, --selftest
 tests/calibrate.py        hypothesis elimination: --suggest, --explain,
                           --shared-luck, --selftest. Diagnosis is automatic
                           when nothing survives; there is no --diagnose.
@@ -542,9 +547,10 @@ damage back into rolls and distinguishes "unlucky sample" from "wrong model".
   searching for the values never would have. See `DERIVATION.md` section 12.
 - ~~**CO modifier selection**~~ — solved. Records are 292 bytes at `0x284A30`,
   and all twelve are named by writing army `+0x1D` and reading the screen.
-  `engine/co.py` fills `co_attack`/`co_defense` from the per-unit pool. It
-  refuses to quote Kanbei or Sturm, whose strength lives in header fields the
-  damage path has never been shown to read — a prediction would be ~20% low.
+  `engine/co.py` fills `co_attack`/`co_defense` from the per-unit pool, and the
+  header pair at `+11`/`+12` on top of it — measured with Kanbei, so the
+  refusal that used to cover him and Sturm is gone and `unmodelled()` is empty
+  for all twelve. See A14.
   The "more records than COs" puzzle is answered: **Sturm has two**, records 10
   and 11, both reporting as Sturm on screen and both using a movement table in
   which every passable terrain costs 1. That was predicted from the duplicate
@@ -626,6 +632,25 @@ confident inference overturned by a measurement:
   offset and the search reported, confidently, that nothing was there. The
   companion assumption — that a mask is a *bitmap* — was equally wrong; it is a
   byte per tile, like the terrain map it sits beside.
+
+- **"The CO modifiers multiply the value."** They multiply the *base*. On a
+  first strike there is no difference to find: the HP term is the attacker's
+  display HP over 10, which is exactly 1 at full health, and every measurement
+  behind A14 was at full health. So the two orders were the same arithmetic and
+  the description picked one without noticing there was a choice. A counter's HP
+  term is a survivor's raw internal HP and never 1, which separates them — and
+  the game reads one point below the value-first prediction on three survivors
+  in nine. The variable that decides it had been pinned at the single value
+  where the question disappears, which is the same trap as `floor_min1` above,
+  found twice in the same formula from opposite ends.
+- **"The ROM folds the defence byte in at a different point for counters."**
+  Carried in A9b for months as the reason a counter could not be quoted under a
+  non-neutral CO. It is the same point. The counter turned out to be the strike's
+  own arithmetic with the display-HP term swapped for raw survivor HP and the
+  luck roll dropped, so the thing that looked like a second formula was one
+  substitution. The refusal it justified was still right to be there — the
+  numbers were genuinely unmeasured — but the stated reason was invented, and it
+  is what made the question look harder than it was.
 
 The pattern: the tell was almost always a value that was *impossible for the
 domain* — ammo 160 on an infantryman, fuel 189 on a tank, 23 HP bars — rather

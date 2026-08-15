@@ -477,8 +477,14 @@ def fights_at_contact(unit_type: str) -> bool:
 
 
 def counter_damage(base: int, survivor_hp: int, co_defense: int,
-                   target_stars: int, target_hp: int) -> int:
+                   target_stars: int, target_hp: int, *,
+                   co_attack: int = 100) -> int:
     """The counterattack's own formula. MEASURED -- see ASSUMPTIONS A9b.
+
+    `co_attack` is keyword-only, and late, because it arrived after the rest:
+    every call written before it was measured is neutral and stays correct
+    where it stands, with no chance of a positional argument sliding into the
+    wrong slot.
 
     A counter is not a second strike. The game overwrites the scaled value the
     strike path computed (`0x080234DA-0x080234F6`) with the survivor's **raw
@@ -493,12 +499,24 @@ def counter_damage(base: int, survivor_hp: int, co_defense: int,
     (55*57/100)*90/100 = 27 against the observed 27, where a `floor` display
     rule gives 24. And the ROM instruction sequence says raw internal directly.
 
-    The defence modifier is applied the way the strike path applies it -- a
-    truncating multiply on the value, then the terrain bracket -- rather than
-    added inside the bracket. Identical at co_defense=100, which is every
-    counter ever recorded; see A14 for the measurement that separated them.
+    BOTH CO modifiers land on the BASE, before the survivor's HP, in the same
+    order and with the same two truncations the strike path uses -- MEASURED,
+    four 64-seed sweeps on an Infantry-v-Tank board, 256 cases, see A9b.
+
+    So the counter is not a different formula for the CO pair. It is `_terms()`
+    with the strike's display-HP term swapped for the survivor's raw internal HP
+    and the luck roll dropped, which is the whole of the difference.
+
+    The defence modifier moving here from the value to the base is the part that
+    took a measurement rather than an argument. A14 located it "on the value"
+    for the strike, and the strike's value IS the base -- its HP term is 1 at
+    full health, so the two orders are indistinguishable there. A counter's HP
+    term is the survivor's raw HP and never 1, which separates them: with Sami
+    countered at 90 defence, base-first reproduces all 64 cases and value-first
+    reads one point high on three survivors in nine.
     """
-    v = (base * survivor_hp // 100) * co_defense // 100
+    atk = (base * co_attack // 100) * co_defense // 100
+    v = atk * survivor_hp // 100
     return max(0, min(v * (100 - target_stars * display_hp(target_hp)) // 100,
                       target_hp))
 
@@ -558,23 +576,27 @@ def counterattack(a: Attack, variant: str = DEFAULT_VARIANT,
     if (attacker_co is None) != (defender_co is None):
         raise ValueError("pass both attacker_co and defender_co, or neither -- "
                          "one alone cannot fill in the return strike")
-    co_a = a.co_attack if attacker_co is None else None
     if attacker_co is not None:
         back = Attack.between(a.defender, a.attacker, defender_co, attacker_co,
                               attacker_power=defender_power,
                               defender_power=attacker_power)
         co_a, co_d = back.co_attack, back.co_defense
     else:
+        # Only `a` to go on, and its two fields are the OPENING's: the
+        # defending CO's DEFENCE modifier where the counter needs its ATTACK
+        # modifier, indexed by a different unit. Neutral is the one case where
+        # that does not matter, because everything is 100 either way.
         co_a, co_d = a.co_defense, a.co_attack
-    if (co_a, co_d) != (NEUTRAL_CO, NEUTRAL_CO):
-        raise CounterModifiersUnknown(
-            f"this counter carries CO modifiers ({co_a}/{co_d}), and where they "
-            "enter the COUNTER path has never been observed -- every counter "
-            "ever recorded was neutral on both sides, and the ROM folds the "
-            "defence byte into a different position than the strike path does. "
-            "A quote would be inventing the one number that matters. See "
-            "ASSUMPTIONS A9b; record a counter under a non-neutral CO to settle "
-            "it.")
+        if (co_a, co_d) != (NEUTRAL_CO, NEUTRAL_CO):
+            raise CounterModifiersUnknown(
+                f"this counter carries CO modifiers ({co_a}/{co_d}) and cannot "
+                "be derived from the opening attack alone: `a.co_attack` and "
+                "`a.co_defense` are the attacking CO's attack and the "
+                "defending CO's defence, and the return strike needs the other "
+                "two fields, each indexed by the other unit. Pass attacker_co "
+                "and defender_co and both are looked up properly. Where the "
+                "modifiers enter is no longer the problem -- that is measured, "
+                "see ASSUMPTIONS A9b.")
 
     # The counter carries no luck of its own, but the SURVIVOR does: which
     # defender is left depends on the opening roll. So walk the opening's luck
@@ -590,7 +612,8 @@ def counterattack(a: Attack, variant: str = DEFAULT_VARIANT,
         if survivor <= 0:
             continue                      # dead on this roll: no counter at all
         dmgs.append(counter_damage(w.base, survivor, co_d,
-                                   attacker_stars, a.attacker_hp))
+                                   attacker_stars, a.attacker_hp,
+                                   co_attack=co_a))
     if not dmgs:
         return None                       # guaranteed kill on every roll
 

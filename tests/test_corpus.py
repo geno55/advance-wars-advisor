@@ -43,7 +43,14 @@ WIDE_LUCK = ("nell_wood_luck.json", "sonja_wood_luck.json", "kanbei_att_wood.jso
 SWEEPS = ("counter.json", "att57.json", "def81.json", "def85.json",
           "def65.json", "wood100.json", "wood81.json", "city100.json",
           "city81.json", "max_wood_co.json", "nell_wood_luck.json",
-          "sonja_wood_luck.json")
+          "sonja_wood_luck.json",
+          "counter_co_1_baseline.json", "counter_co_2_attack.json",
+          "counter_co_3_defence.json", "counter_co_4_both.json")
+
+# The four that carry a non-neutral CO on the COUNTER, and the only ones whose
+# counter column depends on where the modifiers enter. A9b.
+COUNTER_CO_SWEEPS = ("counter_co_1_baseline.json", "counter_co_2_attack.json",
+                     "counter_co_3_defence.json", "counter_co_4_both.json")
 
 ROOT = pathlib.Path(__file__).resolve().parent.parent
 FIXTURES = pathlib.Path(__file__).resolve().parent / "fixtures"
@@ -55,9 +62,16 @@ def _sweep_cos(sweep):
     co_in_fixture records the CO of the player that was WRITTEN, not P1's, so
     it cannot fill in the other side. The fixture's own P1 is Andy, id 1, which
     every sweep that wrote P1 records directly.
+
+    Sweeps that set BOTH armies record co_p1/co_p2, read back out of RAM after
+    the last case; prefer those. The fallback assumes the unwritten side is
+    Andy, which is true of the sweeps taken before the pair existed and is not
+    true in general -- the wood fixture's own P2 is Max.
     """
     if not sweep.get("co_abilities"):
         return 1, 1                     # gate shut: record 1 for both sides
+    if sweep.get("co_p1") is not None and sweep.get("co_p2") is not None:
+        return sweep["co_p1"], sweep["co_p2"]
     written = sweep.get("co_player", 1)
     return (sweep["co_written"] if written == 1 else 1,
             sweep["co_written"] if written == 2 else 1)
@@ -82,6 +96,26 @@ def _effective_co_attack(sweep, unit_type):
     from engine import co as co_mod
     p1, _ = _sweep_cos(sweep)
     return co_mod.modifiers(p1, unit_type)[0] * co_mod.universal(p1)[0] // 100
+
+
+def _counter_mods(sweep, att_type, dfn_type):
+    """(attack, defence) for the COUNTER, not the opening.
+
+    The counter-attacker is the sweep's defender, so the modifier that scales it
+    is that army's ATTACK on that unit -- and its target is the sweep's
+    attacker, so the modifier that protects it is the OTHER army's DEFENCE on
+    the attacking unit. Both differ from the pair the opening used, which is why
+    `counterattack()` will not derive them from an Attack alone.
+    """
+    from engine import co as co_mod
+    cos = _sweep_cos(sweep)
+    att_co = cos[sweep["attacker_slot"] // 64]
+    dfn_co = cos[sweep["defender_slot"] // 64]
+    a = (co_mod.modifiers(dfn_co, dfn_type)[0]
+         * co_mod.universal(dfn_co)[0] // 100)
+    d = (co_mod.modifiers(att_co, att_type)[1]
+         * co_mod.universal(att_co)[1] // 100)
+    return a, d
 
 
 def _effective_luck(sweep):
@@ -492,6 +526,7 @@ class TestSeededSweeps(unittest.TestCase):
                 continue
             att_stars = terr["terrain"][str(after)]["stars"]
             w = select_weapon(dfn, att)
+            co_a, co_d = _counter_mods(sweep, att, dfn)
             for c in sweep["cases"]:
                 if c["attacker_destroyed"]:
                     continue
@@ -499,8 +534,8 @@ class TestSeededSweeps(unittest.TestCase):
                 if survivor <= 0:
                     continue
                 self.assertEqual(
-                    counter_damage(w.base, survivor, 100, att_stars,
-                                   c["attacker_hp_before"]),
+                    counter_damage(w.base, survivor, co_d, att_stars,
+                                   c["attacker_hp_before"], co_attack=co_a),
                     c["counter"],
                     f"{name} seed {c['seed']}: survivor {survivor}")
         self.assertEqual(sorted(skipped),
@@ -508,6 +543,51 @@ class TestSeededSweeps(unittest.TestCase):
                          "the set of sweeps with a disputed attacker tile "
                          "changed -- if a re-sweep resolved one, drop it from "
                          "UNRESOLVED_ATTACKER_TERRAIN")
+
+    def test_the_superseded_counter_orders_do_not_reproduce_the_sweeps(self):
+        """The finding the other way round.
+
+        A9b's CO half came down to three positions that all look reasonable on
+        the strike path, and the corpus only pins the right one if the wrong
+        ones visibly fail. Each of these reproduced every neutral sweep ever
+        taken, which is exactly why they survived so long.
+        """
+        by_row = _units()
+        terr = json.loads((ROOT / "data" / "aw1_terrain.json").read_text(encoding="utf-8"))
+
+        def replay(order):
+            worst = None
+            for name in COUNTER_CO_SWEEPS:
+                sweep = self._load(name)
+                att = by_row[sweep["attacker_type"] - 1]
+                dfn = by_row[sweep["defender_type"] - 1]
+                stars = terr["terrain"][str(sweep["attacker_terrain_after"])]["stars"]
+                base = select_weapon(dfn, att).base
+                co_a, co_d = _counter_mods(sweep, att, dfn)
+                for c in sweep["cases"]:
+                    if c["attacker_destroyed"]:
+                        continue
+                    survivor = sweep["defender_hp"] - c["damage"]
+                    v = order(base, survivor, co_a, co_d)
+                    v = v * (100 - stars * 10) // 100
+                    if v != c["counter"]:
+                        worst = worst or (name, survivor, v, c["counter"])
+            return worst
+
+        # The defence modifier after the survivor's HP: what A14 implied for the
+        # strike path, and what the engine did until the Sami sweep.
+        miss = replay(lambda b, s, a, d: (b * a // 100 * s // 100) * d // 100)
+        self.assertIsNotNone(miss, "the defence modifier applied after the HP "
+                             "term now reproduces the corpus -- if that is "
+                             "real, A9b's measurement was wrong")
+        # No attack modifier at all: the shipped model before any of this.
+        miss = replay(lambda b, s, a, d: (b * d // 100) * s // 100)
+        self.assertIsNotNone(miss, "dropping the counter-attacker's attack "
+                             "modifier now reproduces the corpus")
+        # The attack modifier after the HP term rather than on the base.
+        miss = replay(lambda b, s, a, d: (b * d // 100 * s // 100) * a // 100)
+        self.assertIsNotNone(miss, "the attack modifier applied after the HP "
+                             "term now reproduces the corpus")
 
 
 if __name__ == "__main__":

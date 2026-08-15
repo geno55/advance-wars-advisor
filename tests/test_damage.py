@@ -383,20 +383,62 @@ class TestEngineBehaviour(unittest.TestCase):
             self.assertEqual(counter_damage(base, hp, 100, stars, 100), observed,
                              f"{att} at {hp} HP into {dfn} on {stars} stars")
 
-    def test_counter_refuses_a_non_neutral_CO(self):
-        """Where CO modifiers enter the counter path has never been observed --
-        every recorded counter was neutral. A number here would be invented."""
+    def test_counter_puts_both_co_modifiers_on_the_base(self):
+        """Both modifiers multiply the base, before the survivor's HP, each
+        truncating -- four 64-seed sweeps, Infantry -> Tank on wood. A9b.
+
+        The rows are the game's, read off the counter column against the
+        survivor the opening roll left. Value-first for the defence modifier --
+        what A14 implied and the engine used to do -- reads one HIGH on the
+        starred rows, which is what these lock out.
+        """
+        base = select_weapon("Tank", "Infantry").base
+        self.assertEqual(base, 75)
+        # (co_attack, co_defense, {survivor: counter})
+        for co_atk, co_def, rows in (
+                (150, 100, {89: 89, 90: 90, 91: 90, 92: 92, 93: 93, 94: 94,
+                            95: 95, 96: 96}),
+                (100, 90, {88: 52, 89: 53, 90: 54, 91: 54, 92: 54,   # *
+                           93: 55, 94: 55, 95: 56, 96: 57}),         # *
+                (150, 90, {88: 79, 89: 80, 90: 81, 91: 81, 92: 82, 93: 83,
+                           94: 84, 95: 85, 96: 86})):
+            for survivor, observed in rows.items():
+                self.assertEqual(
+                    counter_damage(base, survivor, co_def, 1, 100,
+                                   co_attack=co_atk), observed,
+                    f"Tank at {survivor} HP countering an Infantry, "
+                    f"CO {co_atk}/{co_def}")
+
+    def test_counter_defence_modifier_is_not_applied_after_the_hp_term(self):
+        """The order that fits the strike path and not the counter.
+
+        Kept as its own test because it is the one place the counter and the
+        strike genuinely differ in arithmetic, and because it is invisible at
+        full health -- the survivor has to be something other than 100 for the
+        two to separate at all."""
+        base = select_weapon("Tank", "Infantry").base
+        value_first = (base * 88 // 100) * 90 // 100
+        base_first = (base * 90 // 100) * 88 // 100
+        self.assertNotEqual(value_first, base_first)
+        self.assertEqual(counter_damage(base, 88, 90, 1, 100), 52)
+        self.assertEqual(value_first * 90 // 100, 53)    # the old, wrong answer
+
+    def test_counterattack_quotes_a_non_neutral_CO(self):
+        """It used to raise. A9b's CO half is measured, so the only thing that
+        still cannot be answered is a counter whose CO ids were never passed."""
         from engine import co as co_mod
         max_id = next(i for i in range(12) if co_mod.record(i).name == "Max")
         andy_id = next(i for i in range(12) if co_mod.record(i).name == "Andy")
-        with self.assertRaises(CounterModifiersUnknown):
-            counterattack(Attack.between("Tank", "Tank", andy_id, max_id),
-                          verified=True,
-                          attacker_co=andy_id, defender_co=max_id)
-        self.assertIsNotNone(
-            counterattack(Attack.between("Tank", "Tank", andy_id, andy_id),
-                          verified=True,
-                          attacker_co=andy_id, defender_co=andy_id))
+        a = Attack.between("Tank", "Tank", andy_id, max_id)
+        back = counterattack(a, verified=True,
+                             attacker_co=andy_id, defender_co=max_id)
+        self.assertIsNotNone(back)
+        # Max counters at 150 on Tank, so harder than Andy would on the same
+        # board. Failing to carry the modifier is what this catches.
+        plain = counterattack(Attack.between("Tank", "Tank", andy_id, andy_id),
+                              verified=True,
+                              attacker_co=andy_id, defender_co=andy_id)
+        self.assertGreater(back.max_damage, plain.max_damage)
 
     def test_possible_kill_still_counters(self):
         """A kill that is possible but not guaranteed leaves a survivor on the
