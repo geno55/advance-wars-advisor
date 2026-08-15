@@ -434,10 +434,14 @@ function dmg_seedsweep(fixture, att_slot, def_slot, outpath, nseeds, stride, add
     -- So pass co_abilities = 1 as well, or take the fixture in a match where
     -- they are already on. Either way check Max first: his band moving is the
     -- control that says the CO reached the damage path at all.
-    if emu:read8(CO_ENABLE_ADDR) == 0 then
+    if emu:read8(CO_ENABLE_ADDR) == 0 and not co_abilities then
       console:log("  !! WARNING: [0x03004318] is 0, so the damage path will")
       console:log("  !! use Andy for BOTH sides whatever CO is written. Pass")
       console:log("  !! {co_abilities = 1} to force it. See DERIVATION 24.")
+    elseif co_abilities then
+      console:log(string.format("  CO abilities: forcing [0x%08X] = %d each case"
+        .. " (fixture had %d)", CO_ENABLE_ADDR, co_abilities,
+        emu:read8(CO_ENABLE_ADDR)))
     end
   else
     console:log(string.format("P%d CO: %d (from the fixture, not written)",
@@ -618,6 +622,10 @@ function dmg_seedsweep(fixture, att_slot, def_slot, outpath, nseeds, stride, add
     '  "mode": "seed",',
     string.format('  "rng_state_addr": %d, "rng_mul": %d, "rng_add": %d,',
       addr, RNG_MUL, RNG_ADD),
+    -- Without this a reader cannot tell a sweep where the CO took effect from
+    -- one where it was silently replaced by Andy. They differ in nothing else.
+    string.format('  "co_abilities": %s,',
+      co_abilities and tostring(co_abilities) or "null"),
     string.format('  "co_written": %s, "co_player": %d, "co_in_fixture": %d,',
       co and tostring(co) or "null", co_player, co_in_fixture),
     string.format('  "attacker_slot": %d, "defender_slot": %d,', att_slot, def_slot),

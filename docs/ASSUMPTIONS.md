@@ -658,3 +658,40 @@ clears it. The cheap test writes `0x03004318 = 1` alongside `+0x1D` and predicts
 Max on Tank → Infantry in woods moves from 60-67 to **90-97**; a null there
 means the flag is latched earlier and the fixture has to be built with CO
 abilities already on.
+
+### A13. The CO attack modifier truncates before anything else — **MEASURED**
+
+`DERIVATION.md` 7 read the modifier application off the code years ago:
+`muls` then `__divsi3`, which truncates toward zero. It also said, correctly,
+that this eliminated nothing at the time — with a neutral CO at 100/100 the
+division is exact and the truncation is a no-op.
+
+Every one of the 75 corpus rows and every seeded sweep was neutral. So the
+engine carried the term as an exact `Fraction(base * co_atk, 100)` for the
+project's whole life, and no test could tell.
+
+The first non-neutral measurement caught it immediately. Max is 150/100 on
+Tank; on Tank → Infantry in woods, both at full HP:
+
+| | attack term | predicted band | doubled values |
+|---|---|---|---|
+| exact | 75 × 150/100 = 112.5 | 90..97 | 90, 94 |
+| **truncated** | **floor(112.5) = 112** | **89..96** | **92, 96** |
+| observed | — | **89..96** | **92 (×11), 96 (×14)** |
+
+Both the range and the shape. The other six damages appeared 5–8 times each, so
+the two doubled values are unambiguous, and they are the pair only truncation
+produces. `engine/damage.py` now computes `base * co_atk // 100`.
+
+**Not settled: the defence modifier.** The disassembly applies its divide twice
+in sequence, attack then defence, so it very likely truncates too — but the
+engine folds `co_def` into a single combined defence term and `co_def` has been
+100 in every measurement taken. There is nothing to fit, so the second
+truncation point stays unmodelled rather than guessed. **Kill it by:** a sweep
+against a defender whose CO carries a non-100 defence modifier — Sami is 90 on
+foot units, Eagle 90 on air — with `co_abilities = 1` set.
+
+`tests/fixtures/max_wood_co.json` is the sweep, checked in, and
+`tests/test_corpus.py` replays it. The replay had to learn the gate from A12:
+it computes the CO the game *actually used*, which is Andy for any sweep that
+wrote a CO without also setting `0x03004318`.

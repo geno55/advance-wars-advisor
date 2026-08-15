@@ -39,10 +39,28 @@ UNRESOLVED_ATTACKER_TERRAIN = ("city100.json", "city81.json")
 
 SWEEPS = ("counter.json", "att57.json", "def81.json", "def85.json",
           "def65.json", "wood100.json", "wood81.json", "city100.json",
-          "city81.json")
+          "city81.json", "max_wood_co.json")
 
 ROOT = pathlib.Path(__file__).resolve().parent.parent
 FIXTURES = pathlib.Path(__file__).resolve().parent / "fixtures"
+
+
+def _effective_co_attack(sweep, unit_type):
+    """The attack modifier the GAME actually used for this sweep.
+
+    Not simply the CO that was written. The damage path only consults
+    army +0x1D when [0x03004318] is set; with it clear it substitutes record 1,
+    Andy, for both sides (DERIVATION 24). So a sweep that wrote Max without
+    also forcing that flag measured Andy, and replaying it as Max would fail
+    for the right reason in the wrong place.
+    """
+    from engine import co as co_mod
+    if not sweep.get("co_abilities"):
+        return 100                      # record 1, neutral on every unit
+    co_id = sweep.get("co_written")
+    if co_id is None:
+        co_id = sweep.get("co_in_fixture", 1)
+    return co_mod.modifiers(co_id, unit_type)[0]
 
 
 def _stars():
@@ -133,7 +151,8 @@ class TestSeededSweeps(unittest.TestCase):
         att = by_row[sweep["attacker_type"] - 1]
         dfn = by_row[sweep["defender_type"] - 1]
         def_stars = terr["terrain"][str(sweep["defender_terrain"])]["stars"]
-        a = Attack(att, dfn, sweep["attacker_hp"], sweep["defender_hp"], def_stars)
+        a = Attack(att, dfn, sweep["attacker_hp"], sweep["defender_hp"],
+                   def_stars, co_attack=_effective_co_attack(sweep, att))
         model = {damage_for_luck(a, lk) for lk in range(LUCK_MIN, LUCK_MAX + 1)}
         observed = Counter(c["damage"] for c in sweep["cases"]
                            if not c["destroyed"])
@@ -165,6 +184,37 @@ class TestSeededSweeps(unittest.TestCase):
         sweep, observed = self._check("def81.json")
         self.assertEqual(sweep["hp_written"]["defender"], 81)
         self.assertEqual((min(observed), max(observed)), (48, 53))
+
+    def test_a_non_neutral_co_truncates_before_everything_else(self):
+        """The first measurement taken with a CO that is not Andy, and it
+        caught a bug the whole corpus was blind to.
+
+        Max is 150/100 on Tank. Exact arithmetic gives 75 * 150/100 = 112.5 and
+        predicts 90..97; the game said 89..96, which is floor(112.5) = 112. The
+        engine had carried that term as a Fraction since the beginning and
+        nothing noticed, because 100/100 divides exactly and all 75 corpus rows
+        and every earlier sweep were neutral.
+
+        The shape settles it as firmly as the range. Truncated, ten rolls
+        collapse onto eight damages with 92 and 96 doubled; exact would double
+        90 and 94 instead. The sweep saw 92 eleven times and 96 fourteen,
+        against 5-8 for the rest."""
+        sweep, observed = self._check("max_wood_co.json")
+        self.assertEqual(sweep["co_written"], 2)
+        self.assertEqual(sweep["co_abilities"], 1)
+        self.assertEqual((min(observed), max(observed)), (89, 96))
+        # The doubled values, which only the truncated model produces.
+        doubled = {d for d, n in observed.items() if n >= 10}
+        self.assertEqual(doubled, {92, 96})
+
+    def test_a_written_co_without_the_flag_measured_andy(self):
+        """The four sweeps that wasted an afternoon. Kept as the reason
+        co_abilities is recorded: without it a reader cannot tell a sweep where
+        the CO took effect from one where it was silently replaced."""
+        sweep = self._load("max_wood_co.json")
+        no_flag = dict(sweep, co_abilities=None)
+        self.assertEqual(_effective_co_attack(no_flag, "Tank"), 100)
+        self.assertEqual(_effective_co_attack(sweep, "Tank"), 150)
 
     def test_defender_at_85_agrees(self):
         sweep, observed = self._check("def85.json")

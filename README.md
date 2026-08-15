@@ -41,6 +41,12 @@ paid off — see "What got caught" below.
   months on the strength of two rows that were counterattacks. See A5.
 - CO modifiers filled from the ROM record, and refused where a CO's strength
   lives in header fields the damage path has never been shown to read.
+- **The CO attack modifier truncates** before anything else touches the value,
+  as `__divsi3` in the damage path always said. The engine carried it as an
+  exact fraction for the project's whole life and no test could tell, because
+  100/100 divides exactly and every measurement was neutral. The first
+  non-neutral sweep — Max, 150/100 — landed 89–96 where exact arithmetic
+  predicts 90–97. See A13.
 - **Luck is per-CO, from the record's `+06`/`+07` bytes** —
   `uniform(0, 9 + good) - bad`. Ten records carry 0/0 and roll 0..9; Nell reads
   0..19 (0..59 powered) and Sonja **-15..9**. Sonja's is a correctness fix, not
@@ -52,7 +58,7 @@ paid off — see "What got caught" below.
   range, not an envelope, so "cannot kill" is as reliable as "will kill".
   Settled by crossing two independent eliminations that neither could finish
   alone -- see `DERIVATION.md` 17.
-- 57 regression tests.
+- 57 regression tests, plus 15 replaying the measurements.
 
 **Milestone 1 — the state reader. Done.**
 
@@ -348,7 +354,7 @@ tests/test_damage.py      57 regression tests
 tests/test_pathing.py     22 regression tests, incl. "no unit-type branches"
 tests/test_threat.py      23 regression tests, incl. the same branch ban
 tests/test_fog.py         32 tests, incl. five real-board oracles and branch ban
-tests/test_corpus.py      13 tests: replay every recorded measurement against
+tests/test_corpus.py      15 tests: replay every recorded measurement against
                           the engine, strikes and counters kept apart
 tests/fixtures/           captured boards, seeded sweeps, and the game's own
                           vision array

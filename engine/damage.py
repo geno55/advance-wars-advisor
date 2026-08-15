@@ -176,7 +176,25 @@ def can_attack(attacker: str, defender: str, ammo: int = 99) -> bool:
 # --------------------------------------------------------------------------
 
 def _terms(base, hp_a, co_atk, co_def, stars, hp_d):
-    atk = Fraction(base * co_atk, 100)
+    # The CO attack modifier TRUNCATES here, before anything else touches the
+    # value. `muls` then `__divsi3` in the damage path (DERIVATION 7), and
+    # measured: Max on Tank -> Infantry in woods lands 89..96, not the 90..97
+    # an exact 75 * 150/100 = 112.5 gives. floor(112.5) = 112 reproduces both
+    # the range and the histogram's shape -- 92 and 96 doubled, which is what
+    # the sweep saw at 11 and 14 against 5-8 elsewhere.
+    #
+    # This was a Fraction for the whole life of the project and nothing caught
+    # it, because 100/100 divides exactly and every one of the 75 corpus rows
+    # and every earlier sweep was neutral. DERIVATION 7 said as much at the
+    # time -- "with a neutral CO the truncation is a no-op" -- and it took the
+    # first non-neutral measurement to make the difference visible.
+    #
+    # The DEFENCE modifier is folded into `dfn` below and is NOT truncated
+    # separately. The disassembly applies its divide twice in sequence, so it
+    # probably should be, but co_def has been 100 in every measurement so far,
+    # so there is nothing to fit and this stays as it is rather than guessing
+    # a second truncation point. See ASSUMPTIONS A13.
+    atk = base * co_atk // 100
     hp = Fraction(hp_a, 10)
     dfn = Fraction(200 - (co_def + stars * hp_d), 100)
     return atk, hp, dfn
