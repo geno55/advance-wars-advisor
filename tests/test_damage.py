@@ -17,6 +17,7 @@ from engine.damage import (Attack, CounterModifiersUnknown, DEFAULT_DISPLAY,  # 
                            can_attack, counterattack, damage_for_luck,
                            counter_damage, display_hp, fights_at_contact, resolve, screen_bars,
                            select_weapon, tables)
+from engine import co                                          # noqa: E402
 
 
 class TestTables(unittest.TestCase):
@@ -428,6 +429,75 @@ class TestEngineBehaviour(unittest.TestCase):
         for variant in VARIANTS:
             d = damage_for_luck(Attack("Bomber", "Infantry", defender_hp=15), 9, variant)
             self.assertLessEqual(d, 15)
+
+
+class TestPerCoLuck(unittest.TestCase):
+    """The luck range comes out of the CO record's +06/+07 bytes, under one
+    rule with no per-CO special cases:
+
+        luck = uniform(0, 9 + good) - bad
+
+    These pin the reading. They are NOT evidence the game agrees -- no sweep
+    has yet witnessed a roll outside 0..9. See tools/luck_range_check.py, which
+    is the thing that can settle it.
+    """
+
+    def test_ten_of_twelve_records_roll_the_standard_range(self):
+        ordinary = [i for i in range(12) if co.luck(i) == (0, 9)]
+        self.assertEqual(len(ordinary), 10)
+        # The two that differ are the two the community documents as differing.
+        odd = sorted(co.record(i).name for i in range(12) if i not in ordinary)
+        self.assertEqual(odd, ["Nell", "Sonja"])
+
+    def test_nell_widens_upward_and_her_power_widens_further(self):
+        self.assertEqual(co.luck(0), (0, 19))
+        self.assertEqual(co.luck(0, power=True), (0, 59))
+
+    def test_sonja_slides_the_window_down_rather_than_widening_it(self):
+        """The symmetric 15/15 pair is what forces the rule. Reading +06 alone
+        would give her 0..24, a BETTER roll than everyone else; reading +07
+        alone would give -15..-6, which cannot even reach zero. Only both
+        together produce a same-width window slid downward."""
+        self.assertEqual(co.luck(7), (-15, 9))
+        lo, hi = co.luck(7)
+        self.assertEqual(hi - lo, 24)
+        self.assertEqual(co.record(7).luck_good, co.record(7).luck_bad)
+
+    def test_the_range_reaches_the_damage_model(self):
+        andy = Attack.between("Tank", "Infantry", 1, 1)
+        sonja = Attack.between("Tank", "Infantry", 7, 1)
+        self.assertEqual((andy.luck_min, andy.luck_max), (0, 9))
+        self.assertEqual((sonja.luck_min, sonja.luck_max), (-15, 9))
+        self.assertLess(resolve(sonja).min_damage,
+                        resolve(andy).min_damage)
+
+    def test_luck_is_the_attackers_and_never_the_defenders(self):
+        """Taking it from the defender would hand Sonja's penalty to whoever
+        shoots at her, which is both wrong and wrong in the unsafe direction."""
+        into_sonja = Attack.between("Tank", "Infantry", 1, 7)
+        self.assertEqual((into_sonja.luck_min, into_sonja.luck_max), (0, 9))
+
+    def test_sonja_loses_guaranteed_kills_a_standard_co_would_have(self):
+        """The reason this is a correctness fix and not a refinement. At these
+        defender HPs the old model called the kill guaranteed; a -15 roll
+        leaves the target standing."""
+        flipped = 0
+        for hp in range(55, 90):
+            andy = resolve(Attack.between(
+                "Tank", "Infantry", 1, 1, defender_hp=hp))
+            sonja = resolve(Attack.between(
+                "Tank", "Infantry", 7, 1, defender_hp=hp))
+            if andy.guaranteed_kill and not sonja.guaranteed_kill:
+                flipped += 1
+            # Never the other way: her floor is lower, so she can only lose
+            # guarantees, never gain them.
+            self.assertFalse(sonja.guaranteed_kill and not andy.guaranteed_kill)
+        self.assertGreater(flipped, 0)
+
+    def test_an_explicit_range_still_overrides_the_record(self):
+        a = Attack.between("Tank", "Infantry", 7, 1,
+                                  luck_min=0, luck_max=9)
+        self.assertEqual((a.luck_min, a.luck_max), (0, 9))
 
 
 if __name__ == "__main__":

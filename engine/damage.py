@@ -37,7 +37,31 @@ STATS = pathlib.Path(__file__).resolve().parent.parent / "data" / "aw1_unit_stat
 # without knowing which CO it was.
 NEUTRAL_CO = 100
 
-LUCK_MIN, LUCK_MAX = 0, 9          # standard CO luck roll; Nell/Flak differ
+LUCK_MIN, LUCK_MAX = 0, 9          # the DEFAULT roll; per-CO ranges below
+
+# Per-CO luck comes out of the CO record header, not out of a table of names.
+#
+#     luck = uniform(0, 9 + good) - bad     good = header +06, bad = header +07
+#
+# Across all twelve records only two are nonzero: Nell carries good=10 normally
+# and 50 under her power, Sonja carries good=15 AND bad=15, equal. That
+# symmetry is the tell -- it is what makes one rule fit both COs instead of
+# needing a special case each:
+#
+#     standard    uniform(0, 9)  - 0   ->    0..9
+#     Nell        uniform(0,19)  - 0   ->    0..19
+#     Nell power  uniform(0,59)  - 0   ->    0..59
+#     Sonja       uniform(0,24)  - 15  ->  -15..9
+#
+# ROM-derived, and independently corroborated: those are exactly the ranges the
+# community documents. Two sources agreeing on a rule neither states outright
+# is worth a lot -- but it is still an INTERPRETATION of two bytes, and no
+# emulator sweep has yet produced a roll outside 0..9. See ASSUMPTIONS A11.
+#
+# Sonja matters for safety in a way Nell does not. A negative roll lowers the
+# MINIMUM, so treating her as a standard CO overstates min_damage and reports
+# kills as guaranteed that are not. Nell's error runs the safe way: it
+# understates the maximum.
 
 
 # --------------------------------------------------------------------------
@@ -257,6 +281,14 @@ class Attack:
     ammo: int = 99
     co_attack: int = 100
     co_defense: int = 100
+    # The ATTACKING CO's roll. Defaults to the standard 0..9 so every existing
+    # caller is unchanged; `Attack.between()` fills it from the CO record.
+    luck_min: int = LUCK_MIN
+    luck_max: int = LUCK_MAX
+
+    @property
+    def luck_range(self) -> range:
+        return range(self.luck_min, self.luck_max + 1)
 
     @classmethod
     def between(cls, attacker: str, defender: str, attacker_co: int,
@@ -291,6 +323,11 @@ class Attack:
                     "has not been shown to read -- a prediction would omit it. "
                     "See engine/co.py for how to settle this, or pass "
                     "co_attack/co_defense explicitly to override.")
+        # Luck is the ATTACKER's roll only. Taking it from the defender would
+        # hand Sonja's penalty to whoever shoots at her.
+        lo, hi = _co.luck(attacker_co, attacker_power)
+        kw.setdefault("luck_min", lo)
+        kw.setdefault("luck_max", hi)
         return cls(attacker=attacker, defender=defender,
                    co_attack=modifiers(attacker_co, attacker, attacker_power)[0],
                    co_defense=modifiers(defender_co, defender, defender_power)[1],
@@ -348,7 +385,7 @@ def resolve(a: Attack, variant: str = DEFAULT_VARIANT,
     variants = (variant,) if variant != DEFAULT_VARIANT else SURVIVING_VARIANTS
     los, his = [], []
     for v in variants:
-        vals = [damage_for_luck(a, lk, v) for lk in (LUCK_MIN, LUCK_MAX)]
+        vals = [damage_for_luck(a, lk, v) for lk in (a.luck_min, a.luck_max)]
         los.append(min(vals))
         his.append(max(vals))
     lo, hi = min(los), max(his)

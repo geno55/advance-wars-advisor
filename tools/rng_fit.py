@@ -137,7 +137,11 @@ def main():
     # -- search for (depth, modulus) making damage a function of the roll ---
     fits = []
     for depth in range(1, args.max_depth + 1):
-        for mod in (10, 16, 100):
+        # 10 is the standard roll's width. 20/25/60 are the widths the CO
+        # records imply for Nell (+06=10, 50 under power) and Sonja (+06=15);
+        # without them a sweep taken under either CO cannot fit at all and the
+        # tool reports "no consistent fit" for a roll it simply cannot express.
+        for mod in (10, 16, 20, 25, 60, 100):
             table = defaultdict(set)
             for c in live:
                 roll = outputs(c["seed"], mul, add, depth)[-1] % mod

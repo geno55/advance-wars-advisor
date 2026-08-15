@@ -48,6 +48,9 @@ DATA = pathlib.Path(__file__).resolve().parent.parent / "data"
 
 NEUTRAL = (100, 100)
 
+# The roll every CO gets before its record modifies it.
+DEFAULT_LUCK_MAX = 9
+
 
 def _co_data():
     return json.loads((DATA / "aw1_co.json").read_text(encoding="utf-8"))
@@ -65,6 +68,15 @@ class CoRecord:
     header_global: tuple    # +08/+09
     header_pair: tuple      # +11/+12
     weather_tables: list
+    # +06 widens the roll upward, +07 shifts it down. Zero on ten of the twelve
+    # records; see `luck` for the rule and what it rests on.
+    luck_good: int = 0
+    luck_bad: int = 0
+
+    @property
+    def luck(self) -> tuple:
+        """(min, max) of this CO's luck roll."""
+        return (-self.luck_bad, DEFAULT_LUCK_MAX + self.luck_good - self.luck_bad)
 
     @property
     def has_unmodelled_strength(self) -> bool:
@@ -85,7 +97,36 @@ def record(co_id: int, power: bool = False) -> CoRecord:
         header_global=(h[8], h[9]),
         header_pair=(h[11], h[12]),
         weather_tables=block["weather_tables"],
+        luck_good=h[6],
+        luck_bad=h[7],
     )
+
+
+def luck(co_id: int, power: bool = False) -> tuple:
+    """(min, max) of this CO's luck roll, from the ROM record.
+
+        luck = uniform(0, 9 + good) - bad      good = +06, bad = +07
+
+    Ten of the twelve records carry 0/0 and roll the standard 0..9. The two
+    that do not are the whole reason this function exists:
+
+        Nell        good=10          ->    0..19
+        Nell power  good=50          ->    0..59
+        Sonja       good=15 bad=15   ->  -15..9
+
+    One rule, no per-CO special cases. Sonja's SYMMETRIC pair is what forces
+    it: read +06 alone as "wider roll" and she would swing 0..24, read +07
+    alone as "worse roll" and she would sit at -15..-6. Only the pair together
+    gives a range the same width as everyone else's, slid downward, which is
+    what a luck penalty should be.
+
+    ROM-derived and community-corroborated, but NOT confirmed against the game
+    -- no sweep has yet produced a roll outside 0..9. `engine/damage.py`
+    applies it anyway, because for Sonja the alternative is claiming kills are
+    guaranteed when a -15 roll would leave the target standing. See
+    ASSUMPTIONS A11 and `tools/luck_range_check.py`.
+    """
+    return record(co_id, power).luck
 
 
 def modifiers(co_id: int, unit_type: str, power: bool = False) -> tuple:

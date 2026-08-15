@@ -41,11 +41,16 @@ paid off — see "What got caught" below.
   months on the strength of two rows that were counterattacks. See A5.
 - CO modifiers filled from the ROM record, and refused where a CO's strength
   lives in header fields the damage path has never been shown to read.
+- **Luck is per-CO, from the record's `+06`/`+07` bytes** —
+  `uniform(0, 9 + good) - bad`. Ten records carry 0/0 and roll 0..9; Nell reads
+  0..19 (0..59 powered) and Sonja **-15..9**. Sonja's is a correctness fix, not
+  a refinement: a negative roll lowers the *minimum*, so quoting her as a
+  standard CO reported guaranteed kills that will not land. See A11.
 - **The formula is determined: `luck_after_hp`.** `resolve()` returns an exact
   range, not an envelope, so "cannot kill" is as reliable as "will kill".
   Settled by crossing two independent eliminations that neither could finish
   alone -- see `DERIVATION.md` 17.
-- 39 regression tests.
+- 57 regression tests.
 
 **Milestone 1 — the state reader. Done.**
 
@@ -337,7 +342,7 @@ data/aw1_army_struct.json army record layout + open CO questions
 data/aw1_co.json          12 CO records, all 12 names measured (Sturm has two)
 data/aw1_unit_stats.json  cost, move, move type, range, vision, fuel, ammo
 
-tests/test_damage.py      50 regression tests
+tests/test_damage.py      57 regression tests
 tests/test_pathing.py     22 regression tests, incl. "no unit-type branches"
 tests/test_threat.py      23 regression tests, incl. the same branch ban
 tests/test_fog.py         32 tests, incl. five real-board oracles and branch ban
@@ -355,6 +360,8 @@ harness/mgba_spike.lua    write state, drive input, sweep cases unattended
 tools/spike_check.py      sweep vs engine, and the write-vs-play control
 tools/dmg_ingest.py       damage sweep -> observations.csv, with survival report
 tools/rng_fit.py          seed sweep -> the luck distribution it implies
+tools/luck_range_check.py invert a sweep to the rolls it witnessed, and
+                          score the record's predicted range against them
 tools/counter_check.py    the two counterattack hypotheses against a seed sweep
 tests/calibrate.py        hypothesis elimination: --suggest, --explain,
                           --shared-luck, --selftest. Diagnosis is automatic

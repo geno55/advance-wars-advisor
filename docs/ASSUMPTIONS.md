@@ -516,6 +516,52 @@ somewhere later in the animation. Nothing here depends on it -- the reads are
 taken after the exchange has settled -- but a live reader polling mid-move would
 need to know.
 
+### A11. Per-CO luck comes from the record's +06/+07 bytes
+
+`engine/damage.py` rolled a flat 0..9 for every CO. Two of the twelve records
+say otherwise, at header `+06` and `+07`:
+
+| CO | +06 | +07 | implied range |
+|---|---|---|---|
+| ten of twelve | 0 | 0 | 0..9 |
+| Nell | 10 | 0 | 0..19 |
+| Nell, power | 50 | 0 | 0..59 |
+| Sonja | 15 | 15 | −15..9 |
+
+One rule covers all of them, with no per-CO branch:
+
+    luck = uniform(0, 9 + good) − bad          good = +06, bad = +07
+
+**Sonja's symmetric pair is what forces that reading.** Take `+06` alone as
+"wider roll" and she swings 0..24, a *better* roll than everyone else, which no
+one describes her as having. Take `+07` alone as "worse roll" and she sits at
+−15..−6, unable to reach zero. Only both together give a window the same width
+as everybody else's, slid downward — which is what a luck penalty should look
+like. The rule then reproduces Nell's two ranges for free.
+
+Those are also exactly the ranges the community documents. Two sources agreeing
+on a rule that neither states outright is worth a great deal, but note what it
+is not: nobody has yet seen the game produce a roll outside 0..9. The bytes are
+ROM-extracted; the *rule mapping bytes to rolls* is interpretation.
+
+**Applied anyway, deliberately.** For Sonja the alternative is worse than being
+unverified: a −15 roll lowers the minimum, so treating her as standard reports
+guaranteed kills that will not land. On Tank → Infantry alone there are 15
+defender-HP values where the old model said KILL and hers does not. Nell's error
+ran the safe way — understating her maximum — but Sonja's ran the dangerous way,
+and that asymmetry is the reason this is a correctness fix rather than a
+refinement.
+
+**Kill it by:** `tools/luck_range_check.py` on a seed sweep taken with the CO
+written to Nell (0) or Sonja (7). It inverts each observed damage back to the
+roll that produced it and reports what was *witnessed*, not what fits. The bar
+is deliberately high: rolls landing inside 0..19 prove nothing, because 0..9
+lands inside 0..19 too. Only a roll **above 9** confirms Nell and only one
+**below 0** confirms Sonja, and the tool says NOT SETTLED rather than
+CONFIRMED when a sweep fails to produce one. Use a 0-star matchup so damage
+separates every roll; on starred terrain several rolls collapse onto one damage
+and witness nothing.
+
 ## Unknown — not modelled
 
 - **CO powers.** The second 128-byte stat block is selected by army `+0x1E`,
@@ -527,6 +573,16 @@ need to know.
   returning a number that would be ~20% low. **Kill it by:** writing army
   `+0x1D` to Kanbei and to Andy on one fixture, seeding the RNG so luck is
   fixed, and comparing the damage.
+
+  **Strong lead, not yet acted on:** decoding `+11/+12` as
+  `(UniversalATK, 200 − UniversalDEF)` yields 100/100 for every CO normally and
+  110/110 under power — and **Eagle under Lightning Strike at 80/70**, which is
+  an arbitrary, specific pair that the community documents outright. Kanbei
+  reads 120/120 (140/130 powered) and the two Sturm records 130/80 and 80/120.
+  If that decoding holds, `+11/+12` is not an unknown at all: it is the
+  universal attack/defence pair, and the refusal below can be lifted by
+  applying it. The subtraction convention came from the community formula, not
+  from us. Worth confirming against the disassembly before shipping.
 - The `fighter-secondary` ROM discrepancy (see `DERIVATION.md`).
 - ~~Weather effects, fog of war.~~ Weather is read from `0x0300433C` and drives
   movement cost. Fog is modelled but unverified and cannot yet be detected —
