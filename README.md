@@ -45,7 +45,9 @@ paid off — see "What got caught" below.
   `uniform(0, 9 + good) - bad`. Ten records carry 0/0 and roll 0..9; Nell reads
   0..19 (0..59 powered) and Sonja **-15..9**. Sonja's is a correctness fix, not
   a refinement: a negative roll lowers the *minimum*, so quoting her as a
-  standard CO reported guaranteed kills that will not land. See A11.
+  standard CO reported guaranteed kills that will not land. ROM-derived and
+  community-corroborated, **not yet witnessed in a sweep** — the obvious way to
+  test it turned out not to work, see A12. Kill conditions A11, A12.
 - **The formula is determined: `luck_after_hp`.** `resolve()` returns an exact
   range, not an envelope, so "cannot kill" is as reliable as "will kill".
   Settled by crossing two independent eliminations that neither could finish
@@ -507,6 +509,10 @@ damage back into rolls and distinguishes "unlucky sample" from "wrong model".
 - **The identical copy at `0x02017B42`** has no known purpose; it is dumped
   only as a cross-check.
 - **Sonja's vision trait**, and CO powers that reveal the map.
+- **Where the damage path reads the CO from.** Not army `+0x1D`: writing that
+  swaps the CO everywhere the intel screen looks and changes damage not at all,
+  even for Max. Until that is traced, a CO's effect can only be measured by
+  building the fixture with the CO chosen in VS setup.
 - **The composition itself is unmeasured.** Threat projection's inputs are all
   verified; the matching and ordering built on top of them are covered by unit
   tests and by nothing else. The reachability half is checkable with the

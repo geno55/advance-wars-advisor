@@ -32,10 +32,27 @@ what the pool says and `unmodelled()` reports the header pairs that are not
 being applied. `damage.resolve(co=...)` refuses non-neutral-header COs unless
 the caller opts in, so a Kanbei prediction cannot be produced silently.
 
-HOW TO SETTLE IT, and the tooling already exists: write army +0x1D to Kanbei
-(6) and to Andy (1) on the same fixture, seed the RNG so luck is fixed, and
-compare the damage. Identical means the header pairs do not reach the damage
-path; ~20% apart means they do, and the ratio names the rule.
+HOW NOT TO SETTLE IT. This file used to say: write army +0x1D to Kanbei and to
+Andy on the same fixture, seed the RNG, and compare the damage -- identical
+means the header pairs do not reach the damage path. **That test is broken and
+would have produced exactly the wrong answer.**
+
+Writing +0x1D at a target-select fixture does not change damage AT ALL, not
+even for a CO whose effect is not in doubt. Max is 150/100 on Tank and should
+move a Tank -> Infantry-in-woods attack from 60-67 to 90-97; written mid-
+fixture he lands on 60-67, the same as Andy. The byte is written and reads back
+correctly, and the game's intel screen believes it -- which is how all twelve
+records were named -- but the damage path does not consult it, presumably
+because it was resolved earlier, when Fire was chosen.
+
+So the old test could only ever return "identical", and the conclusion drawn
+from that would have been "Kanbei's header fields do not reach the damage
+path". A test that cannot fail is worse than no test.
+
+HOW TO SETTLE IT: build the fixture with the CO chosen for real. VS mode picks
+COs at match setup, so a Kanbei match and an Andy match, each saved at
+target-select on the same matchup, differ in the CO and nothing else. Then
+`co_written` stays null and `co_in_fixture` carries the truth.
 """
 from __future__ import annotations
 

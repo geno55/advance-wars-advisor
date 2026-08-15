@@ -420,6 +420,20 @@ function dmg_seedsweep(fixture, att_slot, def_slot, outpath, nseeds, stride, add
     end
     console:log(string.format("P%d CO: fixture had %d, writing %d each case",
       co_player, co_in_fixture, co))
+    -- MEASURED, and it is a trap: at a target-select fixture this write does
+    -- not reach the damage path. Max (150/100 on Tank) written here produced
+    -- 60-67 on Tank -> Infantry in woods, identical to Andy, where his own
+    -- modifiers demand 90-97. The byte takes, and the intel screen agrees --
+    -- that is how the twelve records were named -- but combat has already
+    -- resolved its CO by the time Fire is chosen.
+    --
+    -- Left in because it still swaps the identity for anything that reads
+    -- +0x1D live. Do not use it to measure a CO's effect on damage: it will
+    -- return "no difference" for every CO, including ones whose effect is not
+    -- in doubt. Build the fixture with the CO chosen in VS setup instead.
+    console:log("  !! WARNING: a written CO does NOT change damage from a")
+    console:log("  !! target-select fixture -- verified with Max, who should")
+    console:log("  !! move the band and does not. See engine/co.py.")
   else
     console:log(string.format("P%d CO: %d (from the fixture, not written)",
       co_player, co_in_fixture))

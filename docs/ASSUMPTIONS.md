@@ -553,7 +553,10 @@ and that asymmetry is the reason this is a correctness fix rather than a
 refinement.
 
 **Kill it by:** `tools/luck_range_check.py` on a seed sweep taken with the CO
-written to Nell (0) or Sonja (7). It inverts each observed damage back to the
+**chosen in VS setup**, not written. Writing army `+0x1D` mid-fixture does not
+reach the damage path -- see the note under Kanbei below, and A12. Four sweeps
+were taken that way (Andy, Nell, Sonja, Max) and all four returned the same
+60-67 band, which measured nothing. It inverts each observed damage back to the
 roll that produced it and reports what was *witnessed*, not what fits. The bar
 is deliberately high: rolls landing inside 0..19 prove nothing, because 0..9
 lands inside 0..19 too. Only a roll **above 9** confirms Nell and only one
@@ -570,9 +573,10 @@ and witness nothing.
   are all 100/100; their records carry `+08/+09` and `+11/+12` pairs that the
   damage path has never been shown to read. `engine/co.py` reports these as
   unmodelled and `Attack.between()` refuses to quote those COs rather than
-  returning a number that would be ~20% low. **Kill it by:** writing army
-  `+0x1D` to Kanbei and to Andy on one fixture, seeding the RNG so luck is
-  fixed, and comparing the damage.
+  returning a number that would be ~20% low. **Kill it by:** building two
+  fixtures in VS mode, one with Kanbei chosen and one with Andy, and comparing
+  the damage with the RNG seeded. NOT by writing army `+0x1D` mid-fixture,
+  which this file recommended for months and which cannot work -- see A12.
 
   **Strong lead, not yet acted on:** decoding `+11/+12` as
   `(UniversalATK, 200 − UniversalDEF)` yields 100/100 for every CO normally and
@@ -590,3 +594,49 @@ and witness nothing.
 - Terrain movement costs, capture, supply, repair — all of milestone 1/3.
 - Whether the RNG can be read and predicted. Explicitly out of scope for now;
   the model deals in damage *ranges*.
+
+### A12. Writing army `+0x1D` does not change damage — **MEASURED, and it broke two kill conditions**
+
+The CO id at army `+0x1D` is real and confirmed: writing it swaps the CO the
+intel screen reports, which is how all twelve records were named. It does not
+follow that combat reads it, and combat does not.
+
+Four seed sweeps on the same target-select fixture, Tank → Infantry in woods,
+identical but for a CO written after every reload:
+
+| CO written | per-unit Tank mods | predicted band | observed |
+|---|---|---|---|
+| Andy (1) | 100/100 | 60–67 | 60–67 |
+| Nell (0) | 100/100 | 60–75 | 60–67 |
+| Sonja (7) | 100/100 | 48–67 | 60–67 |
+| **Max (2)** | **150/100** | **90–97** | **60–67** |
+
+Max is the one that matters. His modifiers are not in doubt and they are large;
+if the write reached the damage path his band could not sit on Andy's. The
+write itself is fine — the harness reads the byte back and it holds. Combat has
+simply already resolved its CO by the time the cursor is on the target,
+presumably when Fire was chosen.
+
+**What this cost.** Two documented kill conditions ran through this mechanism —
+A11's, and the long-standing plan to settle Kanbei by writing `+0x1D` and
+comparing damage. Both would have returned "no difference" for *any* CO, and
+the conclusion drawn from Kanbei's would have been "the header fields do not
+reach the damage path", which is precisely the wrong answer arrived at
+confidently. A test that cannot fail is worse than no test, and this one had
+been sitting in the file as the recommended next step.
+
+**What it did not cost.** Nothing measured. Every checked-in sweep has
+`co_written: null` and all 75 corpus rows are neutral, so no shipped number
+came through this route. The luck ranges in A11 remain a ROM-derived
+interpretation — untested, not refuted.
+
+`harness/mgba_dmg.lua` still accepts `opts.co`, because it does swap the
+identity for anything reading `+0x1D` live, but it now prints a warning, and
+`tools/luck_range_check.py` refuses to interpret a sweep that used it.
+
+**The open question this leaves:** where the damage path gets its CO. The
+movement-cost path at `0x0803A73E` demonstrably reads `[army+0x1D]` and
+`[army+0x1E]`; the damage path's modifier lookup is documented as
+`[co * 128 + unit_type * 4]` without `co`'s provenance ever being traced. That
+trace is now worth doing, because it would also say whether a written CO could
+be made to work by writing whatever it caches instead.
