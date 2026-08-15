@@ -47,7 +47,9 @@ paid off — see "What got caught" below.
 - **The defence modifier multiplies the value before luck**, it is not added
   inside the terrain bracket. The engine had it in the bracket from the start
   and nothing could object, because the two forms are identical at 100 and
-  every measurement before Kanbei was neutral on defence. A14.
+  every measurement before Kanbei was neutral on defence. Sami's per-unit 90 on
+  Infantry (53–60) confirms it a second time and pins the defence side's
+  truncation — **both sides truncate**, as `__divsi3` always said. A14.
 - **The CO attack modifier truncates** before anything else touches the value,
   as `__divsi3` in the damage path always said. The engine carried it as an
   exact fraction for the project's whole life and no test could tell, because
@@ -65,7 +67,7 @@ paid off — see "What got caught" below.
   range, not an envelope, so "cannot kill" is as reliable as "will kill".
   Settled by crossing two independent eliminations that neither could finish
   alone -- see `DERIVATION.md` 17.
-- 58 regression tests, plus 20 replaying the measurements.
+- 58 regression tests, plus 21 replaying the measurements.
 
 **Milestone 1 — the state reader. Done.**
 
@@ -361,7 +363,7 @@ tests/test_damage.py      58 regression tests
 tests/test_pathing.py     22 regression tests, incl. "no unit-type branches"
 tests/test_threat.py      23 regression tests, incl. the same branch ban
 tests/test_fog.py         32 tests, incl. five real-board oracles and branch ban
-tests/test_corpus.py      20 tests: replay every recorded measurement against
+tests/test_corpus.py      21 tests: replay every recorded measurement against
                           the engine, strikes and counters kept apart
 tests/fixtures/           captured boards, seeded sweeps, and the game's own
                           vision array

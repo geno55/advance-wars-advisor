@@ -755,13 +755,18 @@ then defender's — exactly the "twice in sequence, attack then defence" that
 reduced to `(100 − stars·hp_d)/100`. `counter_damage` gets the same correction
 for the same reason.
 
-**Measured for the universal half only.** The per-unit defence value is assumed
-to be a multiplier in the same convention — so Max's 110 on indirect defence
-means taking 10% *more*, not less — because it comes from the same table and is
-applied at the same point. No sweep has yet used a CO with a non-100 per-unit
-defence. **Kill it by:** sweeping against Sami's Infantry (90 on foot) or
-Eagle's air (90), with `co_abilities = 1`. If the convention is inverted there,
-the sign of every per-unit defence modifier is wrong.
+**The per-unit half is measured too, now.** Sami is 120/90 on Infantry and
+100/100 universally, so her 90 acts alone and nothing else moves. A direct
+multiplier predicts value 75 → 67 and a band of **53–60**; the inverted
+reading, treating it as a defence stat applied via `200 − x`, predicts taking
+10% *more*. The game said 53–60. So the sign is right, and Max's 110 on
+indirect defence really does mean taking 10% more damage.
+
+That sweep settles the defence-side truncation as well, which A13 had listed as
+unmeasurable while `co_def` was always 100: `75 * 90 // 100 = 67` gives 53–60,
+an exact 67.5 gives 54–61, and the doubled pair moves with it — 56 and 60
+truncated, 54 and 58 exact, observed 56 (×11) and 60 (×14). **Both sides
+truncate**, which is what `__divsi3` said all along.
 
 Also still open: the counter path under a non-neutral CO. `counterattack()`
 raises `CounterModifiersUnknown` rather than guess, because the ROM folds the

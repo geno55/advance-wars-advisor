@@ -38,7 +38,7 @@ from engine.damage import (Attack, counter_damage, damage_for_luck,  # noqa: E40
 UNRESOLVED_ATTACKER_TERRAIN = ("city100.json", "city81.json")
 
 WIDE_LUCK = ("nell_wood_luck.json", "sonja_wood_luck.json", "kanbei_att_wood.json",
-          "kanbei_def_wood.json")
+          "kanbei_def_wood.json", "sami_def_wood.json")
 
 SWEEPS = ("counter.json", "att57.json", "def81.json", "def85.json",
           "def65.json", "wood100.json", "wood81.json", "city100.json",
@@ -334,6 +334,27 @@ class TestSeededSweeps(unittest.TestCase):
         self.assertEqual((sweep["co_written"], sweep["co_player"]), (6, 2))
         self.assertEqual((min(observed), max(observed)), (48, 55))
         self.assertEqual(_effective_co_defense(sweep, "Infantry"), 80)
+
+    def test_a_per_unit_defence_value_uses_the_same_convention(self):
+        """Sami is 120/90 on Infantry and 100/100 universally, so the 90 acts
+        alone. It was applied on the strength of Kanbei's universal following
+        the same convention -- same table, same point -- and nothing had
+        measured it.
+
+        Two readings were live. A direct multiplier makes 90 mean taking 10%
+        LESS: value 75 -> 67, band 53-60. Inverted, as a defence stat applied
+        via 200-x, it would mean taking 10% MORE. The game said 53-60, so the
+        sign is right and every per-unit defence modifier keeps it.
+
+        This board also separates truncated from exact on the DEFENCE side,
+        which A13 had listed as unmeasurable while co_def was always 100:
+        75*90//100 = 67 gives 53-60, an exact 67.5 gives 54-61."""
+        sweep, observed = self._check("sami_def_wood.json")
+        self.assertEqual((sweep["co_written"], sweep["co_player"]), (4, 2))
+        self.assertEqual((min(observed), max(observed)), (53, 60))
+        self.assertEqual(_effective_co_defense(sweep, "Infantry"), 90)
+        # the doubled pair, which only the truncated value produces
+        self.assertEqual({d for d, n in observed.items() if n >= 10}, {56, 60})
 
     def test_defender_at_85_agrees(self):
         sweep, observed = self._check("def85.json")
