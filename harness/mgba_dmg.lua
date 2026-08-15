@@ -531,7 +531,7 @@ function dmg_seedsweep(fixture, att_slot, def_slot, outpath, nseeds, stride, add
   -- terrain read from the fixture is the tile it came FROM, not the one it
   -- fought from -- and every attacker-terrain figure this file reports, past
   -- and present, is attributed to the wrong tile.
-  if c_seed.moved then
+  if c_seed.moved and c_seed.att_t0 ~= c_seed.att_t1 then
     console:error(string.format(
       "ATTACKER TERRAIN IS THE PRE-MOVE TILE. The record read (%d,%d) terrain "
       .. "%d before confirming and (%d,%d) terrain %d after. The counterattack "
@@ -540,6 +540,20 @@ function dmg_seedsweep(fixture, att_slot, def_slot, outpath, nseeds, stride, add
       c_seed.att_x0, c_seed.att_y0, c_seed.att_t0,
       c_seed.att_x1, c_seed.att_y1, c_seed.att_t1,
       c_seed.att_t1, c_seed.att_t0))
+  elseif c_seed.moved then
+    -- Moved, but between two tiles of the same terrain, so every figure this
+    -- file reports is attributed correctly and there is nothing to fix.
+    --
+    -- This used to be the branch above, firing on POSITION rather than
+    -- terrain. It printed "[ERROR] ... lands on terrain 1, not 1" on every
+    -- single sweep -- self-contradictory on its face, and worth fixing for
+    -- that reason alone: an error that is always wrong teaches you to skip
+    -- the errors, and this harness has real ones.
+    console:log(string.format(
+      "  note: attacker moved (%d,%d) -> (%d,%d) on confirm, same terrain "
+      .. "(%d), so attacker_terrain is right either way",
+      c_seed.att_x0, c_seed.att_y0, c_seed.att_x1, c_seed.att_y1,
+      c_seed.att_t1))
   elseif c_seed.att_t0 ~= c_seed.att_t1 then
     console:error(string.format(
       "attacker terrain changed from %d to %d without the unit moving -- that "
