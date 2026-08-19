@@ -29,8 +29,13 @@ paid off — see "What got caught" below.
 - Both 24×24 damage matrices, all 18 units, extracted from `0x283B48` and
   `0x283D88`, with 17 structural assertions re-checked on every extraction.
 - Internal unit ID map recovered structurally, not guessed.
-- Weapon selection reproducing known behaviour (Md Tank hits Infantry for 105
-  with its MG but Tank for 85 with its cannon; out-of-ammo fallback).
+- **Weapon selection read off the ROM**, not inferred from behaviour: `cmp r6,
+  r0` / `blt` at `0x08060D00` computes both weapons and fires the larger, ties
+  to the primary. The **per-matchup weapon flag** this was suspected of merely
+  coinciding with does not exist. Measured in both directions too — the corpus
+  fires the secondary for Tank → Infantry and Tank → Mech and the *primary* for
+  Mech → Tank, each alternative refuted by damage magnitude with no overlap.
+  The out-of-ammo fallback is the one part still assumed; see A17.
 - Calibrated against 75 exact-HP observations from a live game — 14
   hand-recorded, 61 from the automated sweep. Terrain stars confirmed; five of
   six formula variants refuted.

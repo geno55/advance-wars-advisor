@@ -111,7 +111,15 @@
   "note_type_ids_are_1_based_in_ram": true,
   "co_modifier_table": "0x08284A0C, indexed [co * 128 + unit_type * 4], dereferenced to a struct whose byte +5 is the modifier",
   "co_modifier_application": "value = (value * modifier) / 100, applied TWICE in sequence (attack then defence), each an independent truncating signed division via __divsi3 at 0x0807B488",
-  "army_struct_stride": "0x68"
+  "army_struct_stride": "0x68",
+  "weapon_selection": {
+   "site": "0x08060D00",
+   "rule": "cmp r6, r0 / blt -- take whichever weapon deals more; blt is strict so a tie takes the primary",
+   "detail": "the primary damage is computed into r6 (0 when the primary cannot hit the target, set at 0x08060C3C), the secondary into r0, and the comparison follows both __divsi3 calls -- so it compares MODIFIER-APPLIED damage, not raw base. Order-preserving for every modifier in the CO records, so it is equivalent to max-base here; separating the two would need a modifier below 4.",
+   "no_weapon_flag": "there is no per-matchup weapon flag anywhere -- the hypothesis that max-base merely coincided with one is refuted by the comparison existing",
+   "ammo_gate": "NOT FOUND in the selection routine; the out-of-ammo fallback remains ASSUMPTIONS A17",
+   "measured": "both directions in harness/observations.csv -- secondary for Tank->Infantry (75 v 35) and Tank->Mech (70 v 30), primary for Mech->Tank (55 v 6), each alternative refuted by damage magnitude with no overlap"
+  }
  },
  "unit_ids": {
   "0": "Infantry",

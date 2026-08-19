@@ -583,6 +583,98 @@ class TestPerCoLuck(unittest.TestCase):
         self.assertEqual((a.luck_min, a.luck_max), (0, 9))
 
 
+class TestWeaponSelectionMatchesTheRom(unittest.TestCase):
+    """The selection rule is `cmp r6, r0` / `blt` at 0x08060D00: take whichever
+    weapon deals more, ties to the primary. These lock in that `select_weapon`
+    agrees with those instructions, and that the choice really does SWITCH
+    with the matchup -- an always-primary or always-secondary reading would
+    pass half of them and fail the other half.
+    """
+
+    def test_the_larger_weapon_wins_in_both_directions(self):
+        """Same function, opposite answers, driven only by the tables."""
+        self.assertEqual(select_weapon("Tank", "Infantry").slot, "secondary")
+        self.assertEqual(select_weapon("Mech", "Tank").slot, "primary")
+
+    def test_every_matchup_picks_the_larger_of_the_two(self):
+        """All 18x18, against the tables directly. `blt` is strict, so the
+        primary takes ties -- there are none in this ROM, but the rule is the
+        rule and a future table must not silently flip it."""
+        t = tables()
+        for a in t["primary"]:
+            for d in t["primary"][a]:
+                p, s = t["primary"][a][d], t["secondary"][a][d]
+                w = select_weapon(a, d)
+                if p == 0 and s == 0:
+                    self.assertIsNone(w, f"{a}->{d}")
+                    continue
+                self.assertEqual(w.base, max(p, s), f"{a}->{d}")
+                self.assertEqual(w.slot, "primary" if p >= s else "secondary",
+                                 f"{a}->{d}")
+
+    def test_a_tie_goes_to_the_primary(self):
+        """`blt` does not branch when the two are equal. Built by hand,
+        because no real matchup ties."""
+        tbl = {"primary": {"X": {"Y": 40}}, "secondary": {"X": {"Y": 40}}}
+        self.assertEqual(select_weapon("X", "Y", tbl=tbl).slot, "primary")
+
+    def test_the_six_matchups_where_the_secondary_is_larger(self):
+        """These are the ones that carry the argument. A rule reading
+        'primary whenever it can hit at all' -- which is what the ROM's
+        FORECAST helper does before the comparison -- would pick the primary
+        for all six, since none of these primaries is zero."""
+        t = tables()
+        got = {(a, d) for a in t["primary"] for d in t["primary"][a]
+               if 0 < t["primary"][a][d] < t["secondary"][a][d]}
+        self.assertEqual(got, {("MdTank", "Infantry"), ("MdTank", "Mech"),
+                               ("Tank", "Infantry"), ("Tank", "Mech"),
+                               ("BCopter", "Infantry"), ("BCopter", "Mech")})
+        for a, d in got:
+            self.assertEqual(select_weapon(a, d).slot, "secondary", f"{a}->{d}")
+
+
+class TestTheCorpusWitnessedTheSelection(unittest.TestCase):
+    """Three recorded battles pin the rule against the game, and the third is
+    the one that makes it a measurement rather than a coincidence: it is the
+    matchup where the PRIMARY is the larger weapon, so a model that always
+    reached for the secondary would fit the other two and die here.
+
+    Every number below is the observed damage against what each weapon alone
+    could have produced. The bands do not overlap in any of the three.
+    """
+
+    def band(self, base, hp_a, stars, hp_d):
+        vals = [VARIANTS[DEFAULT_VARIANT](base, display_hp(hp_a), 100, 100,
+                                          stars, display_hp(hp_d), lk)
+                for lk in range(0, 10)]
+        return min(vals), max(vals)
+
+    def test_tank_into_infantry_used_the_secondary(self):
+        """Road, both full, observed 78. Secondary 75 spans 75-84; primary 35
+        cannot exceed 44."""
+        lo, hi = self.band(75, 100, 0, 100)
+        self.assertLessEqual(lo, 78)
+        self.assertLessEqual(78, hi)
+        self.assertLess(self.band(35, 100, 0, 100)[1], 78)
+
+    def test_tank_into_mech_used_the_secondary(self):
+        """Mountain, both full, observed 43. Secondary 70 spans 42-47;
+        primary 30 cannot exceed 23."""
+        lo, hi = self.band(70, 100, 4, 100)
+        self.assertLessEqual(lo, 43)
+        self.assertLessEqual(43, hi)
+        self.assertLess(self.band(30, 100, 4, 100)[1], 43)
+
+    def test_mech_into_tank_used_the_primary(self):
+        """The control. A Mech's primary is 55 against a Tank and its
+        secondary 6, so here the larger weapon is the PRIMARY -- and this is
+        the recorded counter at 57 HP, which the counter formula resolves with
+        no luck term at all: base 55 gives exactly the observed 27, base 6
+        gives 2."""
+        self.assertEqual(counter_damage(55, 57, 100, 1, 100), 27)
+        self.assertEqual(counter_damage(6, 57, 100, 1, 100), 2)
+
+
 class TestCounterWalksTheAttacksOwnLuck(unittest.TestCase):
     """counterattack() maps every survivor of the OPENING's luck range through
     the counter formula. For a while it walked the module's default 0..9

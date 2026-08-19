@@ -148,10 +148,47 @@ def select_weapon(attacker: str, defender: str, ammo: int = 99,
                   tbl: Optional[dict] = None) -> Optional[Weapon]:
     """Pick the weapon the game would use, or None if the attack is illegal.
 
-    Rule: use whichever available weapon deals more base damage. This is what
-    reproduces the known behaviour that a Md Tank hits Infantry for 105 (its
-    machine gun) rather than 50 (its cannon), while still using the cannon
-    against armour. Marked as an assumption in docs/ASSUMPTIONS.md.
+    Rule: whichever weapon deals more, ties to the primary. **Read off the
+    ROM**, not inferred from behaviour -- the routine computes the primary's
+    damage into r6 (leaving 0 when the primary cannot hit this target at all),
+    computes the secondary's into r0, and then:
+
+        08060C38  adds r6, r0, #0   ; r6 = the PRIMARY's damage
+        08060C3E  ldr  r2, ...      ; DAMAGE_SECONDARY
+        08060D00  cmp  r6, r0       ; primary vs secondary
+        08060D02  blt  #0x8060d0a   ; primary < secondary -> fire the SECONDARY
+        08060D04  b    #0x8060da8   ; else -> fire the primary
+
+    `blt` is strict, so a tie takes the primary, which is what `>=` below
+    does. No unit type appears in that code and no per-matchup weapon flag
+    exists anywhere -- the alternative this rule was suspected of merely
+    coinciding with is not a thing the ROM has.
+
+    Two details the instructions settle that the old "more base damage"
+    wording did not:
+
+      * The comparison is on the **modifier-applied damage**, not the raw
+        base -- both `bl __divsi3` calls land before the `cmp`. It makes no
+        difference here: the modifier is indexed by the ATTACKER's type, so
+        both weapons get the same one, and `x * m // 100` cannot invert an
+        ordering. It can only flatten one, and flattening hands the tie to
+        the primary. Separating the two readings needs the larger base to
+        lose its lead entirely, which for the closest such pair in the tables
+        (BCopter -> Mech, 50 against 75) takes a modifier below 4. Nothing in
+        the CO records is under 80.
+      * A weapon that cannot hit the target scores 0 rather than being
+        skipped, so "illegal" and "worst" are the same branch.
+
+    Measured too, in both directions, which is what rules out an
+    always-primary or always-secondary reading: the corpus picks the
+    secondary for Tank -> Infantry (75 over 35) and Tank -> Mech (70 over
+    30), and the primary for Mech -> Tank (55 over 6). Each alternative is
+    refuted by damage magnitude with no overlap. See ASSUMPTIONS, Established.
+
+    `ammo` is the one part of this that is still an ASSUMPTION -- see A17. No
+    ammo read appears in the selection routine, and no recorded battle has an
+    attacker out of ammo, so the primary dropping out at 0 is how the game is
+    documented to behave and not something checked here.
     """
     t = tbl or tables()
     prim = t["primary"].get(attacker, {}).get(defender, 0) if ammo > 0 else 0

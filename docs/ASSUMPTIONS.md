@@ -25,6 +25,22 @@ fixtures, and in this file's git history.
   In-RAM type IDs are 1-based; table rows are 0-based.
 - **Out-of-ammo Fighters cannot attack.** The alternate ROM copy that gives them
   a secondary weapon has zero code cross-references — dead data.
+- **Weapon selection is a comparison, not a flag.** `cmp r6, r0` / `blt` at
+  `0x08060D00`: the primary's damage is computed into `r6` (0 when the primary
+  cannot hit the target at all), the secondary's into `r0`, and the larger
+  fires — `blt` is strict, so a tie takes the primary. There is **no
+  per-matchup weapon flag** anywhere in the ROM, which is the alternative A1
+  suspected the rule of merely coinciding with. The comparison sits after both
+  `__divsi3` calls, so it ranks *modifier-applied* damage rather than raw base;
+  identical here, because the modifier is indexed by the attacker's type and
+  `x * m // 100` cannot invert an ordering — separating the two readings would
+  need a modifier below 4, and the CO records bottom out at 80. Measured in
+  **both directions**, which is what rules out an always-primary or
+  always-secondary reading: the corpus fires the secondary for Tank → Infantry
+  (75 over 35, observed 78 on road where the primary caps at 44) and Tank → Mech
+  (70 over 30, observed 43 on mountain where the primary caps at 23), and the
+  **primary** for Mech → Tank (55 over 6, the recorded counter at 57 HP reading
+  exactly 27 where the secondary gives 2). Retired A1.
 - **The strike formula is `luck_after_hp`, and it is exact.** One surviving
   variant: both CO modifiers folded into the base (each truncating), the
   attacker's display-HP term, the luck roll added after it, and the terrain
@@ -101,17 +117,6 @@ fixtures, and in this file's git history.
 
 ## Assumed — these are the ones that will bite
 
-### A1. Weapon selection = "whichever deals more base damage"
-`select_weapon()` picks the higher-base weapon, subject to ammo. This reproduces
-the known behaviour that a Md Tank hits Infantry for 105 (machine gun) and Tank
-for 85 (cannon). But "max damage" is a guess at the *rule*; the game might
-instead use an explicit per-matchup weapon flag that happens to agree here.
-The same assumption now covers the counter's weapon: `counterattack()` selects
-the defender's weapon by the same max-base rule, and no recorded counter has
-distinguished that from a flag — A9b's sweeps left it open by construction.
-**Kill it by:** finding a matchup where primary and secondary are close, and
-checking which one the ammo counter decrements.
-
 ### A7. A counterattack happens iff both range rings include 1
 `counterattack()` returns a return strike only when `min_range <= 1 <= max_range`
 holds for the attacker *and* the defender, which is `fights_at_contact()`. The
@@ -173,6 +178,32 @@ full HP on starred terrain. 81 internal separates `ceil` from `round`, 57
 separates `ceil` from the floors — the same discriminating values that settled
 the strike (retired A9a).
 
+### A17. The out-of-ammo fallback
+
+`select_weapon()` drops the primary when `ammo == 0`, so a Tank with an empty
+cannon is quoted as hitting a Tank for its machine gun's 6 rather than not at
+all. That is how the game is documented to behave and it is what A1's old
+wording meant by "subject to ammo" — but the selection routine that A1's kill
+settled contains **no ammo read at all** (only the two `__divsi3` calls and
+the table lookups), so the gate is somewhere this disassembly has not been,
+and every recorded battle has the attacker with ammo to spare.
+
+It is load-bearing in the safe direction for defence and the unsafe one for
+offence: an advisor that wrongly keeps the primary available promises a kill
+the empty gun cannot deliver.
+
+**Kill it by:** the ammo counter, which is a direct readout of which weapon
+fired — the primary consumes a round and the secondary does not. Two sweeps
+on one fixture: a Tank with ammo written to 0 attacking a Tank, where the
+fallback predicts base 6 (a few points of damage) and no fallback predicts no
+attack offered at all; then the same with ammo 9, predicting base 55 and the
+counter dropping to 8. **Ship a positive control**: the existing corpus is
+twelve sweeps of Tank → Infantry all reading ammo 9 before and 9 after, which
+is consistent with the secondary firing and equally consistent with this
+fixture never decrementing ammo at all. One matchup that *must* spend a round
+— Tank → Tank, primary-only against armour — is what separates those, and
+without it the ammo column proves nothing.
+
 ## Unknown — not modelled
 
 - **CO powers.** The second 128-byte stat block is selected by army `+0x1E`,
@@ -209,6 +240,7 @@ The measured content is in the Established bullets; the full accounts are in
 | entry | finding | full account |
 |---|---|---|
 | A0 | the disassembly walk was never continued; everything it deferred was settled by measurement instead | git history |
+| A1 | weapon selection is `cmp`/`blt` at `0x08060D00` — the larger fires, ties to the primary; no weapon flag exists. The ammo clause split off as A17 | `tests/test_damage.py`, `data/aw1_damage.json` `code_analysis.weapon_selection` |
 | A2 | the formula is `luck_after_hp`, exact | `DERIVATION.md` 17 |
 | A3 | terrain stars from the ROM struct at `0x284170+8` | `DERIVATION.md` |
 | A4 | combat luck is a u32 at `0x03001D30`; the roll is uniform 0..9 | `DERIVATION.md` 16 |
