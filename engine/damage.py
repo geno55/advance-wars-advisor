@@ -542,13 +542,20 @@ def counterattack(a: Attack, variant: str = DEFAULT_VARIANT,
     how the same output claimed a kill was not guaranteed and that nothing
     would come back, on adjacent lines.
 
-    The survivor is the STRONGEST one -- `max_remaining_hp`, the defender that
-    took the smallest damage roll. That is the pessimistic direction for the
-    attacker, which is the one that matters here: this number answers "what is
-    the worst that comes back at me", and understating it is how a tool talks a
-    player into a bad trade. It used to read `min_remaining_hp` under a comment
-    claiming that was pessimistic; it is the opposite, because the weakest
-    survivor hits weakest.
+    There is no single survivor to pick. The counter carries no luck of its
+    own, but WHICH defender is left does, so this walks the opening's whole luck
+    range and maps every surviving defender through the counter formula. The
+    top of the returned range is the strongest survivor -- the smallest opening
+    roll -- which is the pessimistic direction for the attacker, and the one
+    that matters: this answers "what is the worst that comes back at me", and
+    understating it is how a tool talks a player into a bad trade.
+
+    Two earlier versions got that backwards in different ways. The first took
+    `min_remaining_hp`, the WEAKEST survivor, under a comment calling it
+    pessimistic -- it is the opposite, because the weakest survivor hits
+    weakest. The second took `max_remaining_hp` alone, which is the right end
+    but reports a single value where the game has a range, and its lower bound
+    was not a lower bound at all.
 
     `attacker_stars` is the cover on the ORIGINAL attacker's tile, which is
     where the return strike lands. It defaults to 0, the same open-ground

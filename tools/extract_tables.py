@@ -110,62 +110,7 @@ def main(rom_path, out_path):
             "secondary_offset": hex(SECONDARY),
             "duplicate_offsets": [hex(PRIMARY_COPY), hex(SECONDARY_COPY)],
             "stride": N,
-            "verified_against_emulator": True,
         },
-        "calibration": {
-            "observations": 14,
-            "source": "harness/observations.csv, exact internal HP read from RAM",
-            "co": "single neutral CO on both armies, no power active; validated "
-                  "by a Tank->Infantry road reading of 78 against a ROM base of 75",
-            "display_rule": "floor_min1 -- combat scales by a TRUNCATED tenth of "
-                            "internal HP, min 1. ceil, round and plain floor are "
-                            "all refuted by observation.",
-            "terrain_stars": {"road": 0, "plains": 1, "mountain": 4},
-            "terrain_source": "read from the in-game Def display; road, plains "
-                              "and mountain were independently re-derived from "
-                              "damage data and agreed",
-            "formula_variants_refuted": ["floor_end", "floor_attack_then_end",
-                                         "floor_each_step", "round_end"],
-            "formula_variants_surviving": ["luck_after_hp", "luck_last"],
-            "residual_uncertainty":
-                "The two survivors agree exactly on MINIMUM damage, so "
-                "guaranteed-kill calls are exact. They differ on MAXIMUM damage "
-                "by up to 4 on 4-star terrain. resolve() reports the envelope "
-                "over both rather than picking one.",
-            "why_not_resolved":
-                "Separating them needs the top of the luck range, and the GBA "
-                "advances its RNG per frame -- save-state replays sample a "
-                "narrow, timing-dependent band rather than the full 0..9. Over "
-                "35 trials the maximum appeared once. Not worth more grinding "
-                "for a difference that never changes a kill decision.",
-        },
-        "copy_discrepancies": discrepancies,
-        "open_questions": [],
-        "resolved_questions": ([{
-            "id": "fighter-secondary",
-            "question": "Does an out-of-ammo Fighter retain a secondary weapon?",
-            "detail": "The alternate ROM copy gives Fighter a secondary (vs Fighter 15, "
-                      "Bomber 45, BCopter 65, TCopter 75); the main copy gives it none.",
-            "answer": "No. The main copy is live; an out-of-ammo Fighter cannot attack.",
-            "evidence": "Literal-pool cross-reference scan (tools/find_xrefs.py): the main "
-                        "tables are referenced by code at 7 sites (primary) and 3 sites "
-                        "(secondary). The alternate copies at 0x083F4BBC/0x083F4DFC are "
-                        "referenced by ZERO code sites -- they are dead data.",
-        }] if discrepancies else []),
-        "code_analysis": {
-            "damage_lookup_sites": ["0x08022EB0", "0x08060B60", "0x08060DBA"],
-            "index_formula": "table + (attacker_type - 1) * 24 + (defender_type - 1)",
-            "note_type_ids_are_1_based_in_ram": True,
-            "co_modifier_table": "0x08284A0C, indexed [co * 128 + unit_type * 4], "
-                                 "dereferenced to a struct whose byte +5 is the modifier",
-            "co_modifier_application": "value = (value * modifier) / 100, applied TWICE in "
-                                       "sequence (attack then defence), each an independent "
-                                       "truncating signed division via __divsi3 at 0x0807B488",
-            "army_struct_stride": "0x68",
-        },
-        "unit_ids": {str(k): v for k, v in UNIT_IDS.items()},
-        "unused_slots": GAPS,
-        # Keep raw 24x24 verbatim: never discard bytes we did not understand.
         "primary_raw": mats["primary"],
         "secondary_raw": mats["secondary"],
         # Named view for humans and for the engine.
@@ -174,7 +119,41 @@ def main(rom_path, out_path):
         "secondary": {UNIT_IDS[a]: {UNIT_IDS[d]: mats["secondary"][a][d]
                                     for d in UNIT_IDS} for a in UNIT_IDS},
     }
-    pathlib.Path(out_path).write_text(json.dumps(out, indent=1), encoding="utf-8")
+    # THE ROM HALF ONLY, and nothing else touched.
+    #
+    # This script reads a cartridge. It cannot know whether the formula wrapped
+    # around these tables reproduces what the game did, and it did not write the
+    # open questions, the code analysis or the unit id map either -- those
+    # arrived later, by hand and by other tools. It rewrote the file wholesale
+    # regardless, which made re-extracting a destructive act twice over: it
+    # re-asserted `verified_against_emulator: True` whatever the state of the
+    # model, and it dropped six hand-curated blocks on the floor.
+    #
+    # So: update the keys this script actually derives, in place, and leave
+    # every other key exactly as found. The measurement-derived fields belong to
+    # tools/verify_corpus.py, which computes them by replaying the corpus.
+    ROM_OWNED = ("game", "rom_sha1", "provenance", "primary_raw",
+                 "secondary_raw", "primary", "secondary")
+    MEASURED = ("verified_against_emulator", "verification")
+    out_file = pathlib.Path(out_path)
+    if out_file.exists():
+        doc = json.loads(out_file.read_text(encoding="utf-8"))
+        kept = {k: doc.get("provenance", {})[k] for k in MEASURED
+                if k in doc.get("provenance", {})}
+        for key in ROM_OWNED:
+            doc[key] = out[key]
+        doc["provenance"].update(kept)
+        carried = [k for k in doc if k not in ROM_OWNED]
+        print(f"kept {len(carried)} block(s) this script does not own: "
+              f"{', '.join(carried)}")
+        print(f"kept measurement fields: {', '.join(kept) or 'NONE'}"
+              " -- tools/verify_corpus.py --write recomputes them")
+    else:
+        doc = out
+        print("no existing file: the measurement-derived fields are ABSENT, so "
+              "resolve() will refuse advice until you run "
+              "tools/verify_corpus.py --write")
+    out_file.write_text(json.dumps(doc, indent=1) + "\n", encoding="utf-8")
     print(f"wrote {out_path}")
 
     order = [UNIT_IDS[i] for i in sorted(UNIT_IDS)]

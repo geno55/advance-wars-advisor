@@ -398,9 +398,11 @@ def report(observations, alive):
     _, dmg, kill, _ = agreement(alive)
     if stars_pinned and kill == 0 and dmg == 0:
         h = alive[0]
-        print("\nDONE. Set provenance.verified_against_emulator=true in "
-              "data/aw1_damage.json,")
-        print(f"DEFAULT_VARIANT='{h.variant}' in engine/damage.py")
+        print(f"\nDONE. Set DEFAULT_VARIANT='{h.variant}' in engine/damage.py,")
+        print("then run  python tools/verify_corpus.py --write  to recompute")
+        print("provenance.verified_against_emulator from the replay. Do NOT")
+        print("set that flag by hand: it is derived, and a hand-set one is")
+        print("rejected for having no record of how it was arrived at.")
         if len(att_ds) == 1 and len(def_ds) == 1 and att_ds == def_ds:
             print(f"DEFAULT_DISPLAY='{h.att_display}' -- both operands are "
                   "pinned, and to the same rule")

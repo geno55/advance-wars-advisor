@@ -175,7 +175,20 @@ class TestHpConventions(unittest.TestCase):
 
 class TestEngineBehaviour(unittest.TestCase):
     def test_resolve_works_now_that_calibration_passed(self):
-        self.assertTrue(tables()["provenance"]["verified_against_emulator"])
+        """The flag must be DERIVED, not merely true.
+
+        Asserting `assertTrue(flag)` on its own is what closed the loop: the ROM
+        extractor wrote the flag, this test demanded it, and nothing in between
+        consulted any evidence. What makes it a check rather than a pin is the
+        `verification` record beside it, which names what was replayed --
+        `tests/test_corpus.py` compares that record against the corpus on disk.
+        """
+        prov = tables()["provenance"]
+        self.assertTrue(prov["verified_against_emulator"])
+        self.assertIn("verification", prov,
+                      "the flag is hand-set: no record of how it was computed")
+        self.assertEqual(prov["verification"]["computed_by"],
+                         "tools/verify_corpus.py")
         self.assertIsNotNone(resolve(Attack("Tank", "Infantry")))
 
     def test_the_unverified_guard_still_functions(self):

@@ -388,6 +388,9 @@ tools/counter_check.py    counterattack hypotheses against a seed sweep: the
 tests/calibrate.py        hypothesis elimination: --suggest, --explain,
                           --shared-luck, --selftest. Diagnosis is automatic
                           when nothing survives; there is no --diagnose.
+tools/verify_corpus.py    computes provenance.verified_against_emulator by
+                          replaying every recorded measurement. The flag that
+                          gates all advice is derived here, never typed
 
 tools/extract_tables.py   ROM -> damage JSON, 17 structural assertions
 tools/extract_movecost.py ROM -> movement cost JSON

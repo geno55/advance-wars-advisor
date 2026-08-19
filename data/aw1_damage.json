@@ -10,13 +10,30 @@
    "0x3f4dfc"
   ],
   "stride": 24,
-  "verified_against_emulator": true
+  "verified_against_emulator": true,
+  "verification": {
+   "method": "every recorded measurement replayed against the engine",
+   "computed_by": "tools/verify_corpus.py",
+   "tests": "tests/test_corpus.py",
+   "tests_run": 22,
+   "replayed": {
+    "observations": 75,
+    "sweeps": 20,
+    "sweep_cases": 1224
+   },
+   "engine": {
+    "display_rule": "ceil",
+    "surviving_variants": [
+     "luck_after_hp"
+    ]
+   }
+  }
  },
  "calibration": {
-  "observations": 14,
+  "observations": 75,
   "source": "harness/observations.csv, exact internal HP read from RAM",
   "co": "single neutral CO on both armies, no power active; validated by a Tank->Infantry road reading of 78 against a ROM base of 75",
-  "display_rule": "floor_min1 -- combat scales by a TRUNCATED tenth of internal HP, min 1. ceil, round and plain floor are all refuted by observation.",
+  "display_rule": "ceil -- both operands scale by ceil(internal/10). Measured by writing HP and sweeping luck seeds; floor, floor_min1 and round are each refuted by a recorded board. See ASSUMPTIONS A9a.",
   "terrain_stars": {
    "road": 0,
    "plains": 1,
@@ -27,14 +44,14 @@
    "floor_end",
    "floor_attack_then_end",
    "floor_each_step",
-   "round_end"
-  ],
-  "formula_variants_surviving": [
-   "luck_after_hp",
+   "round_end",
    "luck_last"
   ],
-  "residual_uncertainty": "The two survivors agree exactly on MINIMUM damage, so guaranteed-kill calls are exact. They differ on MAXIMUM damage by up to 4 on 4-star terrain. resolve() reports the envelope over both rather than picking one.",
-  "why_not_resolved": "Separating them needs the top of the luck range, and the GBA advances its RNG per frame -- save-state replays sample a narrow, timing-dependent band rather than the full 0..9. Over 35 trials the maximum appeared once. Not worth more grinding for a difference that never changes a kill decision."
+  "formula_variants_surviving": [
+   "luck_after_hp"
+  ],
+  "residual_uncertainty": "None on the variant axis: luck_after_hp is the only one left, identified positively by the shape of a 128-attack histogram rather than by absence of a counter-example, so max_damage is a figure and not an envelope. What remains open is listed in docs/ASSUMPTIONS.md.",
+  "why_not_resolved": "Resolved. Seeded sweeps reach the whole luck range, which frame-timed replays could not, and the surviving variants predict different histogram SHAPES -- so the top of the range stopped being the only discriminator. See ASSUMPTIONS A4."
  },
  "copy_discrepancies": [
   {

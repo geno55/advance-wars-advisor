@@ -544,6 +544,42 @@ class TestSeededSweeps(unittest.TestCase):
                          "changed -- if a re-sweep resolved one, drop it from "
                          "UNRESOLVED_ATTACKER_TERRAIN")
 
+    def test_the_verification_flag_is_derived_from_this_corpus(self):
+        """The flag that gates every quote must describe what is actually here.
+
+        `provenance.verified_against_emulator` decides whether `resolve()` will
+        give advice at all. Nothing used to compute it: the ROM extractor wrote
+        True unconditionally, `calibrate.py` printed "set it by hand", and a
+        test asserted it was True -- so there was no green state in which it
+        could honestly be false, and re-extracting re-armed it regardless.
+
+        It is now computed by `tools/verify_corpus.py --write`, which replays
+        this module and records what it replayed. This checks the record still
+        matches the corpus on disk, which is the part that rots: adding a sweep
+        without re-verifying leaves a true-looking flag that was earned on a
+        smaller body of evidence.
+        """
+        sys.path.insert(0, str(ROOT / "tools"))
+        import verify_corpus
+
+        prov = json.loads((ROOT / "data" / "aw1_damage.json")
+                          .read_text(encoding="utf-8"))["provenance"]
+        self.assertIn("verification", prov,
+                      "the flag has no record of how it was computed -- run "
+                      "tools/verify_corpus.py --write")
+        rec = prov["verification"]
+        self.assertEqual(rec["replayed"], verify_corpus.count_corpus(),
+                         "the verification was computed over a different "
+                         "corpus than the one on disk -- re-run "
+                         "tools/verify_corpus.py --write")
+        self.assertEqual(rec["engine"], verify_corpus.engine_fingerprint(),
+                         "the engine's display rule or surviving variants "
+                         "changed since the flag was computed")
+        # And the flag itself agrees with this suite having passed: if any
+        # replay above fails, the run is red and the flag is stale by
+        # definition. Only the True case needs asserting.
+        self.assertTrue(prov["verified_against_emulator"])
+
     def test_the_superseded_counter_orders_do_not_reproduce_the_sweeps(self):
         """The finding the other way round.
 
