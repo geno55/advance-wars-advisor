@@ -649,6 +649,34 @@ CONFIRMED when a sweep fails to produce one. Use a 0-star matchup so damage
 separates every roll; on starred terrain several rolls collapse onto one damage
 and witness nothing.
 
+### A15. The capture rules behind `engine/actions.py`
+
+The capture PROGRESS FIELD is measured: unit record `+4` packs it alongside HP
+and ammo, it reads 0..20 in live captures, and a mid-capture infantry is what
+exposed the `ammo = v >> 7` error. The capturable terrain ids `{6, 8, 10, 11,
+14}` come out of the ROM terrain extraction with its structural assertions.
+Everything else action enumeration does with capture is assumed from the
+game's manual and from play, and none of it has been put in front of the
+running game:
+
+- **Who may capture = `unit_class == "foot"`.** The class is a ROM field, so
+  the code stays free of unit names, but the claim that this class is exactly
+  the set of capturers is an inference — the field could mean something else
+  and coincide on Infantry and Mech.
+- **Rate = displayed HP bars per capture action**, accumulating to a fall at
+  exactly 20. The 0..20 range is observed; the per-turn increment and the
+  threshold behaviour have never been swept.
+- **Moving off the tile resets progress to 0.** Held from play; never
+  measured, and the reset has never been observed in the progress byte.
+
+**Kill them by:** the spike harness already proves write-then-drive is
+transparent to the game (README, milestone 3). One sweep settles all three:
+restore a fixture with a unit beside a neutral city, write its type across all
+18 units, press A on the city, and read whether the menu offers Capture — that
+is the class rule. Then write HP to 45 and 100 on a capturer, capture, and
+read the progress byte — that is the rate. Move it off and back and read the
+byte again — that is the reset. Ship the control case like every sweep.
+
 ## Unknown — not modelled
 
 - **CO powers.** The second 128-byte stat block is selected by army `+0x1E`,

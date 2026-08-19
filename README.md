@@ -333,6 +333,45 @@ the array would be zero with fog off and would be a bitmap — it is `01`
 everywhere and a byte per tile — and both assumptions were hard filters, so it
 confidently found nothing.
 
+**Milestone 6 — action enumeration. Composed; the capture rules are the new
+assumptions.**
+
+`engine/actions.py` answers the other half of the question threat projection
+answers: not *what can happen to me here* but *what can I legally do this
+turn*. For one unit it enumerates every action — wait, attack, capture, load —
+each resolved to facts the engine already knows how to state: the strike and
+counter as exact ranges, the counter taking the cover of the tile the unit
+would **end** on, and the next-turn exposure computed on the board where the
+trade has already happened. It deliberately returns no ranking. Every number
+in it is composed from measured tables; a "best action" is a judgment call the
+game cannot be asked to check, and it will live in its own module and say so.
+
+Same construction discipline as pathing and threat, enforced by the same test:
+not a single branch on unit type. Who may capture is the ROM's `unit_class`
+field, who may load is the cargo mask, who may shoot is `armed` and the range
+fields.
+
+The exposure after an attack is one consistent worst-case world — the low
+opening roll: the target is removed only on a **guaranteed** kill and
+otherwise stands at its strongest surviving HP, which is the same roll that
+produces the biggest counter, so your unit stands at its weakest. When even
+that worst case is death, the exposure is `None` rather than a number: what
+the enemy could do next turn to a unit that may already be gone is not worth
+printing, and the counter's own kill flags carry the verdict.
+
+What is new and **unmeasured** is the capture rules — who may capture, the
+bars-per-turn rate, the reset on moving — now written down as A15 with the
+spike-harness sweep that would settle all three, instead of living silently in
+the code. Unloading, joining, production and CO power activation are not
+offered at all rather than offered wrongly; each is named in the module
+docstring with the reason.
+
+25 regression tests, including the branch ban. The resolution tests assert
+equality with `engine/damage.py` called directly on the same inputs — what
+this layer adds is *wiring* (the right stars on each side, the right HP, the
+right CO reaching the quote), and the formula itself stays tested where it
+lives.
+
 ## Layout
 
 ```
@@ -340,7 +379,8 @@ engine/damage.py          weapon selection, formula variants, damage envelopes
 engine/state.py           Board: terrain, defence, movement cost, units, cargo
 engine/pathing.py         one Dijkstra: reachable, destinations, path
 engine/co.py              CO modifiers, and what it refuses to model
-engine/threat.py          what the enemy can do to you next turn  <- the advisor
+engine/threat.py          what the enemy can do to you next turn
+engine/actions.py         every legal action a unit has this turn  <- the advisor
 engine/fog.py             what you can legally see; reads the game's own array
 harness/mgba_state.lua    dump the live board as JSON          <- the state reader
 harness/mgba_ramtool.lua  RAM search/diff, map and army inspection, unit records
@@ -373,6 +413,7 @@ tests/fixtures/           captured boards, seeded sweeps, and the game's own
 harness/fixtures/         mGBA save states parked at target-select, so a sweep
                           is reproducible rather than re-played by hand
 tools/threat_report.py    exposure, per-unit safety, and the coverage grid
+tools/action_report.py    every action a unit has this turn, facts attached
 tools/fog_hunt.py         pin the fog flag by diffing labelled RAM probes
 tools/fog_diff.py         our predicted visibility vs the game's own count array
 tools/path_diff.py        our reachable set vs the game's own flood fill
@@ -490,6 +531,28 @@ python tools/threat_report.py state.json --map --for Infantry
 prints the coverage grid — how many enemies can put a shot on each tile.
 `--for` matters: without it a Lander looks threatened by an Anti-Air.
 
+## Reading your options
+
+```bash
+python tools/action_report.py state.json
+```
+
+One line per unit that can still act: how many attacks it has and on what, its
+hardest available hit, whether a capture is in reach, and its least-exposed
+tile. Then:
+
+```bash
+python tools/action_report.py state.json --unit 7
+```
+
+lists everything that unit can do — every attack with its exact strike and
+counter ranges and the exposure on the tile it would fire from, every capture
+with the turn count, every transport it could board, and the safest tiles to
+wait on. Attacks print hardest-hitting first and waits least-exposed first,
+which is a filing convention, not advice: the numbers are composed from
+measured tables, a recommendation would not be, and the tool stops at that
+line on purpose.
+
 ## Re-extracting from the ROM
 
 ```bash
@@ -536,6 +599,10 @@ damage back into rolls and distinguishes "unlucky sample" from "wrong model".
   swaps the CO everywhere the intel screen looks and changes damage not at all,
   even for Max. Until that is traced, a CO's effect can only be measured by
   building the fixture with the CO chosen in VS setup.
+- **The action layer's legality is unmeasured.** Which attacks and captures
+  the game actually offers is readable off its own action menu with the spike
+  harness, and has not been; the capture rules are assumptions, written down
+  as A15 with the sweep that would settle them.
 - **The composition itself is unmeasured.** Threat projection's inputs are all
   verified; the matching and ordering built on top of them are covered by unit
   tests and by nothing else. The reachability half is checkable with the
