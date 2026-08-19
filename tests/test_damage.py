@@ -583,6 +583,63 @@ class TestPerCoLuck(unittest.TestCase):
         self.assertEqual((a.luck_min, a.luck_max), (0, 9))
 
 
+class TestCounterWalksTheAttacksOwnLuck(unittest.TestCase):
+    """counterattack() maps every survivor of the OPENING's luck range through
+    the counter formula. For a while it walked the module's default 0..9
+    instead of the attack's own bounds, so the two COs whose ranges differ got
+    counters quoted from rolls they do not have.
+
+    The fixture throughout: Tank -> Mech on 0 stars, both full. Base 70 out,
+    so the opening is 70 + roll exactly; base 55 back with the Tank's display
+    HP holding the terrain bracket at 1, so the counter is 55 * survivor // 100
+    and every expected value below is one line of arithmetic.
+    """
+
+    def _quote(self, attacker_co, defender_hp=100):
+        a = Attack.between("Tank", "Mech", attacker_co, 1,
+                           terrain_stars=0, defender_hp=defender_hp)
+        return counterattack(a, attacker_stars=0,
+                             attacker_co=attacker_co, defender_co=1)
+
+    def test_the_neutral_baseline(self):
+        """Andy: rolls 0..9, survivors 30..21, counters 16..11."""
+        c = self._quote(1)
+        self.assertEqual((c.min_damage, c.max_damage), (11, 16))
+
+    def test_nells_big_rolls_produce_her_weakest_survivors(self):
+        """Nell rolls to 19: survivors run 30..11 and the counter floor is
+        55*11//100 = 6, not the 11 that walking 0..9 reports. Her ceiling
+        matches Andy's, because the strongest survivor is roll 0 either way."""
+        c = self._quote(0)
+        self.assertEqual((c.min_damage, c.max_damage), (6, 16))
+
+    def test_sonjas_minus_fifteen_hits_back_hardest(self):
+        """Sonja rolls from -15: the survivor of her weakest strike stands at
+        45 and counters for 55*45//100 = 24, where walking 0..9 tops out at
+        16. The top of the counter range is the bound this function exists to
+        not understate, and it was understated by exactly this case."""
+        c = self._quote(7)
+        self.assertEqual((c.min_damage, c.max_damage), (11, 24))
+
+    def test_a_kill_sonja_does_not_have_quotes_a_counter(self):
+        """At defender HP 60 a neutral opening kills on every roll and the
+        counter is rightly None. Sonja's -15 leaves a survivor on 5, and that
+        survivor hits back -- reporting no counter there is the same shape as
+        A11's guaranteed kills that will not land."""
+        self.assertIsNone(self._quote(1, defender_hp=60))
+        c = self._quote(7, defender_hp=60)
+        self.assertIsNotNone(c)
+        self.assertEqual(c.max_damage, 55 * 5 // 100)
+
+    def test_nells_kills_above_nine_thin_the_survivors(self):
+        """At defender HP 95 her rolls 70..89 leave survivors 25..6, so the
+        counter floor is 55*6//100 = 3. Walking 0..9 never sees survivors
+        below 16 and reports a floor of 8 -- a lower bound that was not one,
+        which is the same defect the envelope was built to fix."""
+        c = self._quote(0, defender_hp=95)
+        self.assertEqual((c.min_damage, c.max_damage), (3, 13))
+
+
 if __name__ == "__main__":
     unittest.main(verbosity=2)
 

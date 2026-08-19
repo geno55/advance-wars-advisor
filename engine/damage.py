@@ -610,8 +610,17 @@ def counterattack(a: Attack, variant: str = DEFAULT_VARIANT,
     # range and map each surviving defender through the counter formula. This is
     # a real envelope over one variable, not a range over a variable the game
     # does not have -- and it is why the old lower bound was too high.
+    #
+    # The range is the ATTACK's own, not the default 0..9 -- it walked the
+    # module constants for a while, which quoted Nell's and Sonja's counters
+    # from rolls their COs do not have. Nell rolls to 19, so her strongest
+    # strikes -- the weakest survivors, and the kills that end the counter
+    # entirely -- were never walked; Sonja rolls from -15, so her weakest
+    # strike, whose survivor hits back HARDEST, was missing and the top of the
+    # counter range was understated, which is the bound this function exists
+    # to not understate.
     dmgs = []
-    for lk in range(LUCK_MIN, LUCK_MAX + 1):
+    for lk in a.luck_range:
         d = damage_for_luck(a, lk, variant)
         if d is None:
             continue
