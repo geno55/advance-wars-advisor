@@ -436,6 +436,8 @@ harness/mesen_sonja.lua   Sonja probes: vision arrays under written fog, and
                           the HP panel with a read-watch on her record header
 harness/mesen_sonja_fix.lua  dumps the three Sonja captures as loader-schema
                           fixtures. DERIVATION.md 28
+harness/mesen_vision_rules.lua  the rain and air-over-wood captures that made
+                          the last two vision rules measurements. DERIVATION.md 29
 harness/observations.csv  75 recorded battles (14 by hand, 61 swept)
 
 data/aw1_damage.json      damage matrices + provenance + resolved questions

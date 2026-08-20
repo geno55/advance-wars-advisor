@@ -245,7 +245,10 @@ FIXTURES = ("fog_vision_15x10", "fog_vision_15x10_mtn", "fog_vision_19x16_props"
             "fog_vision_19x16_p2", "fog_vision_19x16_p3",
             # The Sonja triple: the same board and fog with P2's CO written to
             # Andy, Sonja, and Sonja with the power block on (DERIVATION 28).
-            "sonja_vision_andy", "sonja_vision_sonja", "sonja_vision_power")
+            "sonja_vision_andy", "sonja_vision_sonja", "sonja_vision_power",
+            # The rule-confirmation captures (DERIVATION 29): written rain, a
+            # BCopter parked on written Wood, and its Infantry control.
+            "fog_vision_rain", "fog_vision_airwood", "fog_vision_groundwood")
 
 # The same three-player board captured on three different turns. Nothing about
 # it changes between them except whose move it is.
@@ -293,11 +296,9 @@ class TestAgainstTheGame(unittest.TestCase):
         rule could be quietly wrong and still pass, because nothing on a given
         board exercised it -- which is exactly what happened to
         `mountain_bonus` while it was assumed."""
-        # air_over_concealment and rain_penalty are deliberately absent: both
-        # are read off the marker's code (0x0801EAB8, 0x0801ED90) and no
-        # capture yet exercises them -- see fog.py's docstring.
         for name in ("hiding_terrain", "property_vision", "mountain_bonus",
-                     "co_vision", "co_conceal_pierce"):
+                     "co_vision", "co_conceal_pierce",
+                     "air_over_concealment", "rain_penalty"):
             broke = 0
             for _, board, counts in self.boards():
                 got = fog.computed_count(board, board.active_player,

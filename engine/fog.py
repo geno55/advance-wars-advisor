@@ -91,20 +91,24 @@ and added three more:
                       Measured on the power capture.
   air_over_concealment  a Wood/Reef tile with an AIR unit standing on it is
                       lit anyway -- the marker consults a per-tile unit index
-                      and tests the type range (0x0801EAB8). READ, not
-                      measured: no capture has an air unit on a wood.
+                      and tests the type range (0x0801EAB8). MEASURED
+                      (DERIVATION 29): a BCopter written onto a Wood is lit
+                      at distance 3 where the Infantry control stays dark.
   mountain_bonus      applies to FOOT units only -- the marker gates on RAM
                       type <= 2 (0x0801ECCE). Invisible until now because
                       nothing else can stand on a mountain except air, which
                       no capture had parked there.
   rain_penalty        weather 2 costs every unit 1 vision, floored at 1
-                      (0x0801ED90). READ, not measured: no rain capture.
+                      (0x0801ED90). MEASURED (DERIVATION 29): the written-rain
+                      capture reproduces at 150/150 and misses 32 tiles with
+                      the rule off.
 
 WHAT IS STILL NOT MEASURED
 
-  * What the identical copy at 0x02017B42 is for. Dumped as a cross-check only.
-  * air_over_concealment and rain_penalty, as above -- both read off the
-    marker's code but exercised by no capture yet.
+  * What the identical copy at 0x02017B42 is for. Dumped as a cross-check
+    only. (The rain floor at 1 IS measured: the capture's vision-1 units --
+    Mechs, Artillery -- still light their adjacent tiles, and dropping the
+    clamp misses 7 of them.)
 
 Because `Board.fog` is only known when the reader supplies it, nothing here
 fires by accident: callers must say fog is on, or pass a board that knows.

@@ -201,6 +201,14 @@ fixtures, and in this file's git history.
   reads it every frame (`0x0802B2F6`) and draws `?` for the HP digit.
   Display-side only — combat uses the real HP. Also read off the same
   marker: the mountain +3 is FOOT-ONLY (`0x0801ECCE`).
+- **The last two vision rules, measured** (DERIVATION 29). Rain costs every
+  unit 1 vision, floored at 1 — the written-rain capture reproduces 150/150,
+  misses 32 tiles with the rule off, and the floor itself carries 7 tiles
+  (the capture's Mechs and Artillery still light their neighbours). A
+  wood/reef tile is lit by the AIR unit standing on it — a BCopter written
+  onto Wood is lit at distance 3 where the Infantry control stays dark.
+  Fixtures `fog_vision_rain/airwood/groundwood.json`; all seven vision rules
+  are now load-bearing in the oracle test.
 
 ## Assumed — these are the ones that will bite
 
@@ -212,12 +220,6 @@ A16, both born the day action enumeration was written.
 
 ## Unknown — not modelled
 
-- **The two vision rules read but not yet measured.** `air_over_concealment`
-  (a wood/reef tile with an air unit on it is lit, `0x0801EAB8`) and
-  `rain_penalty` (weather 2 costs 1 vision, floored at 1, `0x0801ED90`) are
-  both read off the fog marker and implemented, but no capture exercises
-  either — they are deliberately absent from the load-bearing rule test.
-  Kill by: an air unit parked on a wood in a fog capture; any rain capture.
 - **The meteor's target selection.** Damage and radius are measured
   (DERIVATION 27); the scoring that picked the enemy cluster is not read.
   The constant lives in the entry functions at `0x0801CC88`/`0x0801CCA0`;

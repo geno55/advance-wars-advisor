@@ -1500,4 +1500,38 @@ nothing else changes, because the real HP never left the unit record.
 Still unread after this: the two-layer split of the tile→unit index, and
 `air_over_concealment`/`rain_penalty` remain code-reads with no capture
 exercising them — both carried as rules with their provenance stated, and
-deliberately absent from the load-bearing test.
+deliberately absent from the load-bearing test. (Both measured in section
+29, the next day.)
+
+
+## 29. The two unexercised rules, exercised
+
+Section 28 shipped `rain_penalty` and `air_over_concealment` as code-reads
+with no capture behind them. Both are measurements now, from boards built
+with the write toolkit the harness already trusts:
+
+- **Rain**: the weather byte is as writable as the fog byte. Write 2, drive
+  the same Tank move, dump the array. The model reproduces it **150/150**;
+  with the rule off it misses 32 tiles — and the **floor at 1 carries 7 of
+  its own**, because the board's vision-1 units (Mechs, Artillery) still
+  light their neighbours where an unfloored `v-1` would go blind.
+- **Air over concealment**: no air unit exists on the map and none can be
+  produced, but the occupancy check reads the unit's TYPE from its record —
+  and type writes are proven transparent. So: Wood written UNDER P1's
+  Infantry at (6,3) (the tile index keeps mapping it, since the unit never
+  moved), its type written to BCopter, and P2's Mech real-moved onto the
+  mountain at (9,3) — a legal distance-3 viewer with mountain vision 4. The
+  wood tile reads **lit (1)** with the BCopter on it and **dark (0)** in the
+  Infantry control, and both full arrays reproduce exactly. All seven vision
+  rules are now load-bearing in the oracle test.
+
+Two rig lessons paid for along the way. The **map cursor bytes do not track
+inside move-select mode**: `goto_tile` driven navigation silently did
+nothing (three "moved" units all sat where they started, caught by logging
+positions off the records), so real moves are driven by counted direction
+taps and verified off the unit record after — which is also why earlier
+scripts that tapped `left` once worked and the one that navigated did not.
+And the negative shape of the air test matters: teleporting an air unit ONTO
+the wood would have proven nothing, because the tile→unit index does not
+follow position writes — the test only works because the unit already stood
+there and only its type changed.
