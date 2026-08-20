@@ -1430,5 +1430,74 @@ meter, which does not charge passively, stays frozen at 0 until then.
 Still unread: Sonja's power semantics (her record's header byte 0 is 0 where
 everyone else's is 1, and her power block alone sets header byte 1 — shaped
 like the HP-hiding trait and its power-side reveal, but fog territory and
-unmeasured); the meteor's target-selection scoring; and header `+09`, the
-value pair's defence-side twin, which no code path has been seen to read.
+unmeasured — settled in section 28); the meteor's target-selection scoring;
+and header `+09`, the value pair's defence-side twin, which no code path has
+been seen to read.
+
+
+## 28. Sonja: the marker read whole, and the fog model grown to match
+
+Two unknowns from section 27: Sonja's header bytes 0/1, and her vision trait.
+Both fell to the same combination — find the consumer, then measure the
+consumer's behaviour — and reading the game's fog marker on the way upgraded
+the vision model beyond her.
+
+### The vision computation, at last
+
+Scanning for readers of the stats vision byte (`+0x0E` off `0x08283058`)
+landed on the per-unit marker at `0x0801EC90`, and it reads the CO record:
+after fetching the stats vision it adds **pool entry byte +8** — the same
+per-unit-type pool the damage modifiers live in, indexed by the same
+`co*292 + blk*128` — as a signed adjustment (`0x0801ED06`). Dumping +8
+across all records: **Sonja and only Sonja, +1 on every type except Sub
+normally, +3 under her power.** Her trait was sitting in the pool the whole
+time, three bytes past the attack/defence pair section 7 read.
+
+The same function settled three more things the model had been quietly
+wrong or silent about:
+
+  - the **mountain bonus is gated on RAM type ≤ 2** (`0x0801ECCE`) — foot
+    only. Invisible until now: nothing else can stand on a mountain except
+    air units, and no capture had parked one there.
+  - **rain costs 1 vision, floored at 1** (`0x0801ED90`). Read, unmeasured.
+  - the wood/reef concealment check consults a **per-tile unit index**
+    (`0x0801EAB8`) and lights the tile anyway when an **air unit** stands on
+    it — and that index at map `+0x51A` is the tile→unit structure A15
+    could not find (a second layer sits at map `+0x12`; which is air and
+    which is ground is not yet pinned).
+
+And the concealment check itself opens with **CO header byte 1**
+(`0x0801EA60`): nonzero, and the whole wood/reef clause is skipped. Sonja's
+power block alone sets it. So **Enhanced Vision = +3 vision on everything
+but Sub, plus sight INTO woods and reefs** — both halves data, not code.
+
+### Measured against the game's own array
+
+Fog is a writable byte (section 20), so the powers-ON fixture becomes a fog
+board mid-turn: write `0x0300431D = 1`, write P2's CO, drive one real Tank
+move to force the recompute, and dump the count array at `0x0201763A`. Three
+captures — Andy, Sonja, Sonja with the power block written — and the model
+grown with `co_vision` and `co_conceal_pierce` reproduces **all three
+exactly, 150 tiles out of 150 each** (`tests/fixtures/sonja_vision_*.json`,
+replayed by the fog oracle tests; both rules are load-bearing there).
+
+One reading error caught by its own dump: the height byte next to the width
+read 13, and rows 10..12 came back all zero — the board is 15×10, both HQs
+inside rows 0..9. The fixture script pins 10 and says why.
+
+### The HP question answered by a read watchpoint
+
+Header byte 0 had no findable static reader — so the emulator found it. A
+READ watchpoint on Sonja's record header in ROM, her CO written onto the
+ENEMY army, a damaged Mech hovered: **`0x0802B2F6` reads header[0] every
+frame** while the panel is up, and the screenshots show the panel drawing
+**`?` in place of the HP digit** where Andy's shows `5`. Byte 0 is an "HP
+visible to enemies" flag, 0 only on Sonja's records, consulted for the
+UNIT'S OWNER — her units hide their HP from the opponent's UI, in both
+blocks, display-side only. The engine exposes it as `co.hides_hp()`;
+nothing else changes, because the real HP never left the unit record.
+
+Still unread after this: the two-layer split of the tile→unit index, and
+`air_over_concealment`/`rain_penalty` remain code-reads with no capture
+exercising them — both carried as rules with their provenance stated, and
+deliberately absent from the load-bearing test.

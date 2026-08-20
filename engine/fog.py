@@ -76,10 +76,35 @@ The array holds the ACTIVE player's view -- settled on a three-player board,
 see `observed_count`. So it answers for whoever is to move and nobody else, and
 an opponent's sight lines are always modelled rather than read.
 
+SONJA, AND THE MARKER READ OFF THE ROM (DERIVATION 28)
+
+The game's marker at 0x0801EC90 was disassembled, which upgraded three rules
+and added three more:
+
+  co_vision           the marker ADDS pool entry +8 (per unit type, per stat
+                      block) to the stats vision. Sonja and only Sonja: +1 on
+                      everything but Sub, +3 under Enhanced Vision. Measured
+                      against the game's array on three captures.
+  co_conceal_pierce   CO header byte 1 makes the marker skip the Wood/Reef
+                      check entirely (0x0801EA60). Sonja's power block alone
+                      sets it: Enhanced Vision sees INTO woods and reefs.
+                      Measured on the power capture.
+  air_over_concealment  a Wood/Reef tile with an AIR unit standing on it is
+                      lit anyway -- the marker consults a per-tile unit index
+                      and tests the type range (0x0801EAB8). READ, not
+                      measured: no capture has an air unit on a wood.
+  mountain_bonus      applies to FOOT units only -- the marker gates on RAM
+                      type <= 2 (0x0801ECCE). Invisible until now because
+                      nothing else can stand on a mountain except air, which
+                      no capture had parked there.
+  rain_penalty        weather 2 costs every unit 1 vision, floored at 1
+                      (0x0801ED90). READ, not measured: no rain capture.
+
 WHAT IS STILL NOT MEASURED
 
   * What the identical copy at 0x02017B42 is for. Dumped as a cross-check only.
-  * Sonja's vision trait, and CO powers that reveal the map.
+  * air_over_concealment and rain_penalty, as above -- both read off the
+    marker's code but exercised by no capture yet.
 
 Because `Board.fog` is only known when the reader supplies it, nothing here
 fires by accident: callers must say fog is on, or pass a board that knows.
@@ -90,8 +115,10 @@ import functools
 from typing import Dict, List, Optional, Set, Tuple
 
 try:                                    # imported as engine.fog by tools/
+    from . import co as co_mod
     from . import pathing
 except ImportError:                     # imported as fog, engine/ on path
+    import co as co_mod
     import pathing
 
 Coord = Tuple[int, int]
@@ -111,7 +138,24 @@ RULES: Dict[str, bool] = {
     "hiding_terrain": True,
     "property_vision": True,
     "mountain_bonus": True,
+    "co_vision": True,             # pool +8; Sonja +1, +3 under power
+    "co_conceal_pierce": True,     # header[1]; Sonja's power only
+    "air_over_concealment": True,  # code-read at 0x0801EAB8, unmeasured
+    "rain_penalty": True,          # code-read at 0x0801ED90, unmeasured
 }
+
+# Weather index 2 in the settings struct is rain; the marker subtracts 1 from
+# every sight radius under it, floored at 1.
+RAIN = 2
+
+
+def _army_co(board, player: int):
+    """(co_id, power_active) for a player, or (None, False) on boards that
+    carry no armies -- the hand-built test boards, mostly."""
+    a = next((a for a in board.armies if a.player == player), None)
+    if a is None or a.co_id is None:
+        return None, False
+    return a.co_id, getattr(a, "power_active", False)
 
 
 def rules(**overrides) -> Dict[str, bool]:
@@ -146,8 +190,19 @@ def _sight(board, unit, rule_set) -> int:
     st = pathing.unit_stats(unit.type)
     v = st["vision"]
     if rule_set["mountain_bonus"]:
-        if board.terrain_name(unit.x, unit.y).lower().startswith("mountain"):
+        # Foot only: the marker gates the bonus on RAM type <= 2 at
+        # 0x0801ECCE. Nothing else can stand on a mountain except air units,
+        # which is when the gate matters.
+        if (st["unit_class"] == "foot"
+                and board.terrain_name(unit.x, unit.y).lower()
+                        .startswith("mountain")):
             v += MOUNTAIN_BONUS
+    if rule_set["co_vision"]:
+        cid, active = _army_co(board, unit.player)
+        if cid is not None:
+            v += co_mod.vision_bonus(cid, unit.type, active)
+    if rule_set["rain_penalty"] and getattr(board, "weather_index", None) == RAIN:
+        v = max(1, v - 1)
     return v
 
 
@@ -214,6 +269,18 @@ def computed_count(board, player: int,
     conceals = {t for t in counts
                 if rule_set["hiding_terrain"]
                 and board.terrain_name(*t).lower() in CONCEALING}
+    # A wood or reef with an air unit parked on it is lit anyway: the marker
+    # looks the tile's occupant up and tests for the air type range.
+    if conceals and rule_set["air_over_concealment"]:
+        conceals -= {(u.x, u.y) for u in board.units
+                     if not u.loaded
+                     and pathing.unit_stats(u.type)["unit_class"] == "air"}
+    # Header byte 1 of the viewing side's ACTIVE stat block skips the
+    # concealment check entirely -- Sonja's Enhanced Vision.
+    if conceals and rule_set["co_conceal_pierce"]:
+        cid, active = _army_co(board, player)
+        if cid is not None and co_mod.pierces_concealment(cid, active):
+            conceals = set()
     for u in _viewers(board, player):
         r = _sight(board, u, rule_set)
         for dx in range(-r, r + 1):

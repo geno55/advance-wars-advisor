@@ -147,6 +147,7 @@
             100
           ]
         },
+        "vision_bonus": {},
         "header": [
           1,
           0,
@@ -243,6 +244,7 @@
             100
           ]
         },
+        "vision_bonus": {},
         "header": [
           1,
           0,
@@ -349,6 +351,7 @@
             100
           ]
         },
+        "vision_bonus": {},
         "header": [
           1,
           0,
@@ -445,6 +448,7 @@
             100
           ]
         },
+        "vision_bonus": {},
         "header": [
           1,
           0,
@@ -551,6 +555,7 @@
             100
           ]
         },
+        "vision_bonus": {},
         "header": [
           1,
           0,
@@ -647,6 +652,7 @@
             100
           ]
         },
+        "vision_bonus": {},
         "header": [
           1,
           0,
@@ -753,6 +759,7 @@
             100
           ]
         },
+        "vision_bonus": {},
         "header": [
           1,
           0,
@@ -849,6 +856,7 @@
             100
           ]
         },
+        "vision_bonus": {},
         "header": [
           1,
           0,
@@ -955,6 +963,7 @@
             100
           ]
         },
+        "vision_bonus": {},
         "header": [
           1,
           0,
@@ -1051,6 +1060,7 @@
             100
           ]
         },
+        "vision_bonus": {},
         "header": [
           1,
           0,
@@ -1157,6 +1167,7 @@
             100
           ]
         },
+        "vision_bonus": {},
         "header": [
           1,
           0,
@@ -1253,6 +1264,7 @@
             100
           ]
         },
+        "vision_bonus": {},
         "header": [
           1,
           0,
@@ -1359,6 +1371,7 @@
             100
           ]
         },
+        "vision_bonus": {},
         "header": [
           1,
           0,
@@ -1455,6 +1468,7 @@
             100
           ]
         },
+        "vision_bonus": {},
         "header": [
           1,
           0,
@@ -1561,6 +1575,25 @@
             100
           ]
         },
+        "vision_bonus": {
+          "Infantry": 1,
+          "Mech": 1,
+          "MdTank": 1,
+          "Tank": 1,
+          "Recon": 1,
+          "APC": 1,
+          "Artillery": 1,
+          "Rockets": 1,
+          "AntiAir": 1,
+          "Missiles": 1,
+          "Fighter": 1,
+          "Bomber": 1,
+          "BCopter": 1,
+          "TCopter": 1,
+          "Battleship": 1,
+          "Cruiser": 1,
+          "Lander": 1
+        },
         "header": [
           0,
           0,
@@ -1656,6 +1689,25 @@
             100,
             100
           ]
+        },
+        "vision_bonus": {
+          "Infantry": 3,
+          "Mech": 3,
+          "MdTank": 3,
+          "Tank": 3,
+          "Recon": 3,
+          "APC": 3,
+          "Artillery": 3,
+          "Rockets": 3,
+          "AntiAir": 3,
+          "Missiles": 3,
+          "Fighter": 3,
+          "Bomber": 3,
+          "BCopter": 3,
+          "TCopter": 3,
+          "Battleship": 3,
+          "Cruiser": 3,
+          "Lander": 3
         },
         "header": [
           0,
@@ -1763,6 +1815,7 @@
             100
           ]
         },
+        "vision_bonus": {},
         "header": [
           1,
           0,
@@ -1859,6 +1912,7 @@
             100
           ]
         },
+        "vision_bonus": {},
         "header": [
           1,
           0,
@@ -1965,6 +2019,7 @@
             100
           ]
         },
+        "vision_bonus": {},
         "header": [
           1,
           0,
@@ -2061,6 +2116,7 @@
             100
           ]
         },
+        "vision_bonus": {},
         "header": [
           1,
           0,
@@ -2167,6 +2223,7 @@
             100
           ]
         },
+        "vision_bonus": {},
         "header": [
           1,
           0,
@@ -2263,6 +2320,7 @@
             100
           ]
         },
+        "vision_bonus": {},
         "header": [
           1,
           0,
@@ -2369,6 +2427,7 @@
             100
           ]
         },
+        "vision_bonus": {},
         "header": [
           1,
           0,
@@ -2465,6 +2524,7 @@
             100
           ]
         },
+        "vision_bonus": {},
         "header": [
           1,
           0,

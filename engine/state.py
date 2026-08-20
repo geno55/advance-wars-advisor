@@ -84,6 +84,10 @@ class Army:
     # differently, because assuming a neutral CO where one is unknown is how a
     # prediction ends up 50% low against Max.
     co_id: Optional[int] = None
+    # Army +0x1E: True while this army's CO power is running (activation sets
+    # it, the caster's next turn start clears it -- DERIVATION 27). Selects
+    # the power stat block everywhere, including the fog vision bonus.
+    power_active: bool = False
 
 
 @dataclass
@@ -223,7 +227,7 @@ def load(path) -> Board:
                     u.get("state", 0), u.get("cargo", 0))
                for u in raw["units"]],
         armies=[Army(a["player"], a["funds"], a["income"], a.get("power", 0),
-                     a.get("co_id"))
+                     a.get("co_id"), a.get("power_active", False))
                 for a in raw["armies"]],
         terrain=[r["t"] for r in rows],
         owner=[r["owner"] for r in rows],

@@ -150,6 +150,7 @@ def main(rom_path, out_path):
                   f"weather pointer {p:#x} is not on a movement-table boundary")
             weather.append((p - MOVECOST_0) // MOVECOST_STRIDE)
         mods = {}
+        vision = {}
         for i in range(24):
             p = u32(addr + 0x1C + i * 4) - ROM_BASE
             check(POOL <= p < POOL + POOL_LEN,
@@ -157,8 +158,15 @@ def main(rom_path, out_path):
             uid = i - 1                      # 1-based index, see docstring
             if uid in UNITS:
                 mods[UNITS[uid]] = [rom[p + 5], rom[p + 6]]
+                # pool +8: signed per-unit VISION adjustment, added to the
+                # stats vision by the fog marker at 0x0801ED06/0x0801EDAE.
+                # Nonzero only on Sonja's entries (DERIVATION 28).
+                v = rom[p + 8] - (256 if rom[p + 8] >= 128 else 0)
+                if v:
+                    vision[UNITS[uid]] = v
         return {"addr": hex(addr), "weather_tables": weather,
-                "modifiers": mods, "header": list(rom[addr:addr + 16])}
+                "modifiers": mods, "vision_bonus": vision,
+                "header": list(rom[addr:addr + 16])}
 
     def u16(a):
         return struct.unpack_from("<H", rom, a)[0]
@@ -290,6 +298,27 @@ def main(rom_path, out_path):
           "Andy's power effect should be the heal")
     check(records[4]["power"]["weather_tables"] == [3, 4, 5],
           "Sami's power block should select the foot-cost-1 movement tables")
+
+    # Sonja, and only Sonja: +1 vision on every type but Sub, +3 under power,
+    # and her power block alone sets header[1] -- the concealment-pierce flag
+    # the fog marker tests at 0x0801EA60. Header[0]=0 is her HP-hide.
+    for co in range(N):
+        for blk in ("normal", "power"):
+            vb = records[co][blk]["vision_bonus"]
+            if co == 7:
+                want = 3 if blk == "power" else 1
+                check(set(vb.values()) == {want} and "Sub" not in vb,
+                      f"Sonja {blk} vision bonus should be +{want}, Sub spared")
+            else:
+                check(vb == {}, f"co {co} {blk} should have no vision bonus")
+    check(records[7]["normal"]["header"][0] == 0
+          and records[7]["power"]["header"][1] == 1,
+          "Sonja should carry the HP-hide (hdr0=0) and the power-block "
+          "concealment pierce (hdr1=1)")
+    check(all(records[co][blk]["header"][1] == 0
+              for co in range(N) for blk in ("normal", "power")
+              if not (co == 7 and blk == "power")),
+          "no record but Sonja's power block should pierce concealment")
 
     print(f"{checks} structural assertions passed")
     for co, name in sorted(CONFIRMED.items()):

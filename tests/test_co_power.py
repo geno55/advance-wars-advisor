@@ -91,6 +91,30 @@ class TestPowerMeta:
         assert co.POWER_EFFECTS[NAMES["Grit"]]["range_bonus"] == 2
 
 
+class TestSonja:
+    """DERIVATION 28. The vision numbers are additionally pinned against the
+    game's own count arrays in test_fog.py (the sonja_vision_* fixtures)."""
+
+    def test_vision_bonus_is_plus_one_and_plus_three(self):
+        s = NAMES["Sonja"]
+        assert co.vision_bonus(s, "Infantry") == 1
+        assert co.vision_bonus(s, "Recon") == 1
+        assert co.vision_bonus(s, "Infantry", power=True) == 3
+        assert co.vision_bonus(s, "Sub") == 0          # the one exclusion
+        assert co.vision_bonus(NAMES["Andy"], "Recon") == 0
+        assert co.vision_bonus(NAMES["Andy"], "Recon", power=True) == 0
+
+    def test_only_her_power_pierces_concealment(self):
+        for name, cid in NAMES.items():
+            for power in (False, True):
+                expect = name == "Sonja" and power
+                assert co.pierces_concealment(cid, power) == expect, (name, power)
+
+    def test_only_she_hides_hp(self):
+        for name, cid in NAMES.items():
+            assert co.hides_hp(cid) == (name == "Sonja"), name
+
+
 class TestLifetime:
     def test_power_block_covers_the_opponents_turn(self):
         phases = {p["phase"]: p for p in PROBES["expiry"]["phases"]}

@@ -292,6 +292,31 @@ def power_meta(co_id: int) -> dict:
     return dict(_co_data()["records"][co_id]["power_meta"])
 
 
+def vision_bonus(co_id: int, unit_type: str, power: bool = False) -> int:
+    """Per-unit vision adjustment, pool entry +8, added by the fog marker at
+    0x0801ED06. Sonja and only Sonja: +1 on everything but Sub, +3 under
+    Enhanced Vision. Measured against the game's own count array
+    (tests/fixtures/sonja_vision_*.json)."""
+    block = _co_data()["records"][co_id]["power" if power else "normal"]
+    return block["vision_bonus"].get(unit_type, 0)
+
+
+def pierces_concealment(co_id: int, power: bool = False) -> bool:
+    """Header byte 1: nonzero makes the fog marker skip the Wood/Reef
+    concealment check entirely (0x0801EA60). Set only on Sonja's power
+    block -- Enhanced Vision sees into woods and reefs."""
+    block = _co_data()["records"][co_id]["power" if power else "normal"]
+    return block["header"][1] != 0
+
+
+def hides_hp(co_id: int) -> bool:
+    """Header byte 0 is an 'HP visible to enemies' flag; Sonja alone carries 0
+    in both blocks. The enemy-side unit panel reads it every frame
+    (0x0802B2F6) and draws '?' in place of the HP digit. Display-side only:
+    the real HP stays in the unit record and combat uses it."""
+    return _co_data()["records"][co_id]["normal"]["header"][0] == 0
+
+
 # One-shot effects on activation, MEASURED per record through the headless
 # activation probe (harness/mesen_power_activate.lua, _fx*.lua). Activation
 # itself always does: uses+=1 (army +0x25), ready flag cleared (+0x24), meter

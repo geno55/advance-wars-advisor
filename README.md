@@ -432,6 +432,10 @@ harness/mesen_power_fx.lua/_fx2/_fx3  Grit's range, Max overlay, Eagle refresh,
                           the expiry chain. DERIVATION.md 27
 harness/mesen_power_recon.lua / mesen_state_peek.lua  menu layout and fixture
                           inspection utilities
+harness/mesen_sonja.lua   Sonja probes: vision arrays under written fog, and
+                          the HP panel with a read-watch on her record header
+harness/mesen_sonja_fix.lua  dumps the three Sonja captures as loader-schema
+                          fixtures. DERIVATION.md 28
 harness/observations.csv  75 recorded battles (14 by hand, 61 swept)
 
 data/aw1_damage.json      damage matrices + provenance + resolved questions
@@ -448,8 +452,8 @@ tests/test_threat.py      23 regression tests, incl. the same branch ban
 tests/test_fog.py         32 tests, incl. five real-board oracles and branch ban
 tests/test_corpus.py      21 tests: replay every recorded measurement against
                           the engine, strikes and counters kept apart
-tests/test_co_power.py    12 tests: the power system against its measurements
-                          (charge, thresholds, effects, lifetime)
+tests/test_co_power.py    15 tests: the power system against its measurements
+                          (charge, thresholds, effects, lifetime, Sonja)
 tests/fixtures/           captured boards, seeded sweeps, and the game's own
                           vision array
 harness/fixtures/         mGBA save states parked at target-select, so a sweep

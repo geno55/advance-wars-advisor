@@ -191,6 +191,16 @@ fixtures, and in this file's git history.
   (record 11) in a Manhattan-2 blast; Eagle clears the acted bit on
   non-foot units; Sami's block swaps to movement tables where foot pays 1
   everywhere; Grit's indirects reach max range +2 (measured 5, refused 6).
+- **Sonja, whole** (DERIVATION 28). Vision: pool entry `+8` is a per-unit
+  vision adjustment the fog marker adds — Sonja +1 on everything but Sub,
+  +3 under Enhanced Vision — and her power block's header byte 1 makes the
+  marker skip wood/reef concealment entirely. Both measured against the
+  game's own count array, 150/150 tiles on three captures
+  (`tests/fixtures/sonja_vision_*.json`). HP: header byte 0 is an
+  "HP visible to enemies" flag, 0 only on her records; the enemy-side panel
+  reads it every frame (`0x0802B2F6`) and draws `?` for the HP digit.
+  Display-side only — combat uses the real HP. Also read off the same
+  marker: the mountain +3 is FOOT-ONLY (`0x0801ECCE`).
 
 ## Assumed — these are the ones that will bite
 
@@ -202,28 +212,28 @@ A16, both born the day action enumeration was written.
 
 ## Unknown — not modelled
 
-- **Sonja's power semantics.** Her record's header byte 0 reads 0 where every
-  other record reads 1, and her power block alone sets header byte 1 — shaped
-  like the HP-hiding trait and its power-side reveal, but both bytes are
-  unconsumed by any code path read so far and unmeasured (the powers-on
-  fixture has fog off). Same bucket as her vision trait below.
+- **The two vision rules read but not yet measured.** `air_over_concealment`
+  (a wood/reef tile with an air unit on it is lit, `0x0801EAB8`) and
+  `rain_penalty` (weather 2 costs 1 vision, floored at 1, `0x0801ED90`) are
+  both read off the fog marker and implemented, but no capture exercises
+  either — they are deliberately absent from the load-bearing rule test.
+  Kill by: an air unit parked on a wood in a fog capture; any rain capture.
 - **The meteor's target selection.** Damage and radius are measured
   (DERIVATION 27); the scoring that picked the enemy cluster is not read.
   The constant lives in the entry functions at `0x0801CC88`/`0x0801CCA0`;
   the picker is somewhere in the meteor object's tick.
 - **Header `+09`.** The value pair's second byte (Kanbei 120). Its partner
   `+08` is the meter-value multiplier; nothing has been seen reading `+09`.
-- **The tile→unit index.** Writing a unit record's `x,y` relocates the
-  record but not the unit the game lets you select — the stay-position probe
-  read `acted 0` with the record sitting on the city. Some structure beyond
-  the unit array maps tiles to units, and it has not been found. Harness
-  rule until it is: type/hp/ammo/capture writes are proven transparent,
-  position writes are NOT for selecting your own unit — drive real moves
-  instead. The A16 probe sharpened the boundary: a teleported ENEMY is
-  targetable (Fire found it and the battle resolved), and a terrain byte
-  written into the logic map carries real defence (the full-HP controls
-  reproduced the written Wood's bracket exactly), so whatever the index
-  gates, it is selection, not combat.
+- **The tile→unit index.** FOUND but not decoded whole: the fog marker reads
+  per-tile unit-slot arrays at map `+0x51A` (`0x0801EAB8`) and at map
+  `+0x12` (`0x0801E902`) — two layers, presumably air and ground, unpinned
+  which is which. Nothing writes them yet, so the harness rule stands:
+  type/hp/ammo/capture writes are proven transparent, position writes are
+  NOT for selecting your own unit — drive real moves instead. (History: the
+  stay-position probe read `acted 0` with the record written onto the city;
+  a teleported ENEMY is targetable and written terrain carries real defence,
+  so the index gates selection, not combat.) Kill by: writing both layers
+  alongside `x,y` and re-running the stay-position probe.
 - **The 24-byte table at `0x08283FC8`.** At contact, a defender whose record
   `+1` carries bit `0x20` routes the *primary* lookup through it, indexed by
   **attacker type alone** (`0x08022E12–2E32`). A damage table that ignores the
@@ -233,7 +243,6 @@ A16, both born the day action enumeration was written.
   weapon-selection gates.
 - **The identical visibility copy at `0x02017B42`.** Dumped only as a
   cross-check; no known purpose.
-- **Sonja's vision trait** under fog.
 - **When the unit record updates during a move.** The pre-move tile is what a
   fixture holds (Established); whether the record flips at confirmation or
   later in the animation is unread. Nothing shipped depends on it — only a
