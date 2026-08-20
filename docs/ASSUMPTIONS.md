@@ -173,6 +173,25 @@ fixtures, and in this file's git history.
   the tile itself**. Each rule re-confirmed on a capture built to isolate it.
   `DERIVATION.md` 20–23. Retired A6.
 
+- **The CO power system** — charge, threshold, activation, effects, lifetime
+  — read off the ROM at named addresses and measured live (DERIVATION 27,
+  `tests/fixtures/power_probes.json`). The meter is a u32 at army `+0x20`,
+  charging `value × display_HP_lost` for your own losses plus a quarter of
+  the opponent's term, where `value = cost/10 × header[+08]/100` — that
+  header pair is a unit-VALUE multiplier (Kanbei 120), not attack/defence.
+  Threshold = record cost (u32 at true base +0x08; Sami 25000, Drake 40000,
+  Kanbei/Eagle/Sturm 50000, rest 30000) × (100 + 20 per use, capped 200%)
+  / 100; uses at `+0x25`, ready latch at `+0x24`. Charging requires
+  `[0x03004317]` (the VS CO Power rule; the rule also sets the modifier gate
+  `0x03004318`, closing that unknown) and stops while a power runs.
+  Activation (map-menu Power item): meter to 0, `+0x1E` = 1 until the start
+  of the caster's next turn. One-shots, all measured: Andy +2 display HP
+  free via the repair path; Olaf snow for the power's lifetime; Drake −10
+  internal to every enemy, floor 1; Sturm −80 internal (record 10) or −40
+  (record 11) in a Manhattan-2 blast; Eagle clears the acted bit on
+  non-foot units; Sami's block swaps to movement tables where foot pays 1
+  everywhere; Grit's indirects reach max range +2 (measured 5, refused 6).
+
 ## Assumed — these are the ones that will bite
 
 Nothing, currently. Every assumption this file has carried is either in
@@ -183,17 +202,17 @@ A16, both born the day action enumeration was written.
 
 ## Unknown — not modelled
 
-- **CO powers.** The second 128-byte stat block is selected by army `+0x1E`,
-  and its contents are extracted, but nothing triggers or models activation —
-  including powers that reveal the map. The meter at army `+0x20` charges both
-  the dealer and receiver of damage; the activation threshold and gain formula
-  are unknown, so it is exposed raw and never as a percentage.
-- **What sets `0x03004318`.** Reading 0 in four VS captures says those matches
-  had CO abilities off, not which setup option clears it. Until that is
-  settled, a fixture that needs a live CO must be built with the CO chosen in
-  VS setup. The cheap test writes it to 1 alongside `+0x1D` and predicts Max
-  on Tank → Infantry in woods moving from 60-67 to **90-97**; a null there
-  means the game latches CO state earlier than target-select.
+- **Sonja's power semantics.** Her record's header byte 0 reads 0 where every
+  other record reads 1, and her power block alone sets header byte 1 — shaped
+  like the HP-hiding trait and its power-side reveal, but both bytes are
+  unconsumed by any code path read so far and unmeasured (the powers-on
+  fixture has fog off). Same bucket as her vision trait below.
+- **The meteor's target selection.** Damage and radius are measured
+  (DERIVATION 27); the scoring that picked the enemy cluster is not read.
+  The constant lives in the entry functions at `0x0801CC88`/`0x0801CCA0`;
+  the picker is somewhere in the meteor object's tick.
+- **Header `+09`.** The value pair's second byte (Kanbei 120). Its partner
+  `+08` is the meter-value multiplier; nothing has been seen reading `+09`.
 - **The tile→unit index.** Writing a unit record's `x,y` relocates the
   record but not the unit the game lets you select — the stay-position probe
   read `acted 0` with the record sitting on the city. Some structure beyond

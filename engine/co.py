@@ -85,8 +85,10 @@ class CoRecord:
     id: int
     name: str
     per_unit: dict          # unit name -> (attack, defence), from the pool
-    header_global: tuple    # +08/+09
-    header_pair: tuple      # +11/+12
+    # +08/+09: the unit-VALUE pair (meter charge / deploy cost), NOT damage.
+    # +08 is what unit_value() applies; +09 has no observed reader.
+    header_global: tuple
+    header_pair: tuple      # +11/+12, the universal pair the damage path uses
     weather_tables: list
     # +06 widens the roll upward, +07 shifts it down. Zero on ten of the twelve
     # records; see `luck` for the rule and what it rests on.
@@ -97,10 +99,6 @@ class CoRecord:
     def luck(self) -> tuple:
         """(min, max) of this CO's luck roll."""
         return (-self.luck_bad, DEFAULT_LUCK_MAX + self.luck_good - self.luck_bad)
-
-    @property
-    def has_unmodelled_strength(self) -> bool:
-        return self.header_global != NEUTRAL or self.header_pair != NEUTRAL
 
 
 def record(co_id: int, power: bool = False) -> CoRecord:
@@ -168,9 +166,10 @@ def universal(co_id: int, power: bool = False) -> tuple:
         Kanbei attacking   value 75 -> 90    damage 72-79, predicted 72-79
         Kanbei defending   value 75 -> 60    damage 48-55, predicted 48-55
 
-    +08/+09 holds the same pair *innate*, before any power bonus -- Nell reads
-    100/100 there and 110/90 here under her power. So +11/+12 is the effective
-    one and the pair the damage path wants; +08/+09 adds nothing on top.
+    +08/+09 is NOT this pair's innate form, as this docstring once guessed:
+    +08 is the unit-VALUE multiplier the power charge path reads (Kanbei's
+    120 makes his units worth more meter, same as their deploy cost), and
+    +09 has no observed reader. +11/+12 alone is what the damage path wants.
     """
     d = _co_data()
     block = d["records"][co_id]["power" if power else "normal"]
@@ -211,14 +210,108 @@ def unmodelled(co_id: int, power: bool = False) -> dict:
 
     Empty for every CO now. `+11/+12` used to be listed here and is the reason
     Kanbei and Sturm were refused; it is `universal()`, measured in both
-    directions, and applied. `+08/+09` is the same pair before the power bonus,
-    so applying `+11/+12` accounts for it.
+    directions, and applied. `+08/+09` turned out not to be damage at all --
+    +08 is the meter-value multiplier (DERIVATION 27), so nothing is missing.
 
     Kept, rather than deleted, because it is the hook the refusal hangs on. If
     a later record turns out to carry strength somewhere else, this is where it
     gets reported and `Attack.between` starts declining again.
     """
     return {}
+
+
+# ---------------------------------------------------------------------------
+# The CO power system, DERIVATION 27. Everything below is either read off the
+# ROM at a named address or measured live through the headless rig; nothing is
+# community lore.
+
+# Charging is gated on [0x03004317] (a second settings byte, distinct from the
+# CO-modifier gate at +0x08): with the VS "CO Power" rule off nothing charges,
+# which is why every earlier capture read meter 0.
+CHARGE_GATE = 0x03004317
+
+
+def power_cost(co_id: int) -> int:
+    """The meter's base activation cost, u32 at record TRUE base +0x08.
+
+    Measured by activation: writing exactly this much charge makes the Power
+    menu item appear, and activation resets the meter to 0. Sami 25000,
+    Drake 40000, Kanbei/Eagle/both Sturms 50000, everyone else 30000 --
+    the community's star counts times 10000.
+    """
+    return _co_data()["records"][co_id]["power_meta"]["cost"]
+
+
+def power_threshold(co_id: int, uses: int = 0) -> int:
+    """What a full meter costs after `uses` activations.
+
+    Read off 0x0801C018: percent = 200 if uses > 9 else 100 + 20*uses, then
+    cost * percent / 100, truncating. The use count is army +0x25, incremented
+    on every activation (0x0801C104) and saturating at 255.
+    """
+    percent = 200 if uses > 9 else 100 + 20 * uses
+    return power_cost(co_id) * percent // 100
+
+
+def unit_value(unit_cost: int, co_id: int, power: bool = False) -> int:
+    """A unit's meter-charge value: (cost/10) * header[+08] / 100.
+
+    Read off 0x0802D344. Header +08 is a VALUE multiplier, not attack --
+    Kanbei's 120 makes his units worth 20% more charge, the same 20% his
+    deployments cost. The pool's per-unit s16 adjustment at entry +0 is zero
+    on all 18 referenced entries, so it is folded out here.
+    """
+    d = _co_data()
+    h = d["records"][co_id]["power" if power else "normal"]["header"]
+    return (unit_cost // 10) * h[8] // 100
+
+
+def charge_gains(att_value: int, def_value: int,
+                 att_display_lost: int, def_display_lost: int) -> tuple:
+    """(attacker_gain, defender_gain) for one battle, in meter units.
+
+    Read off 0x0802D2A0-0x0802D5A6 and confirmed live twice:
+
+        own  = unit_value * display_HP_lost      (dead: full display HP)
+        gain = own + other_side_own / 4          (truncating)
+
+    Tank->Infantry, 8 display dealt, 0 taken: predicted (200, 800), watched
+    the writes land exactly that at 0x0801BFC4. The old A-Air/Tank capture
+    (+3725/+2900) solves to 3 display dealt, 4 taken -- consistent.
+
+    The add is skipped entirely while that army's power is ACTIVE (+0x1E
+    nonzero, tested at 0x0801BF7C), and the result clamps at the threshold.
+    """
+    att_own = att_value * att_display_lost
+    def_own = def_value * def_display_lost
+    return (att_own + def_own // 4, def_own + att_own // 4)
+
+
+def power_meta(co_id: int) -> dict:
+    """The extracted power descriptor: cost, walker eligibility, effect."""
+    return dict(_co_data()["records"][co_id]["power_meta"])
+
+
+# One-shot effects on activation, MEASURED per record through the headless
+# activation probe (harness/mesen_power_activate.lua, _fx*.lua). Activation
+# itself always does: uses+=1 (army +0x25), ready flag cleared (+0x24), meter
+# reset to 0, statblock +0x1E = 1. The block reverts to 0 at the start of the
+# caster's NEXT turn (0x0801BFFC), so the power's stat block -- including the
+# universal 110/90 -- covers the opponent's whole turn.
+POWER_EFFECTS = {
+    0: {},                                  # Nell: luck 0..59, stat block only
+    1: {"heal_display": 2},                 # Andy: +2 HP, free, via repair path
+    2: {},                                  # Max: pool 170/100 on directs
+    3: {"weather": "snow"},                 # Olaf: snow until his next turn
+    4: {"move_tables": [3, 4, 5]},          # Sami: foot terrain costs all 1
+    5: {"range_bonus": 2},                  # Grit: indirect max range +2 (2..5)
+    6: {},                                  # Kanbei: universal 140/70
+    7: {},                                  # Sonja: luck stays -15..9; rest unread
+    8: {"refresh": "nonfoot_acted"},        # Eagle: acted bit cleared, non-foot
+    9: {"mass_damage": 10},                 # Drake: -10 internal all enemies, min 1
+    10: {"meteor_internal": 80},            # Sturm: r<=2 cluster, code 0x0801CC88
+    11: {"meteor_internal": 40},            # Sturm (VS record): same, weaker
+}
 
 
 def describe(co_id: int, unit_type: Optional[str] = None,

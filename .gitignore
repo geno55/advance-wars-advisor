@@ -31,6 +31,10 @@
 emulator/
 mGBA*/
 
+# Headless run output: screenshots and logs the probe scripts write. The
+# measurements that matter are distilled into tests/fixtures/.
+harness/out/
+
 # Python
 __pycache__/
 *.py[cod]

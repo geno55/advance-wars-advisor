@@ -1303,3 +1303,132 @@ the one value where the question disappears — after `floor_min1`,
 base-vs-value, and the counter's luck range. The lesson is unchanged and
 apparently inexhaustible: a term that never leaves the integers is a term
 that has never been tested.
+
+
+## 27. The CO power system, whole
+
+The last big Unknown: the meter at army `+0x20` charged both sides of one
+observed attack (+3725/+2900) and nothing else about powers was known — not
+the gain formula, not the threshold, not what activation does. Two routes ran
+in parallel: static reads with the offset-scan tools, and a new capability in
+the headless rig — **write watchpoints with the PC attached**. Mesen's
+`addMemoryCallback(write)` plus `emu.getState()["cpu.r15"]` turns "something
+wrote this byte" into "0x0801BFC4 wrote this byte", and that address is where
+the disassembler starts. Most of this section was found by letting the game
+name its own code.
+
+### Two null results, and the flag pair
+
+The static route drowned first: `+0x20` halfword accesses near army-pointer
+literals are mostly OTHER structs (tile iterators keep x at `+0x1e`/`+0x20`,
+UI objects too), and two full clusters were read before this was accepted.
+
+The dynamic route then returned a null that mattered: on the A15/A16 fixture,
+one driven attack produced **zero writes anywhere in the army array** — while
+a control watch on the defender's HP fired twice, so the rig was sound and
+the meter genuinely does not charge in that match. Writing `0x03004318 = 1`
+changed nothing. The user parked a fresh VS match built with the **CO Power
+rule on** (savestate slot 2), and in it `0x03004318` reads 1 from the start
+— settling section 24's open question: *the VS setup rule is what sets the
+gate*. Charging turned out to answer to a different byte entirely:
+`0x0801BF74` tests **`[0x03004317]`**, the rule's second flag. Off means no
+charge, whatever the modifier gate says.
+
+### The charge, read at its own write
+
+With powers on, the watchpoint caught both writes at `0x0801BFC4` on the
+first driven attack — Tank → Infantry, 80 internal dealt, 1 taken: attacker
++200, defender +800. The adder (`0x0801BF68`) reads the meter as a **u32**
+(`+0x22` was never a field, just the high half), skips charging entirely
+while that army's power is active (`+0x1E` nonzero), and **clamps at the
+threshold**. The amount, computed at `0x0802D2A0`:
+
+    value = (stats.cost/10 + pool[+0]) * record[+0x2C] / 100
+    own   = value * display_HP_lost          (dead: the full display HP)
+    gain  = own + other_side_own / 4         (truncating, both sides)
+
+Three identifications fall out. `pool[+0]` is an s16 per-unit adjustment,
+zero on all 18 referenced entries. `record[+0x2C]` is header byte **+08 — the
+pair Kanbei reads 120/120 — and it is a unit VALUE multiplier, not the
+attack/defence pair section 18 guessed**: the damage path was already fully
+accounted for by `+11/+12` (A14), and here `+08` makes Kanbei's units worth
+20% more meter, the same 20% his deployments cost. And the HP term is
+display-HP lost, `ceil` on both ends. The formula reproduces the measured
+(200, 800) exactly, and the old A-Air/Tank capture solves to display losses
+(4, 3) — the unique non-negative solution, pinned as such in the tests.
+
+### The record starts 0x24 bytes earlier than extracted
+
+The threshold function (`0x0801C018`) indexes the CO record from
+**`0x08284A0C`** — extract_co's base minus 0x24 — so the true header holds:
+name pointer (+0), **power cost, u32 at +0x08**, power-name string id
+(+0x0C), **per-CO activation function pointer (+0x10)**, banner style
+(+0x18). Costs: Sami 25000, Drake 40000, Kanbei/Eagle/both Sturms 50000,
+everyone else 30000 — the community star counts × 10000, and the menu
+measurement below confirms they are activation thresholds, not lore.
+
+    threshold = cost * (100 + 20 * uses) / 100    capped at 200% past 9 uses
+
+`uses` is army `+0x25`, incremented per activation, saturating at 255 — the
+"powers cost more each time" rule, exact. `+0x24` is a one-shot "CO Power
+available" latch set by `0x0801C0A4` when the meter reaches threshold.
+
+### Activation, driven and diffed
+
+With the meter written to the cost and the latch set, **Power appears as the
+third map-menu item** (Unit, Intel, Power, Save, Options, End). Driving it
+for every record and diffing the world — army fields, weather, fog, all unit
+records, write-PCs on — gave the whole effect table in one run:
+
+  - every CO: uses+1 (`0x0801C104`), latch cleared (`0x0801C140`), **meter
+    reset to 0** (`0x0801BF62`), **`+0x1E` = 1** (`0x0801C170`)
+  - **Andy** drives the standard repair routine per unit with funds forced
+    to 999999 and restored after — a free +2 display HP (the formula at
+    `0x0801C314` is `2 + header[+0x0A] + pool[+4]`, both zero everywhere)
+  - **Olaf** writes weather = snow (`0x080352C4`)
+  - **Drake** subtracts 10 internal from every enemy unit, floored at 1
+    internal (`0x0801C640` — mass damage cannot kill)
+  - **Sturm** records differ only in the constant handed to the meteor
+    object: **80 internal (record 10) vs 40 (record 11)**, hitting the
+    enemy cluster within Manhattan 2 of its centre — the target-selection
+    rule itself is still unread
+  - **Eagle** clears unit flags bit 0 — the acted bit — via a walker over
+    non-foot units that have acted; measured by acting the Tank first
+  - **Max/Sami/Grit/Kanbei/Nell/Sonja**: no world writes; stat-block only
+
+The per-unit reach of each power lives in a **descriptor table at
+`0x2858C4`** (12 bytes per CO): a predicate pointer (+4: all / direct
+non-foot / the four indirects / foot / non-foot-acted) and an effect pointer
+(+8: heal / refresh / no-op). Its first two bytes looked exactly like bonus
+magnitudes (Max 1, Sami 1, Grit 3...) and are nothing of the sort — they are
+banner layout parameters, consumed only by the banner drawer. That hypothesis
+died in the disassembly of the walker, which passes units to the two
+pointers and reads nothing else.
+
+### The bonuses that are not one-shots
+
+**Sami's mobility** is the power block's movement-table set: tables 3/4/5,
+which differ from 0/1/2 in exactly one way — Infantry (and Mech in snow) pay
+1 on every passable terrain. Not +1 movement; terrain-cost erasure, already
+sitting in the extracted data. **Grit's range** was measured by teleporting
+enemies to distances 2..7 of his Artillery and enumerating Fire targets
+through the cursor: control offers d∈{2,3}, power offers {2,3,4,5} and
+refuses 6 — **max range +2, min range unchanged**. (The first attempt fired
+a real battle instead: the activation ride-out taps had left the UI one
+state ahead, and the enumeration read map tiles. The retake closes the menu
+stack with B-taps before driving. The stray screenshot did show Snipe
+Attack's 150-pool attack as a 133% forecast, a bonus confirmation.)
+
+### Lifetime
+
+Activate Olaf, end turns, watch `+0x1E` and the weather byte: both survive
+the opponent's whole turn and clear at the start of the **caster's next
+turn** (`0x0801BFFC`, same boundary for the snow). So a power's stat block —
+including the universal 110/90 — is live while the opponent attacks, and the
+meter, which does not charge passively, stays frozen at 0 until then.
+
+Still unread: Sonja's power semantics (her record's header byte 0 is 0 where
+everyone else's is 1, and her power block alone sets header byte 1 — shaped
+like the HP-hiding trait and its power-side reveal, but fog territory and
+unmeasured); the meteor's target-selection scoring; and header `+09`, the
+value pair's defence-side twin, which no code path has been seen to read.

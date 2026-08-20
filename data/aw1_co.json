@@ -9,44 +9,39 @@
     "and the evidence for them, and is NOT a name mapping -- do not",
     "promote an entry out of it without a +0x1D reading.",
     "",
-    "Two records (10 and 11) use a movement table where every passable",
-    "terrain costs 1, and they are the only pair that does. That lines up",
-    "with the long-standing observation that the CO name blob lists",
-    "'Sturm' twice -- but it is still a fingerprint, not a measurement.",
+    "The record actually begins 0x24 bytes BEFORE the header this tool",
+    "has always extracted (true base 0x284A0C). 'power_meta' comes from",
+    "that true header and the descriptor table at 0x2858C4: the power's",
+    "meter cost (u32 at true +0x08), its activation function, and which",
+    "units its walker touches. See DERIVATION.md 27 for the whole CO",
+    "power system: charge, threshold growth, activation, effects.",
     "",
-    "NOTE FOR THE DAMAGE MODEL. Two of the three candidate sources of CO",
-    "scaling are now identified. The per-unit pool is Max's, Sami's,",
-    "Grit's, Eagle's and Drake's mechanism. The +08/+09 pair is GLOBAL,",
-    "and Kanbei proves it: all 24 of his per-unit entries are 100/100",
-    "while +08/+09 reads 120/120, and he is unambiguously a stronger CO.",
-    "",
-    "+11/+12 is still unknown. It is 100/100 normally and 110/90 under",
-    "power for most records, but varies widely (Eagle's power 80/130,",
-    "Sturm 130/120).",
-    "",
-    "engine/damage.py models NEITHER global pair -- it takes co_attack",
-    "and co_defense as parameters and nothing fills them. Calibration",
-    "used a neutral CO throughout so no existing damage data depends on",
-    "this, but a Kanbei prediction would currently be 20% low."
+    "The subblock pair selected by army +0x1E is (normal, power),",
+    "MEASURED: activation writes +0x1E = 1 (0x0801C170) and the start",
+    "of the caster's next turn clears it (0x0801BFFC)."
   ],
   "game": "Advance Wars (USA) Rev 1",
   "rom_sha1": "15053499d5b3f49128a941d7f2d84876f5424d0c",
   "provenance": {
     "method": "extracted from ROM binary",
     "record_base": "0x284a30",
+    "record_true_base": "0x284a0c",
     "record_stride": 292,
     "subblock_stride": 128,
     "record_count": 12,
     "modifier_pool": "0x28491c",
     "modifier_index": "1-based RAM unit type; entry i is unit id i-1",
     "index_formula_site": "0x0803A734",
-    "subblock_meaning": "selected by army +0x1E; believed (normal, power)"
+    "subblock_meaning": "selected by army +0x1E; 0 normal, 1 power active (measured, DERIVATION 27)",
+    "descriptor_table": "0x2858c4"
   },
   "header_fields": {
-    "+06": "luck. 0 for nearly every record; co=0 reads 10 normal and 50 under power, co=7 reads 15. NOT confirmed -- named on the strength of the 0..9 default luck roll being 10 wide.",
-    "+07": "second luck-shaped byte, only nonzero on co=7 (15). Unidentified.",
-    "+08/+09": "a GLOBAL attack/defence pair, distinct from the per-unit modifiers. 100/100 everywhere except co=6, which reads 120/120 while all 24 of its per-unit entries are 100/100.",
-    "+11/+12": "a second pair, 100/100 normal and 110/90 under power for most records, but varying widely (co=8 power 80/130, co=10 130/120). How this composes with +08/+09 and the per-unit modifiers is UNKNOWN, and it matters -- see the warning printed by this tool."
+    "+06": "luck widening, confirmed live (DERIVATION 17/A11): roll = uniform(0, 9 + this) - (+07).",
+    "+07": "luck penalty, the subtracted half of the same rule; only co=7.",
+    "+08/+09": "a UNIT-VALUE multiplier pair, not attack/defence. The CO power charge path reads +08 (record +0x2C) and multiplies the unit's cost/10 by it (0x0802D344), which is how Kanbei's 120/120 makes his units worth 20% more meter charge -- the same pair that makes his deployments cost more. +09 has not been observed in any code path yet.",
+    "+0A": "heal adjustment: added to Andy-power heal (2 + this + pool[+4], read at 0x0801C314). Zero on every record.",
+    "+0D": "capture-rate shift (A15); 7 on Sami only.",
+    "+11/+12": "the universal attack/defence pair the damage path applies (A14): value*x/100, defence stored pre-subtracted."
   },
   "confirmed": {
     "0": "Nell",
@@ -68,6 +63,13 @@
   "records": [
     {
       "co": 0,
+      "power_meta": {
+        "cost": 30000,
+        "activation_fn": "0x801c1b5",
+        "banner_style": 0,
+        "eligible": "all",
+        "effect": "noop"
+      },
       "normal": {
         "addr": "0x284a30",
         "weather_tables": [
@@ -263,6 +265,13 @@
     },
     {
       "co": 1,
+      "power_meta": {
+        "cost": 30000,
+        "activation_fn": "0x801c551",
+        "banner_style": 2,
+        "eligible": "all",
+        "effect": "heal"
+      },
       "normal": {
         "addr": "0x284b54",
         "weather_tables": [
@@ -458,6 +467,13 @@
     },
     {
       "co": 2,
+      "power_meta": {
+        "cost": 30000,
+        "activation_fn": "0x801c189",
+        "banner_style": 1,
+        "eligible": "direct_nonfoot",
+        "effect": "noop"
+      },
       "normal": {
         "addr": "0x284c78",
         "weather_tables": [
@@ -653,6 +669,13 @@
     },
     {
       "co": 3,
+      "power_meta": {
+        "cost": 30000,
+        "activation_fn": "0x801c19d",
+        "banner_style": 3,
+        "eligible": "none",
+        "effect": "none"
+      },
       "normal": {
         "addr": "0x284d9c",
         "weather_tables": [
@@ -848,6 +871,13 @@
     },
     {
       "co": 4,
+      "power_meta": {
+        "cost": 25000,
+        "activation_fn": "0x801c189",
+        "banner_style": 0,
+        "eligible": "foot",
+        "effect": "noop"
+      },
       "normal": {
         "addr": "0x284ec0",
         "weather_tables": [
@@ -1043,6 +1073,13 @@
     },
     {
       "co": 5,
+      "power_meta": {
+        "cost": 30000,
+        "activation_fn": "0x801c189",
+        "banner_style": 2,
+        "eligible": "indirect",
+        "effect": "noop"
+      },
       "normal": {
         "addr": "0x284fe4",
         "weather_tables": [
@@ -1238,6 +1275,13 @@
     },
     {
       "co": 6,
+      "power_meta": {
+        "cost": 50000,
+        "activation_fn": "0x801c189",
+        "banner_style": 2,
+        "eligible": "all",
+        "effect": "noop"
+      },
       "normal": {
         "addr": "0x285108",
         "weather_tables": [
@@ -1433,6 +1477,13 @@
     },
     {
       "co": 7,
+      "power_meta": {
+        "cost": 30000,
+        "activation_fn": "0x801c93d",
+        "banner_style": 1,
+        "eligible": "none",
+        "effect": "none"
+      },
       "normal": {
         "addr": "0x28522c",
         "weather_tables": [
@@ -1628,6 +1679,13 @@
     },
     {
       "co": 8,
+      "power_meta": {
+        "cost": 50000,
+        "activation_fn": "0x801c545",
+        "banner_style": 0,
+        "eligible": "nonfoot_acted",
+        "effect": "refresh"
+      },
       "normal": {
         "addr": "0x285350",
         "weather_tables": [
@@ -1823,6 +1881,13 @@
     },
     {
       "co": 9,
+      "power_meta": {
+        "cost": 40000,
+        "activation_fn": "0x801c929",
+        "banner_style": 3,
+        "eligible": "none",
+        "effect": "none"
+      },
       "normal": {
         "addr": "0x285474",
         "weather_tables": [
@@ -2018,6 +2083,13 @@
     },
     {
       "co": 10,
+      "power_meta": {
+        "cost": 50000,
+        "activation_fn": "0x801cc89",
+        "banner_style": 3,
+        "eligible": "none",
+        "effect": "none"
+      },
       "normal": {
         "addr": "0x285598",
         "weather_tables": [
@@ -2213,6 +2285,13 @@
     },
     {
       "co": 11,
+      "power_meta": {
+        "cost": 50000,
+        "activation_fn": "0x801cca1",
+        "banner_style": 3,
+        "eligible": "none",
+        "effect": "none"
+      },
       "normal": {
         "addr": "0x2856bc",
         "weather_tables": [

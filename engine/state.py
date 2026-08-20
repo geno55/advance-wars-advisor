@@ -73,9 +73,11 @@ class Army:
     player: int
     funds: int
     income: int
-    # CO power charge, cumulative from 0. Both the dealer and the receiver of
-    # damage gain. The activation threshold and the gain formula are UNKNOWN, so
-    # this is a raw number, not a percentage -- do not render it as one.
+    # CO power charge, cumulative from 0 and clamped at the threshold. The
+    # field is a u32 at army +0x20 (older dumps read it as u16; the high half
+    # was army +0x22, always 0 below 65536 charge). Both sides of a battle
+    # gain -- the formula and the threshold are DERIVED now, see engine/co.py
+    # charge_gains() and power_threshold() (DERIVATION 27).
     power: int = 0
     # CO identity, 0..11, from army +0x1D. None means the dump predates the
     # field, NOT that the army has no CO -- callers must treat the two

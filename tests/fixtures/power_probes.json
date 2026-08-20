@@ -1,0 +1,70 @@
+{
+  "_comment": [
+    "CO power system probes, measured through the headless rig (DERIVATION 27)",
+    "against the powers-ON VS fixture (savestate slot 2: 15x13 map, Andy vs",
+    "Andy, CO Power rule on, gate 0x03004318 = 1, charge gate 0x03004317 set).",
+    "Scripts: harness/mesen_meter_charge.lua, mesen_power_activate.lua,",
+    "mesen_power_fx.lua/_fx2/_fx3. Delete nothing; these rows pin the formulas."
+  ],
+  "charge": {
+    "watch": "write callback on the army array, PC read from cpu.r15",
+    "adder_pc": "0x0801BFC4",
+    "cases": [
+      {
+        "name": "tank_vs_infantry",
+        "attacker": {"unit": "Tank", "cost": 7000, "display_lost": 0},
+        "defender": {"unit": "Infantry", "cost": 1000, "display_lost": 8},
+        "observed": {"attacker_gain": 200, "defender_gain": 800},
+        "note": "damage 80 internal, counter 1 internal (display 10->10)"
+      },
+      {
+        "name": "aair_vs_tank_legacy",
+        "attacker": {"unit": "AntiAir", "cost": 8000, "display_lost": 4},
+        "defender": {"unit": "Tank", "cost": 7000, "display_lost": 3},
+        "observed": {"attacker_gain": 3725, "defender_gain": 2900},
+        "note": "the original mGBA capture that found the meter; display",
+        "note2": "losses are the unique non-negative solution of the formula"
+      }
+    ]
+  },
+  "activation": {
+    "bookkeeping_pcs": {
+      "uses_increment": "0x0801C104",
+      "ready_clear": "0x0801C140",
+      "meter_reset": "0x0801BF62",
+      "statblock_set": "0x0801C170",
+      "statblock_clear_next_turn": "0x0801BFFC"
+    },
+    "costs": {
+      "Nell": 30000, "Andy": 30000, "Max": 30000, "Olaf": 30000,
+      "Sami": 25000, "Grit": 30000, "Kanbei": 50000, "Sonja": 30000,
+      "Eagle": 50000, "Drake": 40000, "Sturm": 50000, "Sturm2": 50000
+    },
+    "observed_effects": {
+      "Andy": "repair routine driven per unit with funds forced to 999999 and restored; all units were full so no HP moved; formula read at 0x0801C314: 2 + header[+0x0A](=0) + pool[+4](=0) display HP",
+      "Olaf": "weather byte 0x0300433C 0 -> 1 (snow); reverted at the start of his next turn",
+      "Drake": "every enemy unit -10 internal HP; applier at 0x0801C640 floors at 1 internal",
+      "Sturm_10": "four clustered enemy units at (1,6),(1,7),(1,8),(0,6) each -80 internal; all hit tiles within Manhattan 2 of (1,7)",
+      "Sturm_11": "same four units, -40 internal",
+      "Eagle": "acted Tank's flags bit0 cleared after activation (measured moved-then-refreshed)",
+      "menu": "Power is the third map-menu item and appears only with meter at threshold"
+    }
+  },
+  "grit_range": {
+    "artillery_at": [14, 4],
+    "control_targets_distances": [2, 3],
+    "power_targets_distances_run1": [2, 3, 4, 5],
+    "power_targets_distances_run2": [3, 4],
+    "excluded_distances_run2": [6, 7],
+    "conclusion": "max range 3 -> 5 under power; min range 2 unchanged"
+  },
+  "expiry": {
+    "phases": [
+      {"phase": "p2-day1-activated", "blk": 1, "weather": 1},
+      {"phase": "p1-day1", "blk": 1, "weather": 1},
+      {"phase": "p2-day2", "blk": 0, "weather": 0},
+      {"phase": "p1-day2", "blk": 0, "weather": 0}
+    ],
+    "conclusion": "power block and Olaf's snow both last until the start of the caster's next turn; meter does not charge passively between turns"
+  }
+}

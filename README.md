@@ -424,6 +424,14 @@ harness/mesen_counter_bracket.lua  the A16 sweep: 27 live counters against a
                           damaged target on written Wood. DERIVATION.md 26
 harness/mgba_counter_co.lua  the Infantry-v-Tank board and the four sweeps that
                           locate the CO modifiers in the COUNTER path
+harness/mesen_meter_watch.lua   write-watch the army array with PCs attached;
+                          the null result that showed charging is gated
+harness/mesen_meter_charge.lua  the charge measurement on the powers-ON match
+harness/mesen_power_activate.lua  drive every CO's power and diff the world
+harness/mesen_power_fx.lua/_fx2/_fx3  Grit's range, Max overlay, Eagle refresh,
+                          the expiry chain. DERIVATION.md 27
+harness/mesen_power_recon.lua / mesen_state_peek.lua  menu layout and fixture
+                          inspection utilities
 harness/observations.csv  75 recorded battles (14 by hand, 61 swept)
 
 data/aw1_damage.json      damage matrices + provenance + resolved questions
@@ -440,6 +448,8 @@ tests/test_threat.py      23 regression tests, incl. the same branch ban
 tests/test_fog.py         32 tests, incl. five real-board oracles and branch ban
 tests/test_corpus.py      21 tests: replay every recorded measurement against
                           the engine, strikes and counters kept apart
+tests/test_co_power.py    12 tests: the power system against its measurements
+                          (charge, thresholds, effects, lifetime)
 tests/fixtures/           captured boards, seeded sweeps, and the game's own
                           vision array
 harness/fixtures/         mGBA save states parked at target-select, so a sweep

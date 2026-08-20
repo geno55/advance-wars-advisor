@@ -36,9 +36,9 @@
       "note": "income shown on the status screen; equal for all players here"
     },
     "0x20": {
-      "type": "u16",
+      "type": "u32",
       "name": "co_power_meter",
-      "note": "Charge, cumulative from 0. Confirmed by snapshotting the army records, attacking, and diffing: a single A-Air-on-Tank attack took P2 (attacker) 0 -> 3725 and P1 (defender) 0 -> 2900. Both sides charge, as AW does. The SCALE is unknown -- the activation threshold and the gain formula have not been worked out, and one attack is not enough to derive them."
+      "note": "Charge, cumulative from 0, CLAMPED at the activation threshold. A u32, not the u16 recorded earlier -- the setter at 0x0801BF5E and the adder at 0x0801BFC4 use str/ldr, so +0x22 was never a separate field, just the high half. Gains only when [0x03004317] is set (the VS CO Power rule) and only while no power is active. Gain formula and threshold: engine/co.py charge_gains() / power_threshold(), DERIVATION 27."
     },
     "0x1A": {
       "type": "u8",
@@ -53,7 +53,17 @@
     "0x1E": {
       "type": "u8",
       "name": "co_statblock_index",
-      "note": "SOLVED, see DERIVATION.md section 11. Selects which 128-byte stat block within the CO's record applies -- almost certainly 0 = normal and 1 = CO power active. The full index read off 0x0803A734 is [0x08284A40 + weather*4 + [+0x1E]*128 + co*292]. The CO RECORD stride is 292, not 128; 128 is the sub-block stride, which is what the earlier reading got wrong. Observed as 0 for Andy, Max and Sami because no power was active in any of those captures."
+      "note": "Statblock index: 0 normal, 1 CO power active -- MEASURED, no longer 'almost certainly'. Activation writes 1 (0x0801C170); the start of the caster's next turn writes 0 (0x0801BFFC), so the power block covers the opponent's whole turn. Selects the 128-byte sub-block: [0x08284A40 + weather*4 + [+0x1E]*128 + co*292]. While it is nonzero the meter does not charge (gate at 0x0801BF7C)."
+    },
+    "0x24": {
+      "type": "u8",
+      "name": "co_power_ready",
+      "note": "One-shot 'CO Power available' latch: set by 0x0801C0A4 when the meter reaches the threshold, cleared on activation (0x0801C140). The Power item appears in the map menu while meter >= threshold."
+    },
+    "0x25": {
+      "type": "u8",
+      "name": "co_power_uses",
+      "note": "Activations so far, saturating at 255. Raises the threshold: cost * (100 + 20*uses) / 100, capped at 200% past nine uses, read off 0x0801C018."
     }
   },
   "open_questions": [

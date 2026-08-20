@@ -44,19 +44,45 @@ which units are NOT reduced -- the four indirects. That is Grit. The assertion
 below tests the exclusion rather than the inclusion, so the same misreading
 cannot pass again.
 
-Kanbei settles a question the header notes could only speculate about: he has
-no per-unit modifiers at all, yet is a straightforwardly stronger CO, and his
-+08/+09 reads 120/120. That field is a GLOBAL attack/defence pair, and the
-damage engine does not model it.
+Kanbei's header pair at +08/+09 (120/120) is NOT an attack/defence pair: the
+damage path applies +11/+12 (A14), while +08 is the unit-VALUE multiplier the
+CO power charge path reads (DERIVATION 27) -- the same 20% that makes his
+deployments cost more. The power system itself (true header, costs, descriptor
+table) is extracted into 'power_meta'; see DERIVATION 27.
 """
 import json, hashlib, pathlib, sys, struct
 
 EXPECT_SHA1 = "15053499d5b3f49128a941d7f2d84876f5424d0c"
 ROM_BASE = 0x08000000
 
+# The record actually starts at 0x284A0C -- the power module indexes it there
+# (threshold read at 0x0801C048, charge value at 0x0802D344). BASE below is
+# +0x24 into it; everything this tool extracted before this was learned keeps
+# its offsets, and the true-header fields are read via TRUE_BASE.
+TRUE_BASE = 0x284A0C
 BASE, STRIDE, SUBBLOCK, N = 0x284A30, 292, 0x80, 12
 POOL, POOL_LEN = 0x28491C, 0x400
 MOVECOST_0, MOVECOST_STRIDE = 0x284548, 0x8C
+
+# The per-CO power descriptor table, 12 bytes per CO (read by the activation
+# module at 0x0801C360/0x0801C418/0x0801C634): +0/+1 banner layout params,
+# +4 unit-eligibility predicate, +8 per-unit effect function.
+DESCR = 0x2858C4
+PREDICATES = {
+    0x0801C1C5: "all",             # returns 1
+    0x0801C1C9: "all",             # returns 1
+    0x0801C1CD: "direct_nonfoot",  # not Inf/Mech/Artillery/Rockets/Missiles/Bship
+    0x0801C1FD: "indirect",        # exactly Artillery/Rockets/Missiles/Bship
+    0x0801C225: "foot",            # Infantry, Mech
+    0x0801C241: "nonfoot_acted",   # not foot AND acted flag set
+    0x00000000: "none",
+}
+EFFECTS = {
+    0x0801C265: "heal",     # repair via 0x8029D9C with funds forced to 999999
+    0x0801C34D: "refresh",  # clears unit flags bit 0 (acted)
+    0x0801C359: "noop",
+    0x00000000: "none",
+}
 
 # Unit ids as used by the damage matrices (0-based). The gaps are vestigial.
 UNITS = {
@@ -81,17 +107,20 @@ AIR = {"Fighter", "Bomber", "BCopter", "TCopter"}
 NAVAL = {"Battleship", "Cruiser", "Lander", "Sub"}
 
 HEADER_NOTES = {
-    "+06": "luck. 0 for nearly every record; co=0 reads 10 normal and 50 under "
-           "power, co=7 reads 15. NOT confirmed -- named on the strength of the "
-           "0..9 default luck roll being 10 wide.",
-    "+07": "second luck-shaped byte, only nonzero on co=7 (15). Unidentified.",
-    "+08/+09": "a GLOBAL attack/defence pair, distinct from the per-unit "
-               "modifiers. 100/100 everywhere except co=6, which reads 120/120 "
-               "while all 24 of its per-unit entries are 100/100.",
-    "+11/+12": "a second pair, 100/100 normal and 110/90 under power for most "
-               "records, but varying widely (co=8 power 80/130, co=10 130/120). "
-               "How this composes with +08/+09 and the per-unit modifiers is "
-               "UNKNOWN, and it matters -- see the warning printed by this tool.",
+    "+06": "luck widening, confirmed live (DERIVATION 17/A11): "
+           "roll = uniform(0, 9 + this) - (+07).",
+    "+07": "luck penalty, the subtracted half of the same rule; only co=7.",
+    "+08/+09": "a UNIT-VALUE multiplier pair, not attack/defence. The CO power "
+               "charge path reads +08 (record +0x2C) and multiplies the "
+               "unit's cost/10 by it (0x0802D344), which is how Kanbei's "
+               "120/120 makes his units worth 20% more meter charge -- the "
+               "same pair that makes his deployments cost more. +09 has not "
+               "been observed in any code path yet.",
+    "+0A": "heal adjustment: added to Andy-power heal (2 + this + pool[+4], "
+           "read at 0x0801C314). Zero on every record.",
+    "+0D": "capture-rate shift (A15); 7 on Sami only.",
+    "+11/+12": "the universal attack/defence pair the damage path applies "
+               "(A14): value*x/100, defence stored pre-subtracted.",
 }
 
 
@@ -131,10 +160,30 @@ def main(rom_path, out_path):
         return {"addr": hex(addr), "weather_tables": weather,
                 "modifiers": mods, "header": list(rom[addr:addr + 16])}
 
+    def u16(a):
+        return struct.unpack_from("<H", rom, a)[0]
+
+    def read_power(co):
+        """The true-header power fields and the descriptor-table entry."""
+        t = TRUE_BASE + co * STRIDE
+        d = DESCR + co * 12
+        pred = u32(d + 4)
+        eff = u32(d + 8)
+        check(pred in PREDICATES, f"co {co}: unknown predicate {pred:#x}")
+        check(eff in EFFECTS, f"co {co}: unknown effect fn {eff:#x}")
+        return {
+            "cost": u32(t + 8),
+            "activation_fn": hex(u32(t + 0x10)),
+            "banner_style": u32(t + 0x18),
+            "eligible": PREDICATES[pred],
+            "effect": EFFECTS[eff],
+        }
+
     records = []
     for co in range(N):
         r = BASE + co * STRIDE
         records.append({"co": co,
+                        "power_meta": read_power(co),
                         "normal": read_block(r),
                         "power": read_block(r + SUBBLOCK)})
 
@@ -224,6 +273,24 @@ def main(rom_path, out_path):
           != records[11]["normal"]["header"][11:13],
           "the two Sturm records should differ somewhere, or they are not two")
 
+    # -- power meta, against the activation measurements ------------------
+    costs = [r["power_meta"]["cost"] for r in records]
+    check(costs == [30000, 30000, 30000, 30000, 25000, 30000,
+                    50000, 30000, 50000, 40000, 50000, 50000],
+          f"power costs moved: {costs}")
+    check(records[2]["power_meta"]["eligible"] == "direct_nonfoot",
+          "Max's power predicate should be the direct non-foot units")
+    check(records[4]["power_meta"]["eligible"] == "foot",
+          "Sami's power predicate should be the foot units")
+    check(records[5]["power_meta"]["eligible"] == "indirect",
+          "Grit's power predicate should be the four indirects")
+    check(records[8]["power_meta"]["effect"] == "refresh",
+          "Eagle's power effect should be the refresh")
+    check(records[1]["power_meta"]["effect"] == "heal",
+          "Andy's power effect should be the heal")
+    check(records[4]["power"]["weather_tables"] == [3, 4, 5],
+          "Sami's power block should select the foot-cost-1 movement tables")
+
     print(f"{checks} structural assertions passed")
     for co, name in sorted(CONFIRMED.items()):
         print(f"  co={co} {name}: fingerprint matches")
@@ -264,38 +331,32 @@ def main(rom_path, out_path):
             "and the evidence for them, and is NOT a name mapping -- do not",
             "promote an entry out of it without a +0x1D reading.",
             "",
-            "Two records (10 and 11) use a movement table where every passable",
-            "terrain costs 1, and they are the only pair that does. That lines up",
-            "with the long-standing observation that the CO name blob lists",
-            "'Sturm' twice -- but it is still a fingerprint, not a measurement.",
+            "The record actually begins 0x24 bytes BEFORE the header this tool",
+            "has always extracted (true base 0x284A0C). 'power_meta' comes from",
+            "that true header and the descriptor table at 0x2858C4: the power's",
+            "meter cost (u32 at true +0x08), its activation function, and which",
+            "units its walker touches. See DERIVATION.md 27 for the whole CO",
+            "power system: charge, threshold growth, activation, effects.",
             "",
-            "NOTE FOR THE DAMAGE MODEL. Two of the three candidate sources of CO",
-            "scaling are now identified. The per-unit pool is Max's, Sami's,",
-            "Grit's, Eagle's and Drake's mechanism. The +08/+09 pair is GLOBAL,",
-            "and Kanbei proves it: all 24 of his per-unit entries are 100/100",
-            "while +08/+09 reads 120/120, and he is unambiguously a stronger CO.",
-            "",
-            "+11/+12 is still unknown. It is 100/100 normally and 110/90 under",
-            "power for most records, but varies widely (Eagle's power 80/130,",
-            "Sturm 130/120).",
-            "",
-            "engine/damage.py models NEITHER global pair -- it takes co_attack",
-            "and co_defense as parameters and nothing fills them. Calibration",
-            "used a neutral CO throughout so no existing damage data depends on",
-            "this, but a Kanbei prediction would currently be 20% low.",
+            "The subblock pair selected by army +0x1E is (normal, power),",
+            "MEASURED: activation writes +0x1E = 1 (0x0801C170) and the start",
+            "of the caster's next turn clears it (0x0801BFFC).",
         ],
         "game": "Advance Wars (USA) Rev 1",
         "rom_sha1": sha1,
         "provenance": {
             "method": "extracted from ROM binary",
             "record_base": hex(BASE),
+            "record_true_base": hex(TRUE_BASE),
             "record_stride": STRIDE,
             "subblock_stride": SUBBLOCK,
             "record_count": N,
             "modifier_pool": hex(POOL),
             "modifier_index": "1-based RAM unit type; entry i is unit id i-1",
             "index_formula_site": "0x0803A734",
-            "subblock_meaning": "selected by army +0x1E; believed (normal, power)",
+            "subblock_meaning": "selected by army +0x1E; 0 normal, 1 power "
+                                "active (measured, DERIVATION 27)",
+            "descriptor_table": hex(DESCR),
         },
         "header_fields": HEADER_NOTES,
         "confirmed": {str(k): v for k, v in sorted(CONFIRMED.items())},
@@ -309,8 +370,6 @@ def main(rom_path, out_path):
                                       encoding="utf-8")
     print(f"wrote {out_path}: {N} records, {len(CONFIRMED)} confirmed, "
           f"{len(candidates)} with fingerprints but no measured name")
-    print("NOTE: CO scaling has three candidate sources and only two known "
-          "multiplications -- see _comment before modelling any specific CO.")
 
 
 if __name__ == "__main__":
