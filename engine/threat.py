@@ -523,12 +523,15 @@ def safety(board, unit, *, co_ids: Optional[dict] = None,
 def threat_map(board, player: int, *, unit_type: Optional[str] = None,
                weather: Optional[str] = None, ignore_acted: bool = True,
                fog: Optional[bool] = None,
-               fog_rules: Optional[dict] = None) -> Dict[Coord, List]:
+               fog_rules: Optional[dict] = None,
+               dived: bool = False) -> Dict[Coord, List]:
     """Tile -> the enemy units that could put a shot on it, as the board stands.
 
     Coverage, not damage: what a tile costs you depends on what you park there.
     Pass `unit_type` to count only enemies whose weapons can actually hurt that
     kind of unit -- without it a Lander looks threatened by an Anti-Air.
+    `dived=True` asks the question for a SUBMERGED sub: only Cruisers and
+    Subs pass the filter, per the dived table (DERIVATION 31).
 
     Your own units are where they are, so this is the map for the board as it
     is now. `safety()` is the one that re-runs the enemy searches against a
@@ -538,7 +541,7 @@ def threat_map(board, player: int, *, unit_type: Optional[str] = None,
     for enemy in hostiles(board, player, ignore_acted,
                           fog=bool(fog_active(board, fog)), rule_set=fog_rules):
         if unit_type is not None and not damage.can_attack(
-                enemy.type, unit_type, enemy.ammo):
+                enemy.type, unit_type, enemy.ammo, defender_dived=dived):
             continue
         for tile in covered_tiles(board, enemy, weather):
             out.setdefault(tile, []).append(enemy)

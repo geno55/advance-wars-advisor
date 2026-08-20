@@ -444,6 +444,8 @@ harness/mesen_meteor.lua  twelve seeded meteor strikes against a three-cluster
                           board: the strategy roll and the RNG generator, 12/12
 harness/mesen_meteor2.lua the blast edge cases: friendly fire, the <=1.0 HP
                           immunity, the clamp at 1. DERIVATION.md 30
+harness/mesen_dive.lua / _dive2.lua  the Dive bit and the dived-sub damage
+                          table, proven on a map with no sea. DERIVATION.md 31
 harness/observations.csv  75 recorded battles (14 by hand, 61 swept)
 
 data/aw1_damage.json      damage matrices + provenance + resolved questions
@@ -454,7 +456,7 @@ data/aw1_army_struct.json army record layout + open CO questions
 data/aw1_co.json          12 CO records, all 12 names measured (Sturm has two)
 data/aw1_unit_stats.json  cost, move, move type, range, vision, fuel, ammo
 
-tests/test_damage.py      58 regression tests
+tests/test_damage.py      64 regression tests, incl. the dived-sub table
 tests/test_pathing.py     22 regression tests, incl. "no unit-type branches"
 tests/test_threat.py      23 regression tests, incl. the same branch ban
 tests/test_fog.py         32 tests, incl. five real-board oracles and branch ban

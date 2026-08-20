@@ -1,0 +1,26 @@
+{
+  "_comment": [
+    "Dive probes (DERIVATION 31), harness/mesen_dive.lua and _dive2.lua on",
+    "the powers-ON fixture. A P2 unit type-written to Sub on written Sea, a",
+    "P1 unit type-written to Sub and teleported adjacent for the battles.",
+    "All five battles rolled luck 5 (same reload, same frame counts)."
+  ],
+  "flag": {
+    "bit": 32,
+    "menu_surfaced": ["Wait", "Dive"],
+    "menu_dived": ["Wait", "Rise"],
+    "dive_write_pc": "0x08066E90",
+    "rise_write_pc": "0x08066EAC",
+    "note": "a WRITTEN 0x20 is honoured everywhere: the menu offered Rise, the damage path routed through the table"
+  },
+  "battles": [
+    {"name": "cruiser_vs_dived",    "attacker": "Cruiser", "dived": true,
+     "damage": 95, "base": 90, "note": "90 + luck 5, sea 0 stars"},
+    {"name": "cruiser_vs_surfaced", "attacker": "Cruiser", "dived": false,
+     "damage": 95, "base": 90, "note": "identical -- diving does not soften the hunters"},
+    {"name": "bcopter_vs_dived",    "attacker": "BCopter", "dived": true,
+     "damage": null, "base": 0, "note": "Fire not offered; the sub stayed at 100"},
+    {"name": "bcopter_vs_surfaced", "attacker": "BCopter", "dived": false,
+     "damage": 30, "base": 25, "note": "the control that proves the refusal above was the gate"}
+  ]
+}

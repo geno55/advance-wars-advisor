@@ -57,6 +57,14 @@ class Unit:
         return -(-self.hp // 10)
 
     @property
+    def dived(self) -> bool:
+        """Submerged (the Dive command). Bit 0x20 of the flags byte, set at
+        0x08066E90 and cleared by Rise at 0x08066EAC; while it is up, only
+        Cruisers and Subs can hurt this unit -- the damage path swaps its
+        primary lookup for the table at 0x08283FC8 (DERIVATION 31)."""
+        return bool(self.state & 0x20)
+
+    @property
     def capture_turns_left(self) -> Optional[int]:
         """Turns to finish, at this unit's current HP and a NEUTRAL CO. The
         rate is the displayed bar count -- read off the ROM, (hp-1)/10+1 at

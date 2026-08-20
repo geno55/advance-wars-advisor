@@ -9,8 +9,17 @@ Layout (Advance Wars USA Rev 1, sha1 1505...4d0c):
     primary   weapon matrix @ 0x283B48, 24 rows x 24 cols, u8
     secondary weapon matrix @ 0x283D88, 24 rows x 24 cols, u8
     (a byte-identical second copy of both lives at 0x3F4BBC / 0x3F4DFC)
+    dived-defender table    @ 0x283FC8, 24 u8, indexed by ATTACKER id alone
 Value semantics: base damage in internal-HP points (100 = a full-health unit).
 0 means "this weapon cannot target that unit".
+
+The dived table replaces the PRIMARY lookup when the defender's flags byte
+carries bit 0x20 (the Dive state, set at 0x08066E90 and cleared by Rise at
+0x08066EAC; the gate is 0x08022E12). Cruiser 90 and Sub 55 -- the same
+values as the surfaced matrix -- and zero for the other 22 attackers, so
+diving does not soften the hunters' shots, it deletes everyone else's. No
+unit has a secondary against a Sub, which makes the primary-only gate
+complete. DERIVATION.md 31.
 """
 import json, hashlib, pathlib, sys
 
@@ -19,6 +28,7 @@ PRIMARY = 0x283B48
 SECONDARY = 0x283D88
 PRIMARY_COPY = 0x3F4BBC
 SECONDARY_COPY = 0x3F4DFC
+DIVED = 0x283FC8
 EXPECT_SHA1 = "15053499d5b3f49128a941d7f2d84876f5424d0c"
 
 # Internal unit IDs. Gaps are vestigial slots with no unit behind them.
@@ -96,6 +106,13 @@ def main(rom_path, out_path):
             sys.exit(f"ASSERTION FAILED {mat}[{a}][{d}]={got}, expected {want} ({why})")
     print(f"{len(ASSERTIONS)} structural assertions passed")
 
+    dived = list(rom[DIVED:DIVED + N])
+    if not (dived[21] == 90 and dived[23] == 55
+            and all(v == 0 for i, v in enumerate(dived) if i not in (21, 23))):
+        sys.exit(f"ASSERTION FAILED: dived table should be Cruiser 90 / Sub 55 "
+                 f"and zero elsewhere, got {dived}")
+    print("dived-defender table matches: Cruiser 90, Sub 55, 22 zeroes")
+
     for g in GAPS:
         for mat in mats.values():
             if any(mat[g]):
@@ -118,6 +135,11 @@ def main(rom_path, out_path):
                                   for d in UNIT_IDS} for a in UNIT_IDS},
         "secondary": {UNIT_IDS[a]: {UNIT_IDS[d]: mats["secondary"][a][d]
                                     for d in UNIT_IDS} for a in UNIT_IDS},
+        # The dived-defender override: attacker -> base vs a defender whose
+        # flags carry bit 0x20. Replaces the PRIMARY lookup only (0x08022E12);
+        # measured live in harness/mesen_dive.lua / _dive2.lua.
+        "dived_raw": dived,
+        "dived": {UNIT_IDS[a]: dived[a] for a in UNIT_IDS},
     }
     # THE ROM HALF ONLY, and nothing else touched.
     #
@@ -133,7 +155,8 @@ def main(rom_path, out_path):
     # every other key exactly as found. The measurement-derived fields belong to
     # tools/verify_corpus.py, which computes them by replaying the corpus.
     ROM_OWNED = ("game", "rom_sha1", "provenance", "primary_raw",
-                 "secondary_raw", "primary", "secondary")
+                 "secondary_raw", "primary", "secondary",
+                 "dived_raw", "dived")
     MEASURED = ("verified_against_emulator", "verification")
     out_file = pathlib.Path(out_path)
     if out_file.exists():

@@ -1604,3 +1604,46 @@ obvious next kill: seed, fight once, check the roll against `next(seed) %
 honesty note in the docstring: the alliance test is reduced to `player !=
 attacker`, exact for two-sided matches; a teamed match could diverge and
 none has been captured.
+
+
+## 31. The 24-byte table is the dived sub, and the board that proved it had no sea
+
+The table at `0x08283FC8` had been an Unknown since the weapon-selection
+read: a defender whose flags byte carries bit `0x20` routes the PRIMARY
+lookup through it, indexed by attacker type alone. Dumping it settled the
+shape in one look — **Cruiser 90, Sub 55, twenty-two zeroes** — exactly the
+surfaced matrix's two anti-sub answers with everyone else deleted. So the
+hypothesis wrote itself: bit `0x20` is the Dive state, and diving does not
+soften the hunters' shots, it removes everyone else's entirely. A zero
+entry branches to the no-primary path, and no unit in the game has a
+SECONDARY against a Sub, so the primary-only gate decides everything.
+
+The fixture map has no sea and no subs, and needed neither: Sea is a
+terrain write, a Sub is a type write, and both are proven transparent. A
+P2 unit turned Sub on written Sea offered **Wait / Dive** in its action
+menu; driving Dive set bit `0x20` (the write landed at `0x08066E90`), and
+a sub given a WRITTEN `0x20` offered **Wait / Rise** instead — the game
+honours the written bit — with Rise clearing it at `0x08066EAC`. (The
+first run picked Wait, because Dive is the second item; the flags
+watchpoint is what said "no dive happened" instead of letting a
+wrong-menu tap masquerade as a measurement.)
+
+The battles, all four rolling the same luck 5 off the reloaded state:
+
+    Cruiser vs dived sub      95   = 90 + 5, the table's row
+    Cruiser vs surfaced sub   95   identical -- dive changes nothing here
+    BCopter vs dived sub      no Fire offered, sub untouched
+    BCopter vs surfaced sub   30   = 25 + 5, the control that makes the
+                                   refusal above a measurement
+
+The ammo and min_range gates sit BEFORE the dive check in the code, so
+they still bind. The counter direction follows for free: a dived sub that
+opens fire is countered through the same table — unobservable in legal
+play, since its only contact-countering targets are the Cruiser and Sub
+whose table and matrix values coincide, but the model routes it anyway.
+
+`select_weapon` takes `defender_dived`, `Attack` carries both sides' dive
+states, `Unit.dived` reads the bit, `actions.py` and `threat_map` thread
+it, and the extractor now pulls the table into `aw1_damage.json` with its
+own assertions. One bullet leaves ASSUMPTIONS whole: nothing about the
+table is undecoded any more.

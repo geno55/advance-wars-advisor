@@ -201,6 +201,18 @@ fixtures, and in this file's git history.
   reads it every frame (`0x0802B2F6`) and draws `?` for the HP digit.
   Display-side only — combat uses the real HP. Also read off the same
   marker: the mountain +3 is FOOT-ONLY (`0x0801ECCE`).
+- **The dived sub, whole** (DERIVATION 31). Unit flags bit `0x20` is the
+  Dive state — set by the Dive command (`0x08066E90`), cleared by Rise
+  (`0x08066EAC`), menu-visible as Wait/Dive and Wait/Rise, and honoured
+  when written. A dived defender swaps the primary damage lookup for the
+  24-byte attacker-indexed table at `0x08283FC8`: Cruiser 90, Sub 55,
+  zero for the other twenty-two — the same values the surfaced matrix
+  gives the two hunters, so diving deletes attackers rather than softening
+  them; no unit has a secondary against a Sub, making the primary-only
+  gate complete. Measured: Cruiser 95 into dived and surfaced alike
+  (90+5), BCopter refused Fire against dived and dealt 30 (25+5) to the
+  surfaced control. `select_weapon(defender_dived=)`, `Unit.dived`,
+  `tests/fixtures/dive_probes.json`.
 - **Meteor Strike, whole** (DERIVATION 30). The meteor centres on an enemy
   UNIT picked by one of three scans, chosen by a single RNG draw mod 3:
   funds value / raw internal HP / funds value with indirects doubled — each
@@ -245,13 +257,6 @@ A16, both born the day action enumeration was written.
   a teleported ENEMY is targetable and written terrain carries real defence,
   so the index gates selection, not combat.) Kill by: writing both layers
   alongside `x,y` and re-running the stay-position probe.
-- **The 24-byte table at `0x08283FC8`.** At contact, a defender whose record
-  `+1` carries bit `0x20` routes the *primary* lookup through it, indexed by
-  **attacker type alone** (`0x08022E12–2E32`). A damage table that ignores the
-  defender's type fits damage-vs-dived-sub, but the bit and the bytes are
-  undecoded and nothing models it — an engine quote against whatever state
-  bit `0x20` is would use the wrong table. Found in passing while reading the
-  weapon-selection gates.
 - **The identical visibility copy at `0x02017B42`.** Dumped only as a
   cross-check; no known purpose.
 - **When the unit record updates during a move.** The pre-move tile is what a

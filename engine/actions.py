@@ -192,7 +192,8 @@ def _build_attack(board, attacker, defender, co_ids, warnings) -> Optional[objec
     stars = board.defence_for(defender.x, defender.y, d_move)
     a_co, d_co = _co_pair(board, attacker, defender, co_ids, warnings)
     kw = dict(attacker_hp=attacker.hp, defender_hp=defender.hp,
-              terrain_stars=stars, ammo=attacker.ammo)
+              terrain_stars=stars, ammo=attacker.ammo,
+              defender_dived=defender.dived, attacker_dived=attacker.dived)
     if a_co is None:
         return damage.Attack(attacker=attacker.type, defender=defender.type, **kw)
     return damage.Attack.between(attacker.type, defender.type, a_co, d_co, **kw)
@@ -363,7 +364,8 @@ def actions_for(board, unit, *, co_ids: Optional[dict] = None,
 
     # -- attacks ---------------------------------------------------------------
     for enemy in enemies:
-        if not damage.can_attack(unit.type, enemy.type, unit.ammo):
+        if not damage.can_attack(unit.type, enemy.type, unit.ammo,
+                                 defender_dived=enemy.dived):
             continue
         atk = _build_attack(board, unit, enemy, co_ids, warnings)
         strike = damage.resolve(atk)

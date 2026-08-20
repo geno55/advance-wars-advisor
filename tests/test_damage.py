@@ -20,6 +20,72 @@ from engine.damage import (Attack, CounterModifiersUnknown, DEFAULT_DISPLAY,  # 
 from engine import co                                          # noqa: E402
 
 
+class TestDivedDefender(unittest.TestCase):
+    """The 24-byte table at 0x08283FC8 and unit flags bit 0x20 (DERIVATION 31).
+
+    Every number replays a measurement in tests/fixtures/dive_probes.json:
+    Dive sets the bit (0x08066E90), Rise clears it (0x08066EAC), and a dived
+    defender swaps the primary lookup for the attacker-indexed table --
+    Cruiser 90, Sub 55, nothing else can shoot at all.
+    """
+
+    def test_the_table_is_the_two_hunters_and_nothing_else(self):
+        t = tables()["dived"]
+        self.assertEqual(t["Cruiser"], 90)
+        self.assertEqual(t["Sub"], 55)
+        for a, v in t.items():
+            if a not in ("Cruiser", "Sub"):
+                self.assertEqual(v, 0, a)
+
+    def test_diving_does_not_change_the_hunters_numbers(self):
+        t = tables()
+        for hunter in ("Cruiser", "Sub"):
+            self.assertEqual(t["dived"][hunter], t["primary"][hunter]["Sub"])
+
+    def test_no_secondary_reaches_a_sub_so_the_primary_gate_decides(self):
+        for a, row in tables()["secondary"].items():
+            self.assertEqual(row.get("Sub", 0), 0, a)
+
+    def test_selection_and_refusal(self):
+        w = select_weapon("Cruiser", "Sub", defender_dived=True)
+        self.assertEqual((w.slot, w.base), ("primary", 90))
+        self.assertIsNone(select_weapon("BCopter", "Sub", defender_dived=True))
+        self.assertTrue(can_attack("BCopter", "Sub"))
+        self.assertFalse(can_attack("BCopter", "Sub", defender_dived=True))
+        # a Battleship shells a surfaced sub at 95 and cannot touch a dived one
+        self.assertFalse(can_attack("Battleship", "Sub", defender_dived=True))
+        # the ammo gate still sits in front of the dived primary
+        self.assertIsNone(select_weapon("Cruiser", "Sub", ammo=0,
+                                        defender_dived=True))
+
+    def test_the_measured_battles_reproduce(self):
+        """All four probe battles rolled luck 5; the dived and surfaced
+        Cruiser strikes were identical at 95, the BCopter dealt 30 to the
+        surfaced sub and was refused against the dived one."""
+        cruiser = Attack("Cruiser", "Sub", defender_dived=True)
+        self.assertEqual(damage_for_luck(cruiser, 5), 95)
+        self.assertEqual(
+            damage_for_luck(Attack("Cruiser", "Sub"), 5), 95)
+        self.assertEqual(
+            damage_for_luck(Attack("BCopter", "Sub"), 5), 30)
+        self.assertIsNone(
+            damage_for_luck(Attack("BCopter", "Sub", defender_dived=True), 5))
+
+    def test_the_counter_against_a_dived_attacker_routes_through_the_table(self):
+        # A dived sub that opens fire is countered through the table. Its
+        # legal targets are all naval, and the two that counter at contact --
+        # Cruiser and Sub -- carry the SAME value in both tables, so the
+        # routing is unobservable in legal play; the selection call is what
+        # exercises it. The Cruiser's counter comes back at the table's 90:
+        c = counterattack(Attack("Sub", "Cruiser", attacker_dived=True),
+                          verified=True)
+        self.assertIsNotNone(c)
+        self.assertEqual(c.base, 90)
+        # and the routing itself is visible at the selection layer: a unit
+        # with no table entry has no answer to a dived attacker at all
+        self.assertIsNone(select_weapon("BCopter", "Sub", defender_dived=True))
+
+
 class TestTables(unittest.TestCase):
     def test_provenance_is_honest(self):
         p = tables()["provenance"]

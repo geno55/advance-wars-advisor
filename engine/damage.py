@@ -145,7 +145,8 @@ class Weapon:
 
 
 def select_weapon(attacker: str, defender: str, ammo: int = 99,
-                  tbl: Optional[dict] = None) -> Optional[Weapon]:
+                  tbl: Optional[dict] = None,
+                  defender_dived: bool = False) -> Optional[Weapon]:
     """Pick the weapon the game would use, or None if the attack is illegal.
 
     Rule, read off the COMBAT path at 0x08022BFC (the function 0x080235D2
@@ -200,17 +201,32 @@ def select_weapon(attacker: str, defender: str, ammo: int = 99,
     secondary for Tank -> Infantry (75 over 35) and Tank -> Mech (70 over
     30), and the primary for Mech -> Tank (55 over 6). Each alternative is
     refuted by damage magnitude with no overlap. See ASSUMPTIONS, Established.
+
+    A DIVED defender (unit flags bit 0x20, the Dive command) replaces the
+    PRIMARY lookup with the attacker-indexed table at 0x08283FC8 -- Cruiser
+    90, Sub 55, zero for everyone else -- read at the gate 0x08022E12 and
+    measured live (DERIVATION 31): the Cruiser dealt its usual 90-band into
+    a dived sub, the BCopter that deals 25 to a surfaced one was not even
+    offered Fire. The secondary path was not seen carrying the gate, but no
+    unit has a secondary against a Sub, so the primary-only routing decides
+    every board the game can reach. The ammo and min_range gates sit BEFORE
+    the dive check in the code, so they still apply.
     """
     t = tbl or tables()
-    prim = t["primary"].get(attacker, {}).get(defender, 0) if ammo > 0 else 0
+    if defender_dived:
+        prim = t["dived"].get(attacker, 0) if ammo > 0 else 0
+    else:
+        prim = t["primary"].get(attacker, {}).get(defender, 0) if ammo > 0 else 0
     sec = t["secondary"].get(attacker, {}).get(defender, 0)
     if prim == 0 and sec == 0:
         return None
     return Weapon("primary", prim) if prim > sec else Weapon("secondary", sec)
 
 
-def can_attack(attacker: str, defender: str, ammo: int = 99) -> bool:
-    return select_weapon(attacker, defender, ammo) is not None
+def can_attack(attacker: str, defender: str, ammo: int = 99,
+               defender_dived: bool = False) -> bool:
+    return select_weapon(attacker, defender, ammo,
+                         defender_dived=defender_dived) is not None
 
 
 # --------------------------------------------------------------------------
@@ -372,6 +388,12 @@ class Attack:
     # caller is unchanged; `Attack.between()` fills it from the CO record.
     luck_min: int = LUCK_MIN
     luck_max: int = LUCK_MAX
+    # Dive states (unit flags bit 0x20). The DEFENDER's routes this strike's
+    # primary through the dived table; the ATTACKER's routes the counter
+    # against it -- a dived sub shoots normally but is countered through the
+    # table. See select_weapon and DERIVATION 31.
+    defender_dived: bool = False
+    attacker_dived: bool = False
 
     @property
     def luck_range(self) -> range:
@@ -453,7 +475,8 @@ class Outcome:
 
 def damage_for_luck(a: Attack, luck: int, variant: str = DEFAULT_VARIANT,
                     display: Optional[str] = None) -> Optional[int]:
-    w = select_weapon(a.attacker, a.defender, a.ammo)
+    w = select_weapon(a.attacker, a.defender, a.ammo,
+                      defender_dived=a.defender_dived)
     if w is None:
         return None
     fn = VARIANTS[variant]
@@ -477,7 +500,8 @@ def resolve(a: Attack, variant: str = DEFAULT_VARIANT,
             "Run tests/calibrate.py with real observations, or pass verified=True "
             "to acknowledge you are using an unvalidated model."
         )
-    w = select_weapon(a.attacker, a.defender, a.ammo)
+    w = select_weapon(a.attacker, a.defender, a.ammo,
+                      defender_dived=a.defender_dived)
     if w is None:
         return None
 
@@ -645,7 +669,11 @@ def counterattack(a: Attack, variant: str = DEFAULT_VARIANT,
         return None
     if not (fights_at_contact(a.attacker) and fights_at_contact(a.defender)):
         return None
-    w = select_weapon(a.defender, a.attacker, defender_ammo)
+    # The counter's defender is the ORIGINAL attacker: a dived sub that
+    # opens fire is countered through the dived table (Cruiser 90, or not
+    # at all), which is a.attacker_dived from the counter's point of view.
+    w = select_weapon(a.defender, a.attacker, defender_ammo,
+                      defender_dived=a.attacker_dived)
     if w is None:
         return None
 
