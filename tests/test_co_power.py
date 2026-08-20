@@ -1,4 +1,4 @@
-"""The CO power system against its measurements (DERIVATION 27).
+﻿"""The CO power system against its measurements (DERIVATION 27).
 
 Every number asserted here was measured live through the headless rig or read
 off the ROM at a named address; tests/fixtures/power_probes.json is the
@@ -11,7 +11,8 @@ import sys
 
 sys.path.insert(0, str(pathlib.Path(__file__).resolve().parent.parent))
 
-from engine import co
+from engine import co, rng
+from engine.state import Board, Unit
 
 FIXTURES = pathlib.Path(__file__).parent / "fixtures"
 PROBES = json.loads((FIXTURES / "power_probes.json").read_text(encoding="utf-8"))
@@ -115,6 +116,90 @@ class TestSonja:
             assert co.hides_hp(cid) == (name == "Sonja"), name
 
 
+METEOR = json.loads((FIXTURES / "meteor_probes.json").read_text(encoding="utf-8"))
+
+
+def _unit(slot, player, type_, x, y, hp=100):
+    return Unit(slot, player, type_, x, y, hp, 9, 0, 99,
+                False, False, False, 0, 0)
+
+
+def _meteor_board(hp_overrides={}):
+    """The probe board: three P1 clusters, each one scan's favourite."""
+    units = [
+        _unit(1, 1, "Infantry", 1, 6),      # G1, raw-hp winner
+        _unit(2, 1, "MdTank", 6, 3),        # G2, value winner
+        _unit(3, 1, "Battleship", 7, 6),    # G3, indirect-weighted winner
+        _unit(4, 1, "Infantry", 1, 7),
+        _unit(5, 1, "MdTank", 6, 2),
+        _unit(6, 1, "Infantry", 1, 8),
+        _unit(7, 1, "Tank", 4, 2),
+        _unit(8, 1, "Infantry", 0, 6),
+        _unit(65, 2, "Infantry", 8, 4),
+        _unit(71, 2, "Tank", 9, 7),
+    ]
+    units = [u if u.slot not in hp_overrides else
+             _unit(u.slot, u.player, u.type, u.x, u.y, hp_overrides[u.slot])
+             for u in units]
+    return Board(width=15, height=10, units=units, armies=[],
+                 terrain=[[1] * 15 for _ in range(10)],
+                 owner=[[0] * 15 for _ in range(10)])
+
+
+class TestMeteor:
+    """DERIVATION 30: the selector at 0x08063358, its three scans, and the
+    blast rules -- every assertion here is a replay of a measured probe."""
+
+    def test_the_rng_generator_reproduces_all_twelve_draws(self):
+        for row in METEOR["seed_sweep"]:
+            assert rng.next_state(row["seed"]) == row["rng_after"], row
+
+    def test_the_strategy_is_one_draw_mod_three(self):
+        by_mod = METEOR["strategy_by_mod3"]
+        for row in METEOR["seed_sweep"]:
+            assert by_mod[str(rng.next_state(row["seed"]) % 3)] \
+                == row["cluster"], row
+
+    def test_each_scan_picks_its_measured_cluster(self):
+        b = _meteor_board()
+        for strategy, cluster in ((0, "G2"), (1, "G1"), (2, "G3")):
+            center = co.meteor_target(b, 2, strategy)
+            hit = {u.slot for u, _ in
+                   co.meteor_victims(b, center, METEOR["damage_internal"])}
+            assert hit == set(METEOR["cluster_slots"][cluster]), strategy
+
+    def test_friendly_fire_is_real(self):
+        b = _meteor_board()
+        b.units.append(_unit(66, 2, "Infantry", 5, 2))
+        center = co.meteor_target(b, 2, 0)
+        hits = {u.slot: after for u, after in co.meteor_victims(b, center, 80)}
+        assert hits[66] == 20          # the caster's own Infantry, hit full
+
+    def test_units_at_one_hp_score_nothing_and_take_nothing(self):
+        # G2 at 10 internal scores zero, so the value scan falls on G3 --
+        # and the immune units take no damage even when a blast lands on them
+        b = _meteor_board({2: 10, 5: 10, 7: 10})
+        center = co.meteor_target(b, 2, 0)
+        assert center.slot == 3
+        hits = {u.slot for u, _ in co.meteor_victims(b, center, 80)}
+        assert hits == {3}
+        b2 = _meteor_board({7: 5})
+        center2 = co.meteor_target(b2, 2, 0)
+        hits2 = {u.slot: after for u, after in
+                 co.meteor_victims(b2, center2, 80)}
+        assert 7 not in hits2 and hits2[2] == 20 and hits2[5] == 20
+
+    def test_overkill_clamps_at_one_internal(self):
+        b = _meteor_board({2: 50})
+        center = co.meteor_target(b, 2, 0)
+        hits = {u.slot: after for u, after in co.meteor_victims(b, center, 80)}
+        assert hits[2] == 1
+
+    def test_no_positive_score_means_no_target(self):
+        b = _meteor_board({s: 10 for s in (1, 2, 3, 4, 5, 6, 7, 8)})
+        assert co.meteor_target(b, 2, 0) is None
+
+
 class TestLifetime:
     def test_power_block_covers_the_opponents_turn(self):
         phases = {p["phase"]: p for p in PROBES["expiry"]["phases"]}
@@ -125,3 +210,4 @@ class TestLifetime:
         phases = {p["phase"]: p for p in PROBES["expiry"]["phases"]}
         assert phases["p1-day1"]["weather"] == 1
         assert phases["p2-day2"]["weather"] == 0
+

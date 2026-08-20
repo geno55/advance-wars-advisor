@@ -1,0 +1,40 @@
+{
+  "_comment": [
+    "Meteor Strike probes (DERIVATION 30), harness/mesen_meteor.lua and",
+    "mesen_meteor2.lua on the powers-ON fixture. The board rewrites P1 unit",
+    "TYPES in place (tile index intact) into three clusters, one per scan:",
+    "G1 four Infantry around (1,6)-(1,7)   raw hp 400, value  4000",
+    "G2 MdTank/MdTank/Tank around (6,2)    raw hp 300, value 39000",
+    "G3 lone Battleship at (7,6)           raw hp 100, weighted 56000",
+    "Every activation makes exactly one RNG draw; rng_after equalled the",
+    "derived next_state(seed) on all twelve rows, and the hit cluster",
+    "matched next_state(seed) %% 3 on all twelve."
+  ],
+  "seed_sweep": [
+    {"seed": 0,      "rng_after": 1,          "cluster": "G1"},
+    {"seed": 1,      "rng_after": 10,         "cluster": "G1"},
+    {"seed": 2,      "rng_after": 27,         "cluster": "G2"},
+    {"seed": 3,      "rng_after": 52,         "cluster": "G1"},
+    {"seed": 4,      "rng_after": 85,         "cluster": "G1"},
+    {"seed": 5,      "rng_after": 126,        "cluster": "G2"},
+    {"seed": 6,      "rng_after": 175,        "cluster": "G1"},
+    {"seed": 7,      "rng_after": 232,        "cluster": "G1"},
+    {"seed": 100,    "rng_after": 40501,      "cluster": "G1"},
+    {"seed": 1000,   "rng_after": 4005001,    "cluster": "G1"},
+    {"seed": 54321,  "rng_after": 1065937530, "cluster": "G2"},
+    {"seed": 999999, "rng_after": 308705600,  "cluster": "G3"}
+  ],
+  "strategy_by_mod3": {"0": "G2", "1": "G1", "2": "G3"},
+  "cluster_slots": {"G1": [1, 4, 6, 8], "G2": [2, 5, 7], "G3": [3]},
+  "damage_internal": 80,
+  "edge_cases": [
+    {"name": "friendly", "setup": "P2 Infantry (slot 65) teleported to (5,2), inside G2's blast",
+     "observed": "65: 100->20 alongside 2,5,7 -- the blast damages BOTH sides"},
+    {"name": "exclusion", "setup": "G2 written to 10 internal",
+     "observed": "G2 scores zero; the meteor falls on G3 (slot 3, 100->20); G2 untouched"},
+    {"name": "immunity", "setup": "slot 7 at 5 internal, inside the struck G2 blast",
+     "observed": "7 stays at 5 -- units at <=10 internal are not damaged at all"},
+    {"name": "clamp", "setup": "slot 2 at 50 internal, inside the struck G2 blast",
+     "observed": "2: 50->1 -- overkill clamps at 1, the meteor cannot kill"}
+  ]
+}

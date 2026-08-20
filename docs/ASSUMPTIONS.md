@@ -201,6 +201,19 @@ fixtures, and in this file's git history.
   reads it every frame (`0x0802B2F6`) and draws `?` for the HP digit.
   Display-side only — combat uses the real HP. Also read off the same
   marker: the mountain +3 is FOOT-ONLY (`0x0801ECCE`).
+- **Meteor Strike, whole** (DERIVATION 30). The meteor centres on an enemy
+  UNIT picked by one of three scans, chosen by a single RNG draw mod 3:
+  funds value / raw internal HP / funds value with indirects doubled — each
+  scan sums a Manhattan-2 diamond, allies subtract, units at ≤10 internal
+  count nothing, best strictly-greater score wins, none positive means no
+  meteor. Confirmed 12/12 on seeded activations against a board built to
+  make each scan prefer a different cluster. Blast: BOTH sides take the
+  damage (80 internal record 10, 40 record 11), ≤10-internal units are
+  immune (not floored — unlike the tsunami), overkill clamps at 1. The same
+  probe confirmed the RNG generator itself: the state read back after each
+  activation equalled the derived `next(seed)` exactly, twelve times.
+  `engine/co.py meteor_*`, `engine/rng.py`,
+  `tests/fixtures/meteor_probes.json`.
 - **The last two vision rules, measured** (DERIVATION 29). Rain costs every
   unit 1 vision, floored at 1 — the written-rain capture reproduces 150/150,
   misses 32 tiles with the rule off, and the floor itself carries 7 tiles
@@ -220,10 +233,6 @@ A16, both born the day action enumeration was written.
 
 ## Unknown — not modelled
 
-- **The meteor's target selection.** Damage and radius are measured
-  (DERIVATION 27); the scoring that picked the enemy cluster is not read.
-  The constant lives in the entry functions at `0x0801CC88`/`0x0801CCA0`;
-  the picker is somewhere in the meteor object's tick.
 - **Header `+09`.** The value pair's second byte (Kanbei 120). Its partner
   `+08` is the meter-value multiplier; nothing has been seen reading `+09`.
 - **The tile→unit index.** FOUND but not decoded whole: the fog marker reads
@@ -249,9 +258,13 @@ A16, both born the day action enumeration was written.
   fixture holds (Established); whether the record flips at confirmation or
   later in the animation is unread. Nothing shipped depends on it — only a
   live reader polling mid-move would care.
-- **The RNG's generator.** The combat luck state at `0x03001D30` is writable,
-  which is how sweeps seed it, but the update function has never been derived,
-  so rolls are ranges, never predictions.
+- **How the luck path consumes the RNG.** The generator IS derived now —
+  `state' = ((4s+2)(4s+3) mod 2³²) >> 2` at `0x08010A84`, confirmed 12/12
+  through the meteor probe (DERIVATION 30, `engine/rng.py`) — but how a
+  combat luck roll reduces the state has not been read, so rolls stay
+  ranges. Kill by: seed `0x03001D30`, fight one battle, check the roll
+  against `next(seed) % 10`; if that lands, every sweep becomes a
+  prediction and the damage envelopes collapse to points.
 - **Supply, repair, joining, unloading, production** — the turn mechanics
   `engine/actions.py` declines to offer rather than guess; each is named in
   its docstring with the reason.

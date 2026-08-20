@@ -292,6 +292,100 @@ def power_meta(co_id: int) -> dict:
     return dict(_co_data()["records"][co_id]["power_meta"])
 
 
+# ---------------------------------------------------------------------------
+# Sturm's Meteor Strike, DERIVATION 30. Read off the selector at 0x08063358
+# and its three scans, then confirmed live: 12 seeded activations matched the
+# predicted strategy and cluster 12/12, and the edge rules (friendly fire,
+# the hp<=10 immunity, the clamp at 1) were each measured directly.
+
+METEOR_RADIUS = 2
+METEOR_STRATEGIES = 3
+
+
+def _meteor_unit_stats(unit_type):
+    try:                             # local: co.py is otherwise data-only
+        from . import pathing
+    except ImportError:
+        import pathing
+    return pathing.unit_stats(unit_type)
+
+
+def meteor_strategy(rng_state: int) -> int:
+    """Which scan this activation runs: one RNG draw, reduced mod 3.
+
+    0 funds-value, 1 raw internal HP, 2 funds-value with indirects doubled.
+    The draw is the only one the activation makes, so the strategy is fully
+    determined by the state at 0x03001D30 -- 12/12 seeded confirmations.
+    """
+    try:
+        from . import rng
+    except ImportError:
+        import rng
+    return rng.next_state(rng_state) % METEOR_STRATEGIES
+
+
+def _meteor_score(board, attacker: int, center, strategy: int) -> int:
+    total = 0
+    for u in board.units:
+        if u.loaded or u.hp <= 10:               # <=1.0 HP is worth nothing
+            continue
+        if abs(u.x - center.x) + abs(u.y - center.y) > METEOR_RADIUS:
+            continue
+        st = _meteor_unit_stats(u.type)
+        if strategy == 1:
+            v = u.hp
+        else:
+            v = u.hp * ((st["cost"] // 10) // 10)
+            if strategy == 2 and st["min_range"] > 1:
+                v *= 2
+        total += v if u.player != attacker else -v
+    return total
+
+
+def meteor_target(board, attacker: int, strategy: int):
+    """The unit the meteor centres on, or None when no score is positive.
+
+    Candidates are every hostile unit, scanned army-ascending then
+    slot-ascending; the best STRICTLY greater score wins, so the earliest
+    candidate keeps a tie. Occupancy is judged by unit positions, which is
+    what the game's tile index holds for units that have really moved --
+    a teleported record is invisible to the real scorer, so boards built by
+    position writes will not reproduce it.
+
+    The alliance test is the game's 0x080253D4; this model reduces it to
+    player != attacker, which is exact for the two-sided matches every
+    fixture plays. A teamed 3-4 player match could diverge and none has
+    been captured.
+    """
+    best, best_score = None, 0
+    for u in sorted((u for u in board.units
+                     if u.player != attacker and not u.loaded),
+                    key=lambda u: (u.player, u.slot)):
+        score = _meteor_score(board, attacker, u, strategy)
+        if score > best_score:
+            best, best_score = u, score
+    return best
+
+
+def meteor_victims(board, center, damage: int) -> list:
+    """(unit, hp_after) for everyone the blast touches -- BOTH sides.
+
+    Friendly fire is real (a P2 unit written into the blast took the full
+    80), units at 10 internal or less are untouched entirely (not floored:
+    a 5-internal unit inside a struck blast stayed at 5), and overkill
+    clamps at 1 internal (50 - 80 -> 1). Damage is 80 for record 10 and 40
+    for record 11, the constants at 0x0801CC92/0x0801CCAA.
+    """
+    out = []
+    for u in board.units:
+        if u.loaded or u.hp <= 10:
+            continue
+        if abs(u.x - center.x) + abs(u.y - center.y) > METEOR_RADIUS:
+            continue
+        out.append((u, max(1, u.hp - damage)))
+    return out
+
+
 def vision_bonus(co_id: int, unit_type: str, power: bool = False) -> int:
     """Per-unit vision adjustment, pool entry +8, added by the fog marker at
     0x0801ED06. Sonja and only Sonja: +1 on everything but Sub, +3 under
@@ -334,7 +428,7 @@ POWER_EFFECTS = {
     7: {},                                  # Sonja: luck stays -15..9; rest unread
     8: {"refresh": "nonfoot_acted"},        # Eagle: acted bit cleared, non-foot
     9: {"mass_damage": 10},                 # Drake: -10 internal all enemies, min 1
-    10: {"meteor_internal": 80},            # Sturm: r<=2 cluster, code 0x0801CC88
+    10: {"meteor_internal": 80},            # Sturm: see meteor_target()
     11: {"meteor_internal": 40},            # Sturm (VS record): same, weaker
 }
 

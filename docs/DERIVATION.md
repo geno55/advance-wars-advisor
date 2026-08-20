@@ -1535,3 +1535,72 @@ And the negative shape of the air test matters: teleporting an air unit ONTO
 the wood would have proven nothing, because the tile→unit index does not
 follow position writes — the test only works because the unit already stood
 there and only its type changed.
+
+
+## 30. The meteor's mind, and the RNG generator falling out of it
+
+The last CO-power unknown: how Sturm's meteor picks its target. The meteor
+object's template at `0x08285A44` names its phase functions, one of which
+(`0x0801C9DC`) calls **`0x08063358(active_player)`** and stores the result
+as the target — a UNIT SLOT, not a tile. The meteor centres on a unit.
+
+### Three scans, chosen at random
+
+The selector's first act is a call to `0x08010A84` — the RNG — reduced
+mod 3, and the result dispatches to one of **three different scoring
+scans**. All three share a skeleton: for every unit of every hostile army
+(the hostility bitmask at army `+0x28`, scanned army-ascending then
+slot-ascending), mark a Manhattan-2 diamond around its tile, then walk the
+whole map and score the occupants — found through the tile→unit index at
+map `+0x51A`, allies of the caster subtracting and units at **10 internal
+HP or less contributing nothing**. The best strictly-greater score wins,
+so the earliest candidate keeps a tie, and no positive score means no
+target. They differ only in the per-unit value:
+
+    strategy 0   hp × (cost/10)/10            funds value
+    strategy 1   hp                           raw internal HP
+    strategy 2   funds value, ×2 when stats min_range > 1   indirects doubled
+
+### The generator, read and then confirmed twelve times
+
+`0x08010A84` is five instructions:
+
+    state' = ((4·state + 2) · (4·state + 3)  mod 2³²) >> 2
+
+on the u32 at `0x03001D30` — **the combat RNG's update function, which had
+never been derived**. The probe that confirmed the meteor confirmed it too:
+a board rebuilt IN PLACE (type writes are transparent and keep the tile
+index valid — teleports would have been invisible to the scorer) into three
+clusters, each one scan's favourite:
+
+    G1  four Infantry            raw hp 400,  value  4000
+    G2  MdTank, MdTank, Tank     raw hp 300,  value 39000
+    G3  a lone Battleship        raw hp 100,  weighted 56000
+
+Twelve seeds written, twelve activations: the state read back after each
+equalled `next(seed)` **exactly** — one draw per activation, no hidden
+consumers — and the struck cluster matched `next(seed) % 3` twelve out of
+twelve (0 → G2, 1 → G1, 2 → G3). `engine/rng.py` now carries the
+generator; what it deliberately does not carry is a luck prediction,
+because HOW the luck path consumes the state is still unread. That is the
+obvious next kill: seed, fight once, check the roll against `next(seed) %
+10`.
+
+### The blast rules, each measured on its own
+
+- **Friendly fire is real.** A P2 Infantry teleported into G2's blast took
+  the full 80 — the applier walks records, not the tile index, so the
+  teleport landed in it — which is why the scorer bothers subtracting
+  allied value.
+- **Units at ≤10 internal are immune**, not floored: a 5-internal Tank
+  inside a struck blast stayed at 5. (Drake's tsunami floors those same
+  units to 1 — the two mass-damage appliers genuinely differ.)
+- **Overkill clamps at 1**: 50 internal minus 80 leaves 1. The meteor
+  cannot kill.
+- The damage constants are the entry functions' parameters: 80 internal
+  for record 10, 40 for record 11 (`0x0801CC92`/`0x0801CCAA`).
+
+`co.meteor_strategy/meteor_target/meteor_victims` model all of it, with one
+honesty note in the docstring: the alliance test is reduced to `player !=
+attacker`, exact for two-sided matches; a teamed match could diverge and
+none has been captured.

@@ -407,6 +407,8 @@ engine/co.py              CO modifiers, and what it refuses to model
 engine/threat.py          what the enemy can do to you next turn
 engine/actions.py         every legal action a unit has this turn  <- the advisor
 engine/fog.py             what you can legally see; reads the game's own array
+engine/rng.py             the derived RNG generator (the luck consumption is
+                          still unread, so it refuses to predict a roll)
 harness/mgba_state.lua    dump the live board as JSON          <- the state reader
 harness/mgba_ramtool.lua  RAM search/diff, map and army inspection, unit records
                           reset/mark/chg/unc, tag+tagfilter (labelled states),
@@ -438,6 +440,10 @@ harness/mesen_sonja_fix.lua  dumps the three Sonja captures as loader-schema
                           fixtures. DERIVATION.md 28
 harness/mesen_vision_rules.lua  the rain and air-over-wood captures that made
                           the last two vision rules measurements. DERIVATION.md 29
+harness/mesen_meteor.lua  twelve seeded meteor strikes against a three-cluster
+                          board: the strategy roll and the RNG generator, 12/12
+harness/mesen_meteor2.lua the blast edge cases: friendly fire, the <=1.0 HP
+                          immunity, the clamp at 1. DERIVATION.md 30
 harness/observations.csv  75 recorded battles (14 by hand, 61 swept)
 
 data/aw1_damage.json      damage matrices + provenance + resolved questions
@@ -454,8 +460,9 @@ tests/test_threat.py      23 regression tests, incl. the same branch ban
 tests/test_fog.py         32 tests, incl. five real-board oracles and branch ban
 tests/test_corpus.py      21 tests: replay every recorded measurement against
                           the engine, strikes and counters kept apart
-tests/test_co_power.py    15 tests: the power system against its measurements
-                          (charge, thresholds, effects, lifetime, Sonja)
+tests/test_co_power.py    22 tests: the power system against its measurements
+                          (charge, thresholds, effects, lifetime, Sonja, the
+                          meteor's three scans and the RNG generator)
 tests/fixtures/           captured boards, seeded sweeps, and the game's own
                           vision array
 harness/fixtures/         mGBA save states parked at target-select, so a sweep
