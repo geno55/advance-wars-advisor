@@ -18,8 +18,8 @@
    "tests_run": 22,
    "replayed": {
     "observations": 75,
-    "sweeps": 20,
-    "sweep_cases": 1224
+    "sweeps": 21,
+    "sweep_cases": 1251
    },
    "engine": {
     "display_rule": "ceil",

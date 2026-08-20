@@ -1258,3 +1258,48 @@ opened with A on an empty tile. Every case ships the screenshot it ended on,
 because the drive is verified by looking, not assumed: the run that proved
 the rig showed the action menu reading "Capt / Wait" before anything was
 scored against it.
+
+
+## 26. The counter's bracket at a damaged target, and the truncation it flushed out
+
+The last assumption. A16 needed counters landing on a target below full HP on
+starred terrain — the one configuration every earlier sweep had pinned away.
+Design, all through the headless route of section 25, from the same savestate:
+
+- My Infantry's tile written to Wood (2 stars) in the logic map, an enemy
+  teleported adjacent, my HP written to 100, 81 or 57, the RNG seeded, and
+  Fire driven. The observed strike damage names the survivor exactly —
+  `survivor = 100 − damage` — so every (damage, counter) pair is one exact
+  equation per display rule, no luck bookkeeping.
+- 81 separates `ceil` (display 9, bracket 82) from `round` and the floors
+  (display 8, bracket 84); 57 separates the floors (5) from `ceil`/`round`
+  (6). The full-HP controls are the case where all rules agree, run FIRST —
+  they also validate the two unproven writes, because their counters
+  reproduce the written Wood's bracket to the point.
+- One trap dodged at design time: at 57 HP a Tank's counter (58–65) exceeds
+  the target's HP and the cap at `target_hp` blinds the case, so the 57 sweep
+  attacks the enemy Infantry instead (counter 29–35, uncapped).
+
+Predictions were computed and recorded before the run. Result, 27 battles:
+`ceil` 27/27; `round` 0/12 on the 81 sweep; the floors 0/24 across both. The
+counter's bracket rounds the damaged target's HP up, exactly like the strike
+(section 17 / A9a), which is what `counter_damage()` already implemented.
+
+**The sweep also caught a strike-formula error nothing else could reach.**
+Case h81_3 dealt damage 3 where `resolve()` said the minimum was 4. The
+engine carried the display-HP term as an exact fraction — `5 × 9/10 = 4.5` —
+where the ROM divides via BIOS Div at `0x080232C8` and truncates BEFORE the
+luck roll: `floor(4.5) + 0` then the terrain bracket gives 3. No earlier
+measurement could object because base × display was divisible by 10 in every
+one of them: Tank-family bases at displays 6, 9 and 10 all divide, and full
+health always does. It took an Infantry (base 5) at display 9 to leave a
+fraction on the table — a board no sweep had ever built, reached here as a
+side effect of aiming at the counter. `v_luck_after_hp` now floors the term,
+all 75 observations and 21 sweeps still reproduce (they were blind either
+way), and the verification record was re-derived over the grown corpus.
+
+The fourth time this formula hid a truncation behind a variable pinned at
+the one value where the question disappears — after `floor_min1`,
+base-vs-value, and the counter's luck range. The lesson is unchanged and
+apparently inexhaustible: a term that never leaves the integers is a term
+that has never been tested.

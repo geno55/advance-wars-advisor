@@ -92,8 +92,16 @@ fixtures, and in this file's git history.
   of its factors, pinned on three terrains and three display values.
   `resolve()` returns an exact range, so "cannot kill" is as reliable as "will
   kill". Settled by crossing two independent eliminations — the 75-row corpus
-  and seeded sweeps — neither sufficient alone. `DERIVATION.md` 17. Retired
-  A2, A14.
+  and seeded sweeps — neither sufficient alone. **The display-HP term
+  truncates before luck is added** — `0x080232C8` is BIOS Div and always said
+  so, but the engine carried the product as an exact fraction for the
+  project's whole life and nothing could object: every measurement had
+  base × display divisible by 10, so the fraction never survived to the
+  floor. The A16 bracket sweep was the first to fight an Infantry at display
+  9 — 5 × 9/10 = 4.5 — and the game dealt 3 at luck 0, which only
+  `floor(4.5) + 0` produces. The fourth pinned-variable truncation in this
+  formula, caught by a sweep aimed at something else. `DERIVATION.md` 17, 26.
+  Retired A2, A14.
 - **CO modifiers truncate individually.** `(value * mod) / 100` via `__divsi3`,
   applied twice in sequence. Any variant that rounds only at the end is wrong.
   Measured on both sides: Max's 150 lands 89–96, the band only `floor(112.5) =
@@ -120,7 +128,13 @@ fixtures, and in this file's git history.
   at 2 while the opening ranged 45-50, and four more located the CO pair across
   256 cases. `counterattack()` maps every survivor of the opening's own luck
   range through it, so the quote is a real envelope over the one variable there
-  is. Retired A8, A9b.
+  is. **And the bracket's rounding at a damaged target is measured too**
+  (`tests/fixtures/counter_bracket_probes.json`, 27 live battles): the target's
+  display HP is `ceil`, the strike's own rule — 12/12 at 81 HP where `round`
+  and the floors fit none, 12/12 at 57 HP where the floors fit none, and 3/3
+  full-HP controls where all rules agree, run first to prove the rig. Every
+  observed strike damage names the survivor exactly, so each row is one exact
+  equation with no luck term. Retired A8, A9b, A16.
 - **Combat luck is a u32 at `0x03001D30`**, found by bisection; writing it
   makes the roll an input, which is what removed the sampling problem. The
   roll is `uniform(0, 9 + good) − bad` from the CO record's `+06/+07` bytes:
@@ -161,19 +175,11 @@ fixtures, and in this file's git history.
 
 ## Assumed — these are the ones that will bite
 
-### A16. The counter's terrain bracket at a damaged target
-
-`counter_damage()` closes with the strike's terrain bracket on the **target's**
-display HP, and display is `ceil` — but every measured counter landed on a
-target at 100 internal HP, display 10, where all four display rules agree. So
-the bracket's rounding on the counter path is inherited from the strike, not
-measured; A9b's sweeps were blind to it by construction, the same way the
-corpus was blind to the strike's rule for months (retired A5).
-
-**Kill it by:** one counter sweep with the ORIGINAL attacker written below
-full HP on starred terrain. 81 internal separates `ceil` from `round`, 57
-separates `ceil` from the floors — the same discriminating values that settled
-the strike (retired A9a).
+Nothing, currently. Every assumption this file has carried is either in
+Established above or in the Retired ledger below, each killed by a
+measurement or a read with its account named. The section stays, because the
+next composed feature will refill it — that is what happened with A15 and
+A16, both born the day action enumeration was written.
 
 ## Unknown — not modelled
 
@@ -193,7 +199,12 @@ the strike (retired A9a).
   read `acted 0` with the record sitting on the city. Some structure beyond
   the unit array maps tiles to units, and it has not been found. Harness
   rule until it is: type/hp/ammo/capture writes are proven transparent,
-  position writes are NOT — drive real moves instead.
+  position writes are NOT for selecting your own unit — drive real moves
+  instead. The A16 probe sharpened the boundary: a teleported ENEMY is
+  targetable (Fire found it and the battle resolved), and a terrain byte
+  written into the logic map carries real defence (the full-HP controls
+  reproduced the written Wood's bracket exactly), so whatever the index
+  gates, it is selection, not combat.
 - **The 24-byte table at `0x08283FC8`.** At contact, a defender whose record
   `+1` carries bit `0x20` routes the *primary* lookup through it, indexed by
   **attacker type alone** (`0x08022E12–2E32`). A damage table that ignores the
@@ -239,4 +250,5 @@ The measured content is in the Established bullets; the full accounts are in
 | A13 | the CO attack modifier truncates | fixture `max_wood_co` |
 | A14 | `+11/+12` is the universal pair; the defence modifier lands on the base; both sides truncate | fixtures `kanbei_att_wood`/`kanbei_def_wood`/`sami_def_wood` |
 | A15 | capture: foot-only, rate = bar count (+CO shift), moving resets, staying accumulates to a fall at 20 — arithmetic read off the ROM, rules measured live | `tests/fixtures/capture_probes.json`, `harness/mesen_capture.lua` |
+| A16 | the counter's terrain bracket reads the damaged target's display HP with `ceil`, the strike's rule — 27 live battles, alternatives refuted 0/12 each | `tests/fixtures/counter_bracket_probes.json`, `harness/mesen_counter_bracket.lua` |
 | A17 | ammo gates the primary (`& 0x780` at `0x08022E04`/`0x0802306C`); the fallback is the same branch as "weaker weapon"; only the primary decrements ammo (`0x080232B2`) | `code_analysis.weapon_selection`, `tests/test_damage.py` |

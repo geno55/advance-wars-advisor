@@ -686,6 +686,74 @@ class TestTheCorpusWitnessedTheSelection(unittest.TestCase):
         self.assertEqual(counter_damage(6, 57, 100, 1, 100), 2)
 
 
+class TestCounterBracketMeasured(unittest.TestCase):
+    """Replay of tests/fixtures/counter_bracket_probes.json -- the sweep that
+    retired A16. The counter's terrain bracket reads the DAMAGED target's
+    display HP with `ceil`, the same rounding the strike path measured (A9a).
+    27 live battles: full-HP controls where all rules agree, then 81 HP
+    (ceil against round and the floors) and 57 HP (the floors against ceil
+    and round). Each observed strike damage names the survivor exactly, so
+    every row is one exact equation with no luck term.
+    """
+
+    @classmethod
+    def setUpClass(cls):
+        import json as _json
+        cls.rows = _json.loads(
+            (pathlib.Path(__file__).resolve().parent / "fixtures"
+             / "counter_bracket_probes.json").read_text(encoding="utf-8"))["cases"]
+
+    def test_the_engine_reproduces_all_27_counters(self):
+        for r in self.rows:
+            surv = r["en_hp0"] - r["damage"]
+            got = counter_damage(r["counter_base"], surv, 100,
+                                 r["my_stars"], r["my_hp0"])
+            self.assertEqual(got, r["counter"], r["name"])
+
+    def _score(self, prefix, disp_of):
+        ok = 0
+        rows = [r for r in self.rows if r["name"].startswith(prefix)]
+        for r in rows:
+            surv = r["en_hp0"] - r["damage"]
+            pred = min((r["counter_base"] * surv // 100)
+                       * (100 - r["my_stars"] * disp_of(r["my_hp0"])) // 100,
+                       r["my_hp0"])
+            if pred == r["counter"]:
+                ok += 1
+        return ok, len(rows)
+
+    def test_round_dies_on_the_81_sweep(self):
+        """display(81): ceil says 9, round says 8, and the bracket moves by
+        two points of defence. round fit none of the twelve."""
+        self.assertEqual(self._score("h81", lambda h: (h + 5) // 10), (0, 12))
+        self.assertEqual(self._score("h81", lambda h: -(-h // 10)), (12, 12))
+
+    def test_floor_dies_on_the_57_sweep(self):
+        """display(57): ceil and round say 6, the floors say 5. floor fit
+        none of the twelve; ceil and round fit all -- which is why the 81
+        sweep exists."""
+        self.assertEqual(self._score("h57", lambda h: h // 10), (0, 12))
+        self.assertEqual(self._score("h57", lambda h: -(-h // 10)), (12, 12))
+
+    def test_the_controls_are_the_agreeing_case(self):
+        """At 100 every rule reads display 10; all three fit all three rows,
+        which is what makes them a control on the rig and not on the rule."""
+        for disp in (lambda h: -(-h // 10), lambda h: (h + 5) // 10,
+                     lambda h: h // 10):
+            self.assertEqual(self._score("ctrl", disp), (3, 3))
+
+    def test_the_strikes_stay_inside_the_engines_envelope(self):
+        """The opening attacks were computed by the same game: each observed
+        damage must sit inside resolve()'s exact range for that matchup."""
+        for r in self.rows:
+            a = Attack(attacker="Infantry", defender=r["enemy_type"],
+                       attacker_hp=r["my_hp0"], defender_hp=r["en_hp0"],
+                       terrain_stars=1, ammo=0)
+            out = resolve(a)
+            self.assertTrue(out.min_damage <= r["damage"] <= out.max_damage,
+                            r["name"])
+
+
 class TestCounterWalksTheAttacksOwnLuck(unittest.TestCase):
     """counterattack() maps every survivor of the OPENING's luck range through
     the counter formula. For a while it walked the module's default 0..9

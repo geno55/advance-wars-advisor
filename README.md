@@ -42,9 +42,11 @@ paid off — see "What got caught" below.
   same branch as "weaker weapon" — and only the primary branch decrements
   ammo. The counter's gates fell out of the same read: the counter role is
   rejected at any distance but 1, and the primary needs `min_range == 1` —
-  the range fields, no separate flag. Retired A1, A7, A17. **One assumption
-  remains in the whole model**: A16, the counter's terrain bracket at a
-  damaged target.
+  the range fields, no separate flag. Retired A1, A7, A17. **No assumptions
+  remain**: the Assumed section of `ASSUMPTIONS.md` is empty for the first
+  time in the project's life -- A15 and A16 fell to headless measurement
+  (`DERIVATION.md` 25-26), and the A16 sweep repaid the trip by catching a
+  strike-formula truncation the whole corpus was blind to.
 - Calibrated against 75 exact-HP observations from a live game — 14
   hand-recorded, 61 from the automated sweep. Terrain stars confirmed; five of
   six formula variants refuted.
@@ -418,6 +420,8 @@ harness/mgba_capture.lua  capture probes for mGBA's GUI console (superseded
 harness/mesen_capture.lua the headless route: Mesen2 --testrunner drives the
                           probes with no human -- the runs that retired A15.
                           See DERIVATION.md 25
+harness/mesen_counter_bracket.lua  the A16 sweep: 27 live counters against a
+                          damaged target on written Wood. DERIVATION.md 26
 harness/mgba_counter_co.lua  the Infantry-v-Tank board and the four sweeps that
                           locate the CO modifiers in the COUNTER path
 harness/observations.csv  75 recorded battles (14 by hand, 61 swept)
@@ -742,6 +746,15 @@ confident inference overturned by a measurement:
   in nine. The variable that decides it had been pinned at the single value
   where the question disappears, which is the same trap as `floor_min1` above,
   found twice in the same formula from opposite ends.
+- **The display-HP term carried as an exact fraction.** `0x080232C8` is BIOS
+  Div and truncates before luck; the engine multiplied by `hp/10` exactly, and
+  for the project's whole life no measurement could object because base ×
+  display was divisible by 10 in every one -- Tank-family bases at displays 6,
+  9 and 10 all divide, and full health always does. The A16 bracket sweep was
+  the first board to leave a fraction on the table (Infantry, base 5, display
+  9), and the game dealt 3 where the engine's minimum was 4. Found by a sweep
+  aimed at the counter, not the strike. The fourth truncation this formula hid
+  behind a pinned variable.
 - **"The ROM folds the defence byte in at a different point for counters."**
   Carried in A9b for months as the reason a counter could not be quoted under a
   non-neutral CO. It is the same point. The counter turned out to be the strike's

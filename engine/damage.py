@@ -282,7 +282,18 @@ def v_round_end(base, hp_a, co_atk, co_def, stars, hp_d, luck):
 
 def v_luck_after_hp(base, hp_a, co_atk, co_def, stars, hp_d, luck):
     atk, hp, dfn = _terms(base, hp_a, co_atk, co_def, stars, hp_d)
-    return math.floor((atk * hp + luck) * dfn)
+    # The HP term TRUNCATES before luck is added. The ROM said so all along --
+    # 0x080232C8 is `value * ceil(hp) / 10` via BIOS Div (A9a) -- but this
+    # carried the product as an exact fraction for the project's whole life
+    # and nothing could object: every measurement had base x display divisible
+    # by 10 (Tank bases at display 6, 9, 10 all divide; full health always
+    # does), so the fraction never survived to the floor. The A16 bracket
+    # sweep was the first to fight an Infantry at display 9 -- 5 x 9/10 = 4.5
+    # -- and the game dealt 3 at luck 0, which only floor(4.5) + 0 produces.
+    # The same pinned-variable trap as floor_min1, base-vs-value and the
+    # counter's luck range: a term that never left the integers is a term
+    # that was never tested.
+    return math.floor((math.floor(atk * hp) + luck) * dfn)
 
 
 def v_luck_last(base, hp_a, co_atk, co_def, stars, hp_d, luck):
