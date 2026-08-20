@@ -148,54 +148,65 @@ def select_weapon(attacker: str, defender: str, ammo: int = 99,
                   tbl: Optional[dict] = None) -> Optional[Weapon]:
     """Pick the weapon the game would use, or None if the attack is illegal.
 
-    Rule: whichever weapon deals more, ties to the primary. **Read off the
-    ROM**, not inferred from behaviour -- the routine computes the primary's
-    damage into r6 (leaving 0 when the primary cannot hit this target at all),
-    computes the secondary's into r0, and then:
+    Rule, read off the COMBAT path at 0x08022BFC (the function 0x080235D2
+    calls once per role): compute the primary's modifier-applied damage into
+    r8 -- or leave it 0 when the primary is gated off -- compute the
+    secondary's into [sp, #4], and
 
-        08060C38  adds r6, r0, #0   ; r6 = the PRIMARY's damage
-        08060C3E  ldr  r2, ...      ; DAMAGE_SECONDARY
-        08060D00  cmp  r6, r0       ; primary vs secondary
-        08060D02  blt  #0x8060d0a   ; primary < secondary -> fire the SECONDARY
-        08060D04  b    #0x8060da8   ; else -> fire the primary
+        08023292  ldr  r2, [sp, #4]     ; the SECONDARY's damage
+        08023294  cmp  r8, r2           ; against the PRIMARY's
+        08023296  bhi  #0x80232a8       ; strictly higher -> fire the primary
+        08023298  ldr  r3, [sp, #8]     ; else: secondary, if it has a base
+        ...
+        080232B2  ldrh r0, [r1, #0xa]   ; and ONLY on the primary branch:
+        080232B4  subs r0, #1           ; spend one round
+        080232B6  strh r0, [r1, #0xa]
 
-    `blt` is strict, so a tie takes the primary, which is what `>=` below
-    does. No unit type appears in that code and no per-matchup weapon flag
-    exists anywhere -- the alternative this rule was suspected of merely
-    coinciding with is not a thing the ROM has.
+    Three gates zero the primary before the comparison, so "gated off" and
+    "worse" are one branch:
 
-    Two details the instructions settle that the old "more base damage"
-    wording did not:
+      * AMMO. `ldrh [rec, #4]` masked with 0x780 -- bits 7..10, exactly the
+        reader's ammo field -- at 0x08022E04 (contact) and 0x0802306C (range).
+        Zero ammo skips the primary entirely, EVEN when it is the larger
+        weapon, and the secondary stands: that is the out-of-ammo fallback,
+        formerly assumption A17, now read. The decrement above is its
+        converse: the primary spends a round, the secondary never does.
+      * min_range == 1, at contact (stats byte +0x10, read at 0x08022DF8).
+      * a base of 0 in the table.
 
-      * The comparison is on the **modifier-applied damage**, not the raw
-        base -- both `bl __divsi3` calls land before the `cmp`. It makes no
-        difference here: the modifier is indexed by the ATTACKER's type, so
-        both weapons get the same one, and `x * m // 100` cannot invert an
-        ordering. It can only flatten one, and flattening hands the tie to
-        the primary. Separating the two readings needs the larger base to
-        lose its lead entirely, which for the closest such pair in the tables
-        (BCopter -> Mech, 50 against 75) takes a modifier below 4. Nothing in
-        the CO records is under 80.
-      * A weapon that cannot hit the target scores 0 rather than being
-        skipped, so "illegal" and "worst" are the same branch.
+    No unit type appears in any of it and no per-matchup weapon flag exists
+    anywhere -- the alternative A1 suspected this rule of merely coinciding
+    with is not a thing the ROM has.
+
+    THE TIE, and a correction. `bhi` is strict, so in combat a tie goes to
+    the SECONDARY -- and `>` below mirrors that. An earlier reading of this
+    rule said "ties to the primary", off the forecast helper at 0x08060D00,
+    whose `blt` genuinely does keep the primary on a tie. The two sites
+    disagree, and no board can expose it: the tables hold no equal pair (the
+    closest gap is 14), and both weapons receive the SAME attacker-indexed
+    modifier, so `x * m // 100` cannot manufacture a tie for any m in the CO
+    records' 80..150 -- collapsing a gap of 14 needs m < 8. This function
+    mirrors combat because quotes are about combat; if the tables ever
+    change, the forecast screen and the battle could pick different weapons
+    on a tied pair, which would be worth seeing.
+
+    The comparison ranks modifier-applied damage, not raw base -- both
+    __divsi3 calls land before the cmp. Identical ordering here, since a
+    shared multiplier cannot invert one; this compares raw bases and stays
+    extensionally equal.
 
     Measured too, in both directions, which is what rules out an
     always-primary or always-secondary reading: the corpus picks the
     secondary for Tank -> Infantry (75 over 35) and Tank -> Mech (70 over
     30), and the primary for Mech -> Tank (55 over 6). Each alternative is
     refuted by damage magnitude with no overlap. See ASSUMPTIONS, Established.
-
-    `ammo` is the one part of this that is still an ASSUMPTION -- see A17. No
-    ammo read appears in the selection routine, and no recorded battle has an
-    attacker out of ammo, so the primary dropping out at 0 is how the game is
-    documented to behave and not something checked here.
     """
     t = tbl or tables()
     prim = t["primary"].get(attacker, {}).get(defender, 0) if ammo > 0 else 0
     sec = t["secondary"].get(attacker, {}).get(defender, 0)
     if prim == 0 and sec == 0:
         return None
-    return Weapon("primary", prim) if prim >= sec else Weapon("secondary", sec)
+    return Weapon("primary", prim) if prim > sec else Weapon("secondary", sec)
 
 
 def can_attack(attacker: str, defender: str, ammo: int = 99) -> bool:
@@ -505,6 +516,16 @@ def fights_at_contact(unit_type: str) -> bool:
     unit is named. An Artillery (2..3) is neither countered nor countering: it
     never stood adjacent, and it cannot fire at its own feet. Unarmed units read
     0..0 and fall out for free, without being enumerated.
+
+    NO LONGER AN ASSUMPTION -- this is the ROM's own mechanism, read at
+    0x08022BFC (formerly A7). The counter role is hard-gated to distance 1:
+    `cmp ip, #1` on the ranged path (0x0802307C) skips everything when the
+    role flag says counter, so there is no separate counter flag to find. At
+    contact, the shooter's PRIMARY additionally requires stats byte +0x10 --
+    min_range -- to equal exactly 1 (0x08022DF8), and its secondary needs only
+    a nonzero base. min_range <= 1 <= max_range reproduces all of that on this
+    stats table: every armed unit has min_range 1 (implying max >= 1) or a
+    ring that excludes 1 entirely, and unarmed units read 0..0.
     """
     st = _unit_stats().get(unit_type)
     if st is None:

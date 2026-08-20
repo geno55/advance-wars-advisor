@@ -113,12 +113,16 @@
   "co_modifier_application": "value = (value * modifier) / 100, applied TWICE in sequence (attack then defence), each an independent truncating signed division via __divsi3 at 0x0807B488",
   "army_struct_stride": "0x68",
   "weapon_selection": {
-   "site": "0x08060D00",
-   "rule": "cmp r6, r0 / blt -- take whichever weapon deals more; blt is strict so a tie takes the primary",
-   "detail": "the primary damage is computed into r6 (0 when the primary cannot hit the target, set at 0x08060C3C), the secondary into r0, and the comparison follows both __divsi3 calls -- so it compares MODIFIER-APPLIED damage, not raw base. Order-preserving for every modifier in the CO records, so it is equivalent to max-base here; separating the two would need a modifier below 4.",
-   "no_weapon_flag": "there is no per-matchup weapon flag anywhere -- the hypothesis that max-base merely coincided with one is refuted by the comparison existing",
-   "ammo_gate": "NOT FOUND in the selection routine; the out-of-ammo fallback remains ASSUMPTIONS A17",
-   "measured": "both directions in harness/observations.csv -- secondary for Tank->Infantry (75 v 35) and Tank->Mech (70 v 30), primary for Mech->Tank (55 v 6), each alternative refuted by damage magnitude with no overlap"
+   "combat_site": "0x08023294",
+   "rule": "cmp r8, r2 / bhi in the combat damage function 0x08022BFC -- the primary fires only when its modifier-applied damage is STRICTLY higher than the secondary's; a tie keeps the secondary. The forecast helper at 0x08060D00 uses blt and would keep the PRIMARY on a tie -- the two sites disagree, unobservably: no matchup ties (closest gap 14) and the shared attacker-indexed modifier cannot collapse one (needs m < 8; records bottom out at 80)",
+   "ammo_gate": "the primary is skipped when ldrh [record+4] & 0x780 == 0 -- bits 7..10, the ammo field -- at 0x08022E04 (contact) and 0x0802306C (range >= 2). A gated primary scores 0 into the comparison, so the out-of-ammo fallback to the secondary is the same branch as \"weaker weapon\". Formerly ASSUMPTIONS A17",
+   "ammo_decrement": "subs #1 on ctx +0x0A at 0x080232B2..B6, executed ONLY on the primary branch: the primary spends one round per shot, the secondary never does",
+   "counter_gates": "the caller 0x080235D2/DE invokes the function once per role with the Manhattan distance in r2; the counter role (r3=0) is rejected outright at distance != 1 (cmp ip, #1 at 0x0802307C), and at contact the shooter's primary requires stats min_range == 1 (0x08022DF8). Formerly ASSUMPTIONS A7",
+   "min_range_gate": "stats byte +0x10 must equal 1 for the primary to fire at contact (0x08022DF8)",
+   "no_weapon_flag": "there is no per-matchup weapon flag anywhere -- the hypothesis that max-damage merely coincided with one is refuted by the comparison existing",
+   "weapon_code": "ctx +0x18 receives 1 for the primary and 5 for the secondary; ctx +0x10 the chosen value",
+   "measured": "both directions in harness/observations.csv -- secondary for Tank->Infantry (75 v 35) and Tank->Mech (70 v 30), primary for Mech->Tank (55 v 6), each alternative refuted by damage magnitude with no overlap",
+   "alternate_table_lead": "at contact, a defender whose record +1 carries bit 0x20 routes the PRIMARY lookup through a 24-byte table at 0x08283FC8 indexed by ATTACKER TYPE ALONE (0x08022E12-2E32). Shape fits damage-vs-dived-sub; not decoded, not modelled -- see ASSUMPTIONS, Unknown"
   }
  },
  "unit_ids": {

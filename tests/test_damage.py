@@ -89,6 +89,11 @@ class TestWeaponSelection(unittest.TestCase):
         self.assertEqual((w.slot, w.base), ("primary", 85))
 
     def test_out_of_ammo_falls_back_to_secondary(self):
+        """No longer an assumption: ammo gates the primary in the ROM, mask
+        0x780 on the record's +4 halfword at 0x08022E04 and 0x0802306C, and a
+        gated primary scores 0 into the same comparison a weak one does. The
+        fallback happens EVEN when the primary is the larger weapon, which is
+        this case: cannon 85 sits idle, the 8-point MG fires."""
         w = select_weapon("MdTank", "Tank", ammo=0)
         self.assertEqual((w.slot, w.base), ("secondary", 8))
 
@@ -584,11 +589,12 @@ class TestPerCoLuck(unittest.TestCase):
 
 
 class TestWeaponSelectionMatchesTheRom(unittest.TestCase):
-    """The selection rule is `cmp r6, r0` / `blt` at 0x08060D00: take whichever
-    weapon deals more, ties to the primary. These lock in that `select_weapon`
-    agrees with those instructions, and that the choice really does SWITCH
-    with the matchup -- an always-primary or always-secondary reading would
-    pass half of them and fail the other half.
+    """The COMBAT selection is `cmp r8, r2` / `bhi` at 0x08023294: take
+    whichever weapon deals more, and -- `bhi` being strict -- a tie goes to
+    the SECONDARY. These lock in that `select_weapon` agrees with those
+    instructions, and that the choice really does SWITCH with the matchup --
+    an always-primary or always-secondary reading would pass half of them and
+    fail the other half.
     """
 
     def test_the_larger_weapon_wins_in_both_directions(self):
@@ -597,9 +603,8 @@ class TestWeaponSelectionMatchesTheRom(unittest.TestCase):
         self.assertEqual(select_weapon("Mech", "Tank").slot, "primary")
 
     def test_every_matchup_picks_the_larger_of_the_two(self):
-        """All 18x18, against the tables directly. `blt` is strict, so the
-        primary takes ties -- there are none in this ROM, but the rule is the
-        rule and a future table must not silently flip it."""
+        """All 18x18, against the tables directly. No matchup ties in this
+        ROM, so the tie convention (below) never fires here."""
         t = tables()
         for a in t["primary"]:
             for d in t["primary"][a]:
@@ -609,14 +614,20 @@ class TestWeaponSelectionMatchesTheRom(unittest.TestCase):
                     self.assertIsNone(w, f"{a}->{d}")
                     continue
                 self.assertEqual(w.base, max(p, s), f"{a}->{d}")
-                self.assertEqual(w.slot, "primary" if p >= s else "secondary",
+                self.assertEqual(w.slot, "primary" if p > s else "secondary",
                                  f"{a}->{d}")
 
-    def test_a_tie_goes_to_the_primary(self):
-        """`blt` does not branch when the two are equal. Built by hand,
-        because no real matchup ties."""
+    def test_a_tie_goes_to_the_secondary(self):
+        """`bhi` is unsigned STRICT, so the combat path keeps the secondary
+        when the two are equal. Built by hand, because no real matchup ties
+        and no CO modifier can manufacture one (the closest gap is 14, and
+        collapsing it under x*m//100 needs m < 8 against records that bottom
+        out at 80). The forecast helper at 0x08060D00 uses `blt` and would
+        keep the PRIMARY on the same tie -- the two sites genuinely disagree,
+        unobservably. The engine mirrors combat, because quotes are about
+        combat."""
         tbl = {"primary": {"X": {"Y": 40}}, "secondary": {"X": {"Y": 40}}}
-        self.assertEqual(select_weapon("X", "Y", tbl=tbl).slot, "primary")
+        self.assertEqual(select_weapon("X", "Y", tbl=tbl).slot, "secondary")
 
     def test_the_six_matchups_where_the_secondary_is_larger(self):
         """These are the ones that carry the argument. A rule reading

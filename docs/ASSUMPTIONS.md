@@ -25,22 +25,43 @@ fixtures, and in this file's git history.
   In-RAM type IDs are 1-based; table rows are 0-based.
 - **Out-of-ammo Fighters cannot attack.** The alternate ROM copy that gives them
   a secondary weapon has zero code cross-references — dead data.
-- **Weapon selection is a comparison, not a flag.** `cmp r6, r0` / `blt` at
-  `0x08060D00`: the primary's damage is computed into `r6` (0 when the primary
-  cannot hit the target at all), the secondary's into `r0`, and the larger
-  fires — `blt` is strict, so a tie takes the primary. There is **no
-  per-matchup weapon flag** anywhere in the ROM, which is the alternative A1
-  suspected the rule of merely coinciding with. The comparison sits after both
-  `__divsi3` calls, so it ranks *modifier-applied* damage rather than raw base;
-  identical here, because the modifier is indexed by the attacker's type and
-  `x * m // 100` cannot invert an ordering — separating the two readings would
-  need a modifier below 4, and the CO records bottom out at 80. Measured in
-  **both directions**, which is what rules out an always-primary or
-  always-secondary reading: the corpus fires the secondary for Tank → Infantry
-  (75 over 35, observed 78 on road where the primary caps at 44) and Tank → Mech
-  (70 over 30, observed 43 on mountain where the primary caps at 23), and the
-  **primary** for Mech → Tank (55 over 6, the recorded counter at 57 HP reading
-  exactly 27 where the secondary gives 2). Retired A1.
+- **Weapon selection is a comparison, not a flag.** In the combat damage
+  function at `0x08022BFC`: the primary's modifier-applied damage lands in
+  `r8` — or 0 when a gate zeroes it — the secondary's in `[sp,#4]`, and
+  `cmp r8, r2` / `bhi` at `0x08023294` fires whichever is larger. There is
+  **no per-matchup weapon flag** anywhere in the ROM, which is the alternative
+  A1 suspected the rule of merely coinciding with. `bhi` is strict, so in
+  combat a tie keeps the **secondary** — a correction: this bullet first cited
+  the forecast helper at `0x08060D00`, whose `blt` keeps the *primary* on a
+  tie. The two sites genuinely disagree, unobservably: no matchup ties (the
+  closest gap is 14) and the shared attacker-indexed modifier cannot collapse
+  one — that needs m < 8 against CO records that bottom out at 80. The engine
+  mirrors combat. Measured in **both directions**, which is what rules out an
+  always-primary or always-secondary reading: the corpus fires the secondary
+  for Tank → Infantry (75 over 35, observed 78 on road where the primary caps
+  at 44) and Tank → Mech (70 over 30, observed 43 on mountain where the
+  primary caps at 23), and the **primary** for Mech → Tank (55 over 6, the
+  recorded counter at 57 HP reading exactly 27 where the secondary gives 2).
+  Retired A1.
+- **The out-of-ammo fallback is the ROM's own arithmetic.** The primary is
+  skipped when `ldrh [record+4] & 0x780 == 0` — bits 7..10, exactly the ammo
+  field the reader established — at `0x08022E04` (contact) and `0x0802306C`
+  (range ≥ 2). A gated primary scores 0 into the same comparison a weak one
+  does, so "out of ammo" falls back to the secondary *even when the primary is
+  the larger weapon*, and a unit with neither stores nothing and cannot
+  attack. The converse is four instructions later: `subs #1` on ctx `+0x0A` at
+  `0x080232B2` executes **only on the primary branch** — the primary spends a
+  round per shot, the secondary never does, on strikes and counters alike,
+  since both roles run the same function. Retired A17.
+- **The counter's gates are the range fields, read where they act.** The
+  caller at `0x080235D2/DE` runs the damage function once per role with the
+  Manhattan distance between the two records in `r2`; the counter role is
+  rejected outright at any distance other than 1 (`cmp ip, #1` at
+  `0x0802307C`), and at contact the shooter's primary additionally requires
+  stats byte `+0x10` — min range — to equal exactly 1 (`0x08022DF8`), its
+  secondary needing only a nonzero base. No separate counter flag exists.
+  `fights_at_contact()`'s `min_range <= 1 <= max_range` reproduces all of it
+  on this stats table. Retired A7.
 - **The strike formula is `luck_after_hp`, and it is exact.** One surviving
   variant: both CO modifiers folded into the base (each truncating), the
   attacker's display-HP term, the luck roll added after it, and the terrain
@@ -117,25 +138,6 @@ fixtures, and in this file's git history.
 
 ## Assumed — these are the ones that will bite
 
-### A7. A counterattack happens iff both range rings include 1
-`counterattack()` returns a return strike only when `min_range <= 1 <= max_range`
-holds for the attacker *and* the defender, which is `fights_at_contact()`. The
-ROM ranges are established; the **rule built on them is not**. It encodes two
-claims at once: that a direct unit always strikes from an adjacent tile, and
-that the game gates the counter on the defender's ordinary range ring rather
-than on a separate flag. Both are how the game is documented to behave, and
-neither has been put in front of the emulator here.
-
-Before this the function had no range term at all and would quote a Battleship
-returning fire from six tiles, so the assumption is strictly better than what it
-replaced — but it is an assumption, and it now decides whether a number appears.
-
-**Kill it by:** `harness/record.py --exact --counter` already records the
-defender's return strike. Run it once with an Artillery attacking and once with
-an Artillery defending: the model says neither battle produces a counter, and a
-single observed one refutes it. A Sub or a Cruiser is the case to check for a
-hidden per-matchup flag, since both are direct units with restricted targets.
-
 ### A15. The capture rules behind `engine/actions.py`
 
 The capture PROGRESS FIELD is measured: unit record `+4` packs it alongside HP
@@ -178,32 +180,6 @@ full HP on starred terrain. 81 internal separates `ceil` from `round`, 57
 separates `ceil` from the floors — the same discriminating values that settled
 the strike (retired A9a).
 
-### A17. The out-of-ammo fallback
-
-`select_weapon()` drops the primary when `ammo == 0`, so a Tank with an empty
-cannon is quoted as hitting a Tank for its machine gun's 6 rather than not at
-all. That is how the game is documented to behave and it is what A1's old
-wording meant by "subject to ammo" — but the selection routine that A1's kill
-settled contains **no ammo read at all** (only the two `__divsi3` calls and
-the table lookups), so the gate is somewhere this disassembly has not been,
-and every recorded battle has the attacker with ammo to spare.
-
-It is load-bearing in the safe direction for defence and the unsafe one for
-offence: an advisor that wrongly keeps the primary available promises a kill
-the empty gun cannot deliver.
-
-**Kill it by:** the ammo counter, which is a direct readout of which weapon
-fired — the primary consumes a round and the secondary does not. Two sweeps
-on one fixture: a Tank with ammo written to 0 attacking a Tank, where the
-fallback predicts base 6 (a few points of damage) and no fallback predicts no
-attack offered at all; then the same with ammo 9, predicting base 55 and the
-counter dropping to 8. **Ship a positive control**: the existing corpus is
-twelve sweeps of Tank → Infantry all reading ammo 9 before and 9 after, which
-is consistent with the secondary firing and equally consistent with this
-fixture never decrementing ammo at all. One matchup that *must* spend a round
-— Tank → Tank, primary-only against armour — is what separates those, and
-without it the ammo column proves nothing.
-
 ## Unknown — not modelled
 
 - **CO powers.** The second 128-byte stat block is selected by army `+0x1E`,
@@ -217,6 +193,13 @@ without it the ammo column proves nothing.
   VS setup. The cheap test writes it to 1 alongside `+0x1D` and predicts Max
   on Tank → Infantry in woods moving from 60-67 to **90-97**; a null there
   means the game latches CO state earlier than target-select.
+- **The 24-byte table at `0x08283FC8`.** At contact, a defender whose record
+  `+1` carries bit `0x20` routes the *primary* lookup through it, indexed by
+  **attacker type alone** (`0x08022E12–2E32`). A damage table that ignores the
+  defender's type fits damage-vs-dived-sub, but the bit and the bytes are
+  undecoded and nothing models it — an engine quote against whatever state
+  bit `0x20` is would use the wrong table. Found in passing while reading the
+  weapon-selection gates.
 - **The identical visibility copy at `0x02017B42`.** Dumped only as a
   cross-check; no known purpose.
 - **Sonja's vision trait** under fog.
@@ -240,7 +223,8 @@ The measured content is in the Established bullets; the full accounts are in
 | entry | finding | full account |
 |---|---|---|
 | A0 | the disassembly walk was never continued; everything it deferred was settled by measurement instead | git history |
-| A1 | weapon selection is `cmp`/`blt` at `0x08060D00` — the larger fires, ties to the primary; no weapon flag exists. The ammo clause split off as A17 | `tests/test_damage.py`, `data/aw1_damage.json` `code_analysis.weapon_selection` |
+| A1 | weapon selection is `cmp`/`bhi` at `0x08023294` — the larger fires, a tie keeps the secondary; no weapon flag exists (an earlier reading cited the forecast site `0x08060D00`, whose `blt` disagrees on the unobservable tie) | `tests/test_damage.py`, `data/aw1_damage.json` `code_analysis.weapon_selection` |
+| A7 | the counter role is gated to distance 1 and the primary to min_range 1 — the range fields, no separate flag | `code_analysis.weapon_selection`, `engine/damage.py` `fights_at_contact` |
 | A2 | the formula is `luck_after_hp`, exact | `DERIVATION.md` 17 |
 | A3 | terrain stars from the ROM struct at `0x284170+8` | `DERIVATION.md` |
 | A4 | combat luck is a u32 at `0x03001D30`; the roll is uniform 0..9 | `DERIVATION.md` 16 |
@@ -253,3 +237,4 @@ The measured content is in the Established bullets; the full accounts are in
 | A12 | `0x03004318` gates the CO fetch; clear means Andy on both sides | `DERIVATION.md` 24 |
 | A13 | the CO attack modifier truncates | fixture `max_wood_co` |
 | A14 | `+11/+12` is the universal pair; the defence modifier lands on the base; both sides truncate | fixtures `kanbei_att_wood`/`kanbei_def_wood`/`sami_def_wood` |
+| A17 | ammo gates the primary (`& 0x780` at `0x08022E04`/`0x0802306C`); the fallback is the same branch as "weaker weapon"; only the primary decrements ammo (`0x080232B2`) | `code_analysis.weapon_selection`, `tests/test_damage.py` |

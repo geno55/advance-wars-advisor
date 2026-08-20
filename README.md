@@ -29,13 +29,22 @@ paid off — see "What got caught" below.
 - Both 24×24 damage matrices, all 18 units, extracted from `0x283B48` and
   `0x283D88`, with 17 structural assertions re-checked on every extraction.
 - Internal unit ID map recovered structurally, not guessed.
-- **Weapon selection read off the ROM**, not inferred from behaviour: `cmp r6,
-  r0` / `blt` at `0x08060D00` computes both weapons and fires the larger, ties
-  to the primary. The **per-matchup weapon flag** this was suspected of merely
-  coinciding with does not exist. Measured in both directions too — the corpus
-  fires the secondary for Tank → Infantry and Tank → Mech and the *primary* for
-  Mech → Tank, each alternative refuted by damage magnitude with no overlap.
-  The out-of-ammo fallback is the one part still assumed; see A17.
+- **Weapon selection read off the ROM**, not inferred from behaviour: the
+  combat path computes both weapons' modifier-applied damage and `cmp`/`bhi`
+  at `0x08023294` fires the larger — a tie keeps the secondary, though no tie
+  is constructible in this ROM's data. The **per-matchup weapon flag** this
+  was suspected of merely coinciding with does not exist. Measured in both
+  directions too — the corpus fires the secondary for Tank → Infantry and
+  Tank → Mech and the *primary* for Mech → Tank, each alternative refuted by
+  damage magnitude with no overlap. **The ammo rules are read too**: zero ammo
+  gates the primary out of the comparison (mask `0x780` on the record's `+4`,
+  at `0x08022E04` and `0x0802306C`), so the fallback to the secondary is the
+  same branch as "weaker weapon" — and only the primary branch decrements
+  ammo. The counter's gates fell out of the same read: the counter role is
+  rejected at any distance but 1, and the primary needs `min_range == 1` —
+  the range fields, no separate flag. Retired A1, A7, A17; two assumptions
+  remain in the whole model (A15 capture rules, A16 the counter's bracket at
+  a damaged target).
 - Calibrated against 75 exact-HP observations from a live game — 14
   hand-recorded, 61 from the automated sweep. Terrain stars confirmed; five of
   six formula variants refuted.
