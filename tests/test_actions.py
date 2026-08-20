@@ -281,6 +281,76 @@ class TestCapture(unittest.TestCase):
                                                      warnings=[]), "capture"), [])
 
 
+class TestCaptureRateIsTheRomArithmetic(unittest.TestCase):
+    """The increment is read off the ROM at 0x08026180-0x080261FC:
+
+        gain = bars + (bars >> (8 - shift))     bars  = ceil(hp/10), BIOS Div
+                                                shift = CO record +0x0D
+
+    Eleven records carry shift 0, where bars >> 8 is zero for any board the
+    game can reach, so the neutral rate IS the bar count. Sami carries 7 in
+    both blocks: bars >> 1, the documented 1.5x, truncated.
+    """
+
+    def _ids(self):
+        names = json.loads((ROOT / "data" / "aw1_co.json")
+                           .read_text(encoding="utf-8"))["confirmed"]
+        return {v: int(k) for k, v in names.items()}
+
+    def test_the_shift_is_sami_alone(self):
+        import co
+        ids = self._ids()
+        self.assertEqual(co.capture_shift(ids["Sami"]), 7)
+        self.assertEqual(co.capture_shift(ids["Sami"], power=True), 7)
+        others = [co.capture_shift(i) for i in range(12) if i != ids["Sami"]]
+        self.assertEqual(others, [0] * 11)
+
+    def _capture(self, co_id, hp=100, capture=0):
+        b = board([[PLAIN, CITY]],
+                  [unit("Infantry", 0, 0, hp=hp, capture=capture)],
+                  armies=[Army(1, 0, 0, co_id=co_id)])
+        caps = of_kind(actions.actions_for(b, b.units[0], warnings=[]),
+                       "capture")
+        return next(c for c in caps if c.tile == (1, 0))
+
+    def test_sami_captures_half_again_as_fast(self):
+        ids = self._ids()
+        self.assertEqual(self._capture(ids["Andy"]).progress_after, 10)
+        self.assertEqual(self._capture(ids["Sami"]).progress_after, 15)
+        # 7 bars: 7 for anyone, 7 + 3 for Sami
+        self.assertEqual(self._capture(ids["Andy"], hp=70).progress_after, 7)
+        self.assertEqual(self._capture(ids["Sami"], hp=70).progress_after, 10)
+
+    def test_the_bonus_can_change_the_turn_count(self):
+        """A full-health capturer finishes in 2 turns either way -- 15+15 and
+        10+10 both reach 20 -- so the bonus only shows below full health.
+        At 7 bars Sami finishes in 2 where everyone else needs 3."""
+        ids = self._ids()
+        self.assertEqual(self._capture(ids["Andy"], hp=70).capture_turns_left, 3)
+        self.assertEqual(self._capture(ids["Sami"], hp=70).capture_turns_left, 2)
+
+    def test_progress_clamps_at_twenty(self):
+        """cmp #0x13 / bls / movs #0x14 at 0x080262CA: 15 + 15 stores 20."""
+        ids = self._ids()
+        a = self._capture(ids["Sami"], hp=100)
+        b2 = board([[CITY, PLAIN]],
+                   [unit("Infantry", 0, 0, capture=15)],
+                   armies=[Army(1, 0, 0, co_id=ids["Sami"])])
+        cap = of_kind(actions.actions_for(b2, b2.units[0], warnings=[]),
+                      "capture")[0]
+        self.assertEqual(cap.progress_after, 20)
+        self.assertTrue(cap.captures_now)
+
+    def test_an_unknown_co_warns_and_uses_the_bar_count(self):
+        b = board([[PLAIN, CITY]], [unit("Infantry", 0, 0, hp=70)])
+        warnings = []
+        caps = of_kind(actions.actions_for(b, b.units[0], warnings=warnings),
+                       "capture")
+        self.assertEqual(caps[0].progress_after, 7)
+        self.assertTrue(any("capture rate assumes no CO bonus" in w
+                            for w in warnings))
+
+
 class TestLoad(unittest.TestCase):
     def test_loading_is_offered_and_scores_the_transport(self):
         """The exposure on a LOAD is the transport's, because that is what a

@@ -178,6 +178,22 @@ def universal(co_id: int, power: bool = False) -> tuple:
     return h[11], h[12]
 
 
+def capture_shift(co_id: int, power: bool = False) -> int:
+    """Header +0x0D: the capture-rate bonus, as a SHIFT. Read off the ROM at
+    0x080261E4-0x080261FC:
+
+        increment = bars + (bars >> (8 - byte))      bars = ceil(hp / 10)
+
+    Zero on eleven of twelve records -- bars >> 8 is 0 for any bar count the
+    game can produce -- and 7 on Sami's, both blocks, so her units gain
+    bars + (bars >> 1): the documented 1.5x capture rate, truncated. The fetch
+    is gated on [0x03004318] exactly like the damage modifiers (A12): with CO
+    abilities off, everyone captures as Andy, at +0.
+    """
+    d = _co_data()
+    return d["records"][co_id]["power" if power else "normal"]["header"][13]
+
+
 def modifiers(co_id: int, unit_type: str, power: bool = False) -> tuple:
     """(attack, defence) for this CO's units of this type, from the pool.
 

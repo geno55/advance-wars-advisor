@@ -62,6 +62,18 @@ fixtures, and in this file's git history.
   secondary needing only a nonzero base. No separate counter flag exists.
   `fights_at_contact()`'s `min_range <= 1 <= max_range` reproduces all of it
   on this stats table. Retired A7.
+- **The capture arithmetic**, read at `0x08026180–0x080262E4`: each capture
+  action adds `ceil(hp/10)` — computed as `(hp−1)/10 + 1` via BIOS Div, the
+  same idiom A9a read on the strike path, so the rate IS the displayed bar
+  count — **plus a CO bonus** from record byte `+0x0D`: `bars >> (8 − byte)`,
+  fetched behind the same `[0x03004318]` gate as the damage modifiers. Eleven
+  records carry 0 (a `>> 8` no-op); **Sami carries 7 in both blocks** —
+  `bars >> 1`, her documented 1.5× rate, truncated — which the engine had
+  silently omitted until this read. Progress clamps at 20 (`cmp #0x13` /
+  `movs #0x14`), the property falls when the re-read value exceeds 19, and
+  units spawn with the field zeroed (unit-init at `0x08024226`). The transfer
+  special-cases HQ — terrain `& 0x1F == 8` — into a branch that reads the fog
+  flag and army `+0x1C`; not decoded. Narrowed A15.
 - **The strike formula is `luck_after_hp`, and it is exact.** One surviving
   variant: both CO modifiers folded into the base (each truncating), the
   attacker's display-HP term, the luck roll added after it, and the terrain
@@ -138,33 +150,36 @@ fixtures, and in this file's git history.
 
 ## Assumed — these are the ones that will bite
 
-### A15. The capture rules behind `engine/actions.py`
+### A15. What is left of the capture rules: who may, and the reset
 
-The capture PROGRESS FIELD is measured: unit record `+4` packs it alongside HP
-and ammo, it reads 0..20 in live captures, and a mid-capture infantry is what
-exposed the `ammo = v >> 7` error. The capturable terrain ids `{6, 8, 10, 11,
-14}` come out of the ROM terrain extraction with its structural assertions.
-Everything else action enumeration does with capture is assumed from the
-game's manual and from play, and none of it has been put in front of the
-running game:
+The arithmetic — rate, CO bonus, clamp, fall — is READ and moved up to
+Established. Two claims in `engine/actions.py` remain assumptions:
 
-- **Who may capture = `unit_class == "foot"`.** The class is a ROM field, so
-  the code stays free of unit names, but the claim that this class is exactly
-  the set of capturers is an inference — the field could mean something else
-  and coincide on Infantry and Mech.
-- **Rate = displayed HP bars per capture action**, accumulating to a fall at
-  exactly 20. The 0..20 range is observed; the per-turn increment and the
-  threshold behaviour have never been swept.
-- **Moving off the tile resets progress to 0.** Held from play; never
-  measured, and the reset has never been observed in the progress byte.
+- **Who may capture = `unit_class == "foot"`.** The eligibility gate was not
+  found in the ROM: the one class-bit test the scan turned up (`+0x14 & 0x30`
+  at `0x08023A88`) is the out-of-fuel crash/sink check, and the action-menu
+  construction has not been located. The claim rests on the manual and on
+  play.
+- **Moving off the tile resets progress to 0.** The reset *mechanism* is
+  located — `0x08026020` clears the capture bits when the position pair at
+  `[0x030041DC]` differs from `[0x030033AC]`, and five action handlers call
+  it — but what those two globals hold at each call is unpinned, and the two
+  candidate readings differ observably: "cleared when the unit moved this
+  action" forgets progress on a unit that steps away and returns; "cleared
+  when the tile differs from the last recorded one" could remember it.
 
-**Kill them by:** the spike harness already proves write-then-drive is
-transparent to the game (README, milestone 3). One sweep settles all three:
-restore a fixture with a unit beside a neutral city, write its type across all
-18 units, press A on the city, and read whether the menu offers Capture — that
-is the class rule. Then write HP to 45 and 100 on a capturer, capture, and
-read the progress byte — that is the rate. Move it off and back and read the
-byte again — that is the reset. Ship the control case like every sweep.
+**Kill them by:** `harness/mgba_capture.lua`, which needs one fixture (cursor
+on your foot unit standing on a neutral city, nothing adjacent) and one more
+with a second neutral city directly to its right. `cap_probe` is the control —
+the drive sequence must reproduce the bar count before anything else counts.
+`cap_menu_sweep` writes all 18 types through the same three A presses and
+reads whether Capture executed: that is the class rule, with naval rows
+flagged as unreachable boards rather than data. `cap_move_probe` writes
+progress 10 and captures once in place and once after a one-tile move: bars
+means the reset is real, 10 + bars means it is not, and a stay row that loses
+the written progress means the reset fires per-action regardless of movement —
+which answers the question too, just differently. `tools/capture_check.py`
+scores all three and refuses the rows that cannot be read.
 
 ### A16. The counter's terrain bracket at a damaged target
 

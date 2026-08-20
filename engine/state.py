@@ -58,8 +58,10 @@ class Unit:
 
     @property
     def capture_turns_left(self) -> Optional[int]:
-        """Turns to finish, at this unit's current HP. Capture rate is the
-        DISPLAYED bar count, so a damaged unit captures slower."""
+        """Turns to finish, at this unit's current HP and a NEUTRAL CO. The
+        rate is the displayed bar count -- read off the ROM, (hp-1)/10+1 at
+        0x08026190 -- but the game adds a CO bonus this record cannot see
+        (Sami: +bars>>1). engine/actions.py computes the CO-aware number."""
         if self.capture == 0:
             return None
         remaining = 20 - self.capture

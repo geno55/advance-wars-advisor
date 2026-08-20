@@ -83,8 +83,10 @@ from dataclasses import dataclass
 from typing import Dict, List, Optional, Tuple
 
 try:                                    # imported as engine.actions by tools/
+    from . import co as co_mod
     from . import damage, pathing, threat
 except ImportError:                     # imported as actions, engine/ on path
+    import co as co_mod
     import damage
     import pathing
     import threat
@@ -92,8 +94,9 @@ except ImportError:                     # imported as actions, engine/ on path
 Coord = Tuple[int, int]
 DATA = pathlib.Path(__file__).resolve().parent.parent / "data"
 
-# A property falls at 20 capture points. The field and its ceiling are read
-# off the unit record (state.py, milestone 1); the rate is A15.
+# A property falls at 20 capture points. The whole arithmetic is READ off the
+# ROM at 0x08026180-0x080262E4: progress += ceil(hp/10) plus the CO bonus (see
+# _capture_gain), clamped to 20, transfer when the re-read value exceeds 19.
 CAPTURE_GOAL = 20
 
 
@@ -251,6 +254,40 @@ def _loaded_board(board, unit, transport):
 # enumeration
 # --------------------------------------------------------------------------
 
+def _capture_gain(board, unit, co_ids, warnings) -> int:
+    """Capture points this unit adds per action -- the ROM's own arithmetic,
+    read at 0x08026180-0x080261FC:
+
+        gain = bars + (bars >> (8 - shift))      bars  = ceil(hp / 10)
+                                                 shift = CO record +0x0D
+
+    The shift is 0 for every CO but Sami, whose 7 makes the bonus bars >> 1 --
+    the documented 1.5x, truncated, and a real difference in this layer: a
+    7-bar Sami infantry gains 10 a turn where anyone else's gains 7. An
+    unknown CO falls back to the neutral bar count out loud, like every other
+    unknown here. Assumes CO abilities are on ([0x03004318] set), the same
+    assumption every quote in this module already makes.
+    """
+    bars = unit.bars
+    cid = _co_of(board, unit.player, co_ids)
+    if cid is None:
+        note = (f"P{unit.player}'s CO is unknown -- capture rate assumes no CO "
+                f"bonus. Re-dump with the current mgba_state.lua to fix it.")
+        if note not in warnings:
+            warnings.append(note)
+        return bars
+    return bars + (bars >> (8 - co_mod.capture_shift(cid)))
+
+
+def _co_of(board, player, co_ids):
+    if co_ids and player in co_ids:
+        return co_ids[player]
+    try:
+        return board.army(player).co_id
+    except (StopIteration, AttributeError):
+        return None
+
+
 _KIND_ORDER = {"attack": 0, "capture": 1, "load": 2, "wait": 3}
 
 
@@ -314,7 +351,7 @@ def actions_for(board, unit, *, co_ids: Optional[dict] = None,
                 and board.terrain[y][x] in _capturable()
                 and board.owner[y][x] != unit.player):
             progress = unit.capture if tile == (unit.x, unit.y) else 0
-            gained = unit.bars
+            gained = _capture_gain(board, unit, co_ids, warnings)
             remaining = CAPTURE_GOAL - progress
             out.append(Action(
                 kind="capture", unit=unit, tile=tile, move_cost=cost,

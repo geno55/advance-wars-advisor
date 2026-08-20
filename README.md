@@ -373,10 +373,15 @@ that worst case is death, the exposure is `None` rather than a number: what
 the enemy could do next turn to a unit that may already be gone is not worth
 printing, and the counter's own kill flags carry the verdict.
 
-What is new and **unmeasured** is the capture rules — who may capture, the
-bars-per-turn rate, the reset on moving — now written down as A15 with the
-spike-harness sweep that would settle all three, instead of living silently in
-the code. Unloading, joining, production and CO power activation are not
+The capture rules started as assumptions (A15) and are now mostly read off
+the ROM: the rate is the displayed bar count — `(hp−1)/10+1`, the same ceil
+idiom as the damage path — **plus a per-CO bonus at record `+0x0D` that only
+Sami carries** (`bars >> 1`, her documented 1.5×), which the engine had
+silently omitted and now models. Progress clamps at 20 and the property falls
+there. What remains of A15 is the eligibility gate (foot-class, not located
+in the ROM) and the exact trigger of the reset-on-move (mechanism found at
+`0x08026020`, schedule unpinned); `harness/mgba_capture.lua` settles both in
+one short session. Unloading, joining, production and CO power activation are not
 offered at all rather than offered wrongly; each is named in the module
 docstring with the reason.
 
@@ -404,6 +409,8 @@ harness/record.py         interactive battle recorder with live convergence
 harness/mgba_dmg.lua      damage sweeps: frame-delay and written-seed, plus
                           RNG read/write/trace. `cos = {[1]=..,[2]=..}` writes
                           both armies; every sweep records co_p1/co_p2
+harness/mgba_capture.lua  capture probes: who may capture, the rate rows,
+                          and what moving does to progress (A15)
 harness/mgba_counter_co.lua  the Infantry-v-Tank board and the four sweeps that
                           locate the CO modifiers in the COUNTER path
 harness/observations.csv  75 recorded battles (14 by hand, 61 swept)
@@ -437,6 +444,7 @@ tools/dmg_ingest.py       damage sweep -> observations.csv, with survival report
 tools/rng_fit.py          seed sweep -> the luck distribution it implies
 tools/luck_range_check.py invert a sweep to the rolls it witnessed, and
                           score the record's predicted range against them
+tools/capture_check.py    score the capture probes; refuses unreadable rows
 tools/counter_check.py    counterattack hypotheses against a seed sweep: the
                           shape (settled) and where the CO modifiers enter
                           (open). --predict, --selftest
