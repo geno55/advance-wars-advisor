@@ -351,6 +351,78 @@ class TestCaptureRateIsTheRomArithmetic(unittest.TestCase):
                             for w in warnings))
 
 
+class TestCaptureMeasurements(unittest.TestCase):
+    """Replay the live capture probes (tests/fixtures/capture_probes.json,
+    measured headless via harness/mesen_capture.lua) against the engine's
+    capture model. These are the rows that retired A15.
+
+    The eligibility check walks every readable row: a type that captured must
+    be one the engine offers capture to, and one that acted without capturing
+    must not be. Naval rows never reached the menu -- a naval unit cannot
+    stand on a city, so the question does not arise in a reachable game --
+    and are asserted UNREADABLE rather than interpreted.
+    """
+
+    @classmethod
+    def setUpClass(cls):
+        cls.data = json.loads(
+            (ROOT / "tests" / "fixtures" / "capture_probes.json")
+            .read_text(encoding="utf-8"))
+        ids = json.loads((ROOT / "data" / "aw1_damage.json")
+                         .read_text(encoding="utf-8"))["unit_ids"]
+        cls.by_ram = {int(k) + 1: v for k, v in ids.items()}
+
+    def rows(self, prefix):
+        return [r for r in self.data["menu_and_rate_cases"]
+                if r["name"].startswith(prefix)]
+
+    def test_the_controls_agree(self):
+        """Unwritten fixture and an identity type write must match exactly --
+        the write-transparency rule every sweep in this project ships."""
+        ctrl = next(r for r in self.data["menu_and_rate_cases"]
+                    if r["name"] == "ctrl")
+        ident = next(r for r in self.data["menu_and_rate_cases"]
+                     if r["name"] == "ident")
+        self.assertEqual(ctrl["cap"], 10)
+        for k in ("cap", "acted", "x", "y", "hp"):
+            self.assertEqual(ctrl[k], ident[k])
+
+    def test_exactly_the_foot_class_captured(self):
+        import pathing
+        for r in self.rows("t"):
+            name = self.by_ram[r["type"]]
+            foot = pathing.unit_stats(name)["unit_class"] == "foot"
+            if r["acted"] == 0:
+                # never reached the menu: must be a naval type on a board it
+                # cannot occupy, and must NOT be read as a "cannot capture"
+                self.assertEqual(pathing.unit_stats(name)["unit_class"],
+                                 "naval", name)
+                continue
+            self.assertEqual(r["cap"] > 0, foot, name)
+
+    def test_the_rate_is_the_bar_count(self):
+        """hp 100/70/45/9 -> 10/7/5/1, live, on a gate-0 board where the CO
+        bonus is Andy's +0. The ROM read said ceil(hp/10); the game agrees."""
+        got = {r["hp"]: r["cap"] for r in self.data["menu_and_rate_cases"]
+               if r["name"].startswith("hp")}
+        self.assertEqual(got, {70: 7, 45: 5, 9: 1})
+
+    def test_moving_resets_progress(self):
+        """Written progress 15, a one-tile move, then capture: reads 10, the
+        fresh bar count -- not 25 and not a clamped 20. actions.py's rule
+        (progress continues only on the tile the unit already stands on) is
+        the measured one."""
+        r = next(r for r in self.data["menu_and_rate_cases"]
+                 if r["name"] == "move_keep")
+        self.assertEqual(r["cap"], 10)
+
+    def test_staying_keeps_progress_and_the_city_falls_at_twenty(self):
+        stay = self.data["stay_probe"]
+        self.assertEqual(stay["cap1"]["cap_after"], 10)
+        self.assertEqual(stay["cap2_without_moving"]["city_owner"], 1)
+        self.assertEqual(stay["cap2_without_moving"]["cap_after"], 0)
+
+
 class TestLoad(unittest.TestCase):
     def test_loading_is_offered_and_scores_the_transport(self):
         """The exposure on a LOAD is the transport's, because that is what a

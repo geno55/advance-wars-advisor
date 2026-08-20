@@ -42,9 +42,9 @@ paid off — see "What got caught" below.
   same branch as "weaker weapon" — and only the primary branch decrements
   ammo. The counter's gates fell out of the same read: the counter role is
   rejected at any distance but 1, and the primary needs `min_range == 1` —
-  the range fields, no separate flag. Retired A1, A7, A17; two assumptions
-  remain in the whole model (A15 capture rules, A16 the counter's bracket at
-  a damaged target).
+  the range fields, no separate flag. Retired A1, A7, A17. **One assumption
+  remains in the whole model**: A16, the counter's terrain bracket at a
+  damaged target.
 - Calibrated against 75 exact-HP observations from a live game — 14
   hand-recorded, 61 from the automated sweep. Terrain stars confirmed; five of
   six formula variants refuted.
@@ -373,15 +373,19 @@ that worst case is death, the exposure is `None` rather than a number: what
 the enemy could do next turn to a unit that may already be gone is not worth
 printing, and the counter's own kill flags carry the verdict.
 
-The capture rules started as assumptions (A15) and are now mostly read off
-the ROM: the rate is the displayed bar count — `(hp−1)/10+1`, the same ceil
-idiom as the damage path — **plus a per-CO bonus at record `+0x0D` that only
-Sami carries** (`bars >> 1`, her documented 1.5×), which the engine had
-silently omitted and now models. Progress clamps at 20 and the property falls
-there. What remains of A15 is the eligibility gate (foot-class, not located
-in the ROM) and the exact trigger of the reset-on-move (mechanism found at
-`0x08026020`, schedule unpinned); `harness/mgba_capture.lua` settles both in
-one short session. Unloading, joining, production and CO power activation are not
+The capture rules started as assumptions (A15) and are now closed from both
+ends. Read off the ROM: the rate is the displayed bar count — `(hp−1)/10+1`,
+the same ceil idiom as the damage path — **plus a per-CO bonus at record
+`+0x0D` that only Sami carries** (`bars >> 1`, her documented 1.5×), which
+the engine had silently omitted and now models; progress clamps at 20 and
+the property falls there. Measured live, headlessly, for what the ROM read
+could not reach (`tests/fixtures/capture_probes.json`): **exactly the foot
+class captures** — twelve non-foot types executed Wait on the city and the
+four naval types are asserted unreadable rather than interpreted — the rate
+read 10/7/5/1 at 100/70/45/9 HP, **moving resets progress** (a written 15
+plus a one-tile move captured at the fresh bar count), and **staying keeps
+it** — a second stationary capture completed 20 and the city fell on
+screen. A15 retired; see `DERIVATION.md` 25 for the headless route. Unloading, joining, production and CO power activation are not
 offered at all rather than offered wrongly; each is named in the module
 docstring with the reason.
 
@@ -409,8 +413,11 @@ harness/record.py         interactive battle recorder with live convergence
 harness/mgba_dmg.lua      damage sweeps: frame-delay and written-seed, plus
                           RNG read/write/trace. `cos = {[1]=..,[2]=..}` writes
                           both armies; every sweep records co_p1/co_p2
-harness/mgba_capture.lua  capture probes: who may capture, the rate rows,
-                          and what moving does to progress (A15)
+harness/mgba_capture.lua  capture probes for mGBA's GUI console (superseded
+                          by the headless route below, kept for humans)
+harness/mesen_capture.lua the headless route: Mesen2 --testrunner drives the
+                          probes with no human -- the runs that retired A15.
+                          See DERIVATION.md 25
 harness/mgba_counter_co.lua  the Infantry-v-Tank board and the four sweeps that
                           locate the CO modifiers in the COUNTER path
 harness/observations.csv  75 recorded battles (14 by hand, 61 swept)

@@ -73,7 +73,18 @@ fixtures, and in this file's git history.
   `movs #0x14`), the property falls when the re-read value exceeds 19, and
   units spawn with the field zeroed (unit-init at `0x08024226`). The transfer
   special-cases HQ — terrain `& 0x1F == 8` — into a branch that reads the fog
-  flag and army `+0x1C`; not decoded. Narrowed A15.
+  flag and army `+0x1C`; not decoded. **And now measured live, headlessly**
+  (`tests/fixtures/capture_probes.json`, driven by `harness/mesen_capture.lua`):
+  exactly the foot class captures — Infantry and Mech read +10, all twelve
+  testable non-foot types moved onto the city, executed Wait and read 0, and
+  the four naval types never reached the menu, which is asserted UNREADABLE
+  rather than read as a "no", because a naval unit on a city is not a board
+  the game can reach. The rate read 10/7/5/1 at 100/70/45/9 HP on a gate-0
+  board (Andy, +0 bonus). **Moving resets progress** — written progress 15
+  plus a one-tile move captured at 10, the fresh bar count — and **staying
+  keeps it**: a second stationary capture two rounds later completed 20 and
+  the city FELL, owner byte flipping to P1 with the progress field cleared.
+  Retired A15.
 - **The strike formula is `luck_after_hp`, and it is exact.** One surviving
   variant: both CO modifiers folded into the base (each truncating), the
   attacker's display-HP term, the luck roll added after it, and the terrain
@@ -150,37 +161,6 @@ fixtures, and in this file's git history.
 
 ## Assumed — these are the ones that will bite
 
-### A15. What is left of the capture rules: who may, and the reset
-
-The arithmetic — rate, CO bonus, clamp, fall — is READ and moved up to
-Established. Two claims in `engine/actions.py` remain assumptions:
-
-- **Who may capture = `unit_class == "foot"`.** The eligibility gate was not
-  found in the ROM: the one class-bit test the scan turned up (`+0x14 & 0x30`
-  at `0x08023A88`) is the out-of-fuel crash/sink check, and the action-menu
-  construction has not been located. The claim rests on the manual and on
-  play.
-- **Moving off the tile resets progress to 0.** The reset *mechanism* is
-  located — `0x08026020` clears the capture bits when the position pair at
-  `[0x030041DC]` differs from `[0x030033AC]`, and five action handlers call
-  it — but what those two globals hold at each call is unpinned, and the two
-  candidate readings differ observably: "cleared when the unit moved this
-  action" forgets progress on a unit that steps away and returns; "cleared
-  when the tile differs from the last recorded one" could remember it.
-
-**Kill them by:** `harness/mgba_capture.lua`, which needs one fixture (cursor
-on your foot unit standing on a neutral city, nothing adjacent) and one more
-with a second neutral city directly to its right. `cap_probe` is the control —
-the drive sequence must reproduce the bar count before anything else counts.
-`cap_menu_sweep` writes all 18 types through the same three A presses and
-reads whether Capture executed: that is the class rule, with naval rows
-flagged as unreachable boards rather than data. `cap_move_probe` writes
-progress 10 and captures once in place and once after a one-tile move: bars
-means the reset is real, 10 + bars means it is not, and a stay row that loses
-the written progress means the reset fires per-action regardless of movement —
-which answers the question too, just differently. `tools/capture_check.py`
-scores all three and refuses the rows that cannot be read.
-
 ### A16. The counter's terrain bracket at a damaged target
 
 `counter_damage()` closes with the strike's terrain bracket on the **target's**
@@ -208,6 +188,12 @@ the strike (retired A9a).
   VS setup. The cheap test writes it to 1 alongside `+0x1D` and predicts Max
   on Tank → Infantry in woods moving from 60-67 to **90-97**; a null there
   means the game latches CO state earlier than target-select.
+- **The tile→unit index.** Writing a unit record's `x,y` relocates the
+  record but not the unit the game lets you select — the stay-position probe
+  read `acted 0` with the record sitting on the city. Some structure beyond
+  the unit array maps tiles to units, and it has not been found. Harness
+  rule until it is: type/hp/ammo/capture writes are proven transparent,
+  position writes are NOT — drive real moves instead.
 - **The 24-byte table at `0x08283FC8`.** At contact, a defender whose record
   `+1` carries bit `0x20` routes the *primary* lookup through it, indexed by
   **attacker type alone** (`0x08022E12–2E32`). A damage table that ignores the
@@ -252,4 +238,5 @@ The measured content is in the Established bullets; the full accounts are in
 | A12 | `0x03004318` gates the CO fetch; clear means Andy on both sides | `DERIVATION.md` 24 |
 | A13 | the CO attack modifier truncates | fixture `max_wood_co` |
 | A14 | `+11/+12` is the universal pair; the defence modifier lands on the base; both sides truncate | fixtures `kanbei_att_wood`/`kanbei_def_wood`/`sami_def_wood` |
+| A15 | capture: foot-only, rate = bar count (+CO shift), moving resets, staying accumulates to a fall at 20 — arithmetic read off the ROM, rules measured live | `tests/fixtures/capture_probes.json`, `harness/mesen_capture.lua` |
 | A17 | ammo gates the primary (`& 0x780` at `0x08022E04`/`0x0802306C`); the fallback is the same branch as "weaker weapon"; only the primary decrements ammo (`0x080232B2`) | `code_analysis.weapon_selection`, `tests/test_damage.py` |

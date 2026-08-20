@@ -1213,3 +1213,48 @@ woods should move from 60-67 to **90-97**.
 **Not yet established:** which option sets it, and whether writing it
 mid-fixture is enough or whether the game latches CO state earlier. Reading 0 in
 four VS captures says only that those matches had it clear.
+
+
+## 25. The headless route: Mesen2's testrunner, and how A15 died in it
+
+Everything before this section was measured through mGBA's GUI scripting
+console, one human session per run. mGBA 0.10.5 has no script CLI, so the
+harness shipped paste-ready blocks and waited. Mesen2 (the locally built
+Expanded branch) has a GBA core and a true headless mode:
+
+    Mesen.exe --testrunner --timeout=600       --debug.scriptWindow.allowIoOsAccess=true       "Advance Wars (USA) (Rev 1).gba" harness/mesen_capture.lua
+
+which runs a Lua script against the ROM with no window and exits with the
+script. Three requirements that cost real debugging:
+
+- **A real `gba_bios.bin`** in Mesen's Firmware folder. The core has no HLE
+  fallback: without it the game boots straight into ROM and hangs at its
+  first `svc` — and AW1 calls BIOS `Div` inside the damage and capture paths
+  and LZ77 everywhere. The blank screen looks like a bad ROM; it is a
+  missing BIOS.
+- **`emu.loadSavestate()` only runs inside an exec memory callback** on the
+  main CPU. The runner resumes its coroutine from a callback on the BIOS IRQ
+  vector at `0x18` — executed every VBlank — gated by an `endFrame` flag to
+  once per frame. Event callbacks alone cannot reload state.
+- **GUI savestates are script-loadable.** `SaveStateManager::LoadState`
+  parses the same MSS container the GUI writes, so a human parks a fixture
+  once in the GUI (slot file under `SaveStates/`) and every headless case
+  reloads it by path. The fixture for A15: cursor resting on a P1 Infantry
+  one tile south of a neutral city, day 3, fog off, gate `0x03004318` = 0.
+
+Two addresses found along the way, by pressing keys and diffing IWRAM:
+the **cursor is the byte pair `0x030033F0/F1`** (mirrored as u16s at
+`0x030036A4/A6`), which turns menu driving from blind tap counts into
+closed-loop navigation — read, compare, tap. And a **negative** result that
+is itself a finding: writing a unit record's `x,y` moves the record but the
+game will not select the unit at the written tile, so a tile→unit index
+exists somewhere beyond the unit array. Position writes are not transparent;
+real moves are driven instead.
+
+The probes themselves are `tests/fixtures/capture_probes.json`: 26 reloaded
+cases (controls, rate rows, the 18-type menu sweep) plus the two-round stay
+probe played with real turns — End Turn is the fifth item of the map menu,
+opened with A on an empty tile. Every case ships the screenshot it ended on,
+because the drive is verified by looking, not assumed: the run that proved
+the rig showed the action menu reading "Capt / Wait" before anything was
+scored against it.
