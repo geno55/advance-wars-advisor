@@ -1,0 +1,39 @@
+{
+  "_comment": [
+    "The luck consumption, measured (DERIVATION 32, harness/mesen_luck.lua).",
+    "P2 Tank fires on a P1 Infantry teleported to the road at (8,7): base 75,",
+    "0 stars, full HP, so damage - 75 IS the roll. The RNG at 0x03001D30 is",
+    "written between target-select and the confirm tap; rng_after is the",
+    "state once the battle settles. Every battle burned exactly four draws",
+    "and the strike's roll is the THIRD -- the unique draw index consistent",
+    "with all twenty rows across three reductions. The two fixed rows ran",
+    "with settings byte +0x06 (0x03004316) written 1: zero draws, +5 flat."
+  ],
+  "base": 75,
+  "battles": [
+    {"co": "andy",  "good": 0,  "bad": 0,  "seed": 0,     "roll": 1,   "rng_after": 815860},
+    {"co": "andy",  "good": 0,  "bad": 0,  "seed": 1,     "roll": 0,   "rng_after": 708256005},
+    {"co": "andy",  "good": 0,  "bad": 0,  "seed": 2,     "roll": 7,   "rng_after": 689417334},
+    {"co": "andy",  "good": 0,  "bad": 0,  "seed": 3,     "roll": 2,   "rng_after": 1071241671},
+    {"co": "andy",  "good": 0,  "bad": 0,  "seed": 4,     "roll": 3,   "rng_after": 19534200},
+    {"co": "andy",  "good": 0,  "bad": 0,  "seed": 5,     "roll": 6,   "rng_after": 1011572745},
+    {"co": "andy",  "good": 0,  "bad": 0,  "seed": 6,     "roll": 1,   "rng_after": 587920890},
+    {"co": "andy",  "good": 0,  "bad": 0,  "seed": 7,     "roll": 6,   "rng_after": 243607499},
+    {"co": "nell",  "good": 10, "bad": 0,  "seed": 0,     "roll": 11,  "rng_after": 815860},
+    {"co": "nell",  "good": 10, "bad": 0,  "seed": 3,     "roll": 2,   "rng_after": 1071241671},
+    {"co": "nell",  "good": 10, "bad": 0,  "seed": 5,     "roll": 16,  "rng_after": 1011572745},
+    {"co": "nell",  "good": 10, "bad": 0,  "seed": 7,     "roll": 6,   "rng_after": 243607499},
+    {"co": "nell",  "good": 10, "bad": 0,  "seed": 11,    "roll": 6,   "rng_after": 137792463},
+    {"co": "nell",  "good": 10, "bad": 0,  "seed": 13,    "roll": 0,   "rng_after": 561532945},
+    {"co": "sonja", "good": 15, "bad": 15, "seed": 0,     "roll": -14, "rng_after": 815860},
+    {"co": "sonja", "good": 15, "bad": 15, "seed": 1,     "roll": -5,  "rng_after": 708256005},
+    {"co": "sonja", "good": 15, "bad": 15, "seed": 2,     "roll": -13, "rng_after": 689417334},
+    {"co": "sonja", "good": 15, "bad": 15, "seed": 5,     "roll": 1,   "rng_after": 1011572745},
+    {"co": "sonja", "good": 15, "bad": 15, "seed": 9,     "roll": -6,  "rng_after": 937354509},
+    {"co": "sonja", "good": 15, "bad": 15, "seed": 12,    "roll": -1,  "rng_after": 846440576}
+  ],
+  "fixed_luck": [
+    {"seed": 12345, "roll": 5, "rng_after": 12345},
+    {"seed": 99,    "roll": 5, "rng_after": 99}
+  ]
+}

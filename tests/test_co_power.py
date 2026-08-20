@@ -200,6 +200,58 @@ class TestMeteor:
         assert co.meteor_target(b, 2, 0) is None
 
 
+LUCK = json.loads((FIXTURES / "luck_probes.json").read_text(encoding="utf-8"))
+
+
+class TestLuckConsumption:
+    """DERIVATION 32: the luck block at 0x0802333A, measured over 20 seeded
+    battles. The strike's roll is the third of exactly four draws, reduced
+    `draw % (10 + good) - bad` through the CO record."""
+
+    def test_every_battle_burned_exactly_four_draws(self):
+        for row in LUCK["battles"]:
+            s = row["seed"]
+            for _ in range(rng.BATTLE_DRAWS):
+                s = rng.next_state(s)
+            assert s == row["rng_after"], row
+
+    def test_the_strike_roll_is_the_third_draw_reduced(self):
+        for row in LUCK["battles"]:
+            got = rng.strike_luck(row["seed"], row["good"], row["bad"])
+            assert got == row["roll"], row
+
+    def test_the_third_draw_is_the_unique_consistent_index(self):
+        """Any single fixed draw index other than 3 is refuted by at least
+        one row, so the fit is forced rather than chosen."""
+        for k in (1, 2, 4):
+            broken = 0
+            for row in LUCK["battles"]:
+                s = row["seed"]
+                for _ in range(k):
+                    s = rng.next_state(s)
+                if rng.luck_reduce(s, row["good"], row["bad"]) != row["roll"]:
+                    broken += 1
+            assert broken > 0, k
+
+    def test_the_widened_reductions_were_seen_live(self):
+        rolls = {(r["co"], r["roll"]) for r in LUCK["battles"]}
+        assert ("nell", 16) in rolls        # outside 0..9: the %20 is real
+        assert ("sonja", -14) in rolls      # negative: the -15 shift is real
+
+    def test_fixed_luck_draws_nothing_and_adds_five(self):
+        for row in LUCK["fixed_luck"]:
+            assert row["rng_after"] == row["seed"]
+            assert row["roll"] == 5
+
+    def test_the_reduction_matches_the_co_records(self):
+        assert co.luck(1) == (0, 9)
+        assert co.luck(0) == (0, 19)
+        assert co.luck(7) == (-15, 9)
+        for row in LUCK["battles"]:
+            lo, hi = co.luck(NAMES[row["co"].capitalize()])
+            assert lo <= row["roll"] <= hi, row
+
+
 class TestLifetime:
     def test_power_block_covers_the_opponents_turn(self):
         phases = {p["phase"]: p for p in PROBES["expiry"]["phases"]}

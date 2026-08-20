@@ -201,6 +201,19 @@ fixtures, and in this file's git history.
   reads it every frame (`0x0802B2F6`) and draws `?` for the HP digit.
   Display-side only — combat uses the real HP. Also read off the same
   marker: the mountain +3 is FOOT-ONLY (`0x0801ECCE`).
+- **The luck consumption, whole** (DERIVATION 32). The combat luck block
+  at `0x0802333A` draws once from the derived generator and reduces
+  `draw % (10 + good) − bad` through the CO record's `+0x2A/+0x2B` pair,
+  flooring the total at 0. A battle resolution makes exactly four such
+  draws — the strike keeps the THIRD, the counter's is discarded (A9b's
+  "no counter luck", explained) — measured 20/20 across Andy (%10), Nell
+  (%20, a live 16) and Sonja (%25−15, a live −14), with the fixed-luck
+  byte proving all four draws come from this one block (set, the battle
+  draws nothing and adds +5 flat). Given a state read at target-confirm
+  the strike's damage is a point: `rng.strike_luck()` +
+  `damage.damage_for_luck()`. The stated boundary: the draw index is
+  measured on the standard drive; no other UI path into the resolver has
+  been swept. `tests/fixtures/luck_probes.json`.
 - **The dived sub, whole** (DERIVATION 31). Unit flags bit `0x20` is the
   Dive state — set by the Dive command (`0x08066E90`), cleared by Rise
   (`0x08066EAC`), menu-visible as Wait/Dive and Wait/Rise, and honoured
@@ -263,13 +276,12 @@ A16, both born the day action enumeration was written.
   fixture holds (Established); whether the record flips at confirmation or
   later in the animation is unread. Nothing shipped depends on it — only a
   live reader polling mid-move would care.
-- **How the luck path consumes the RNG.** The generator IS derived now —
-  `state' = ((4s+2)(4s+3) mod 2³²) >> 2` at `0x08010A84`, confirmed 12/12
-  through the meteor probe (DERIVATION 30, `engine/rng.py`) — but how a
-  combat luck roll reduces the state has not been read, so rolls stay
-  ranges. Kill by: seed `0x03001D30`, fight one battle, check the roll
-  against `next(seed) % 10`; if that lands, every sweep becomes a
-  prediction and the damage envelopes collapse to points.
+- **What sets the fixed-luck byte.** Settings `+0x06` (`0x03004316`)
+  nonzero makes every strike roll exactly +5 with no RNG draw at all —
+  read at `0x08023330`, measured on two battles (DERIVATION 32). Which
+  setup option or mode sets it is unread; every capture reads 0. Until
+  then the reader should surface a nonzero value loudly rather than
+  predict with the wrong luck model.
 - **Supply, repair, joining, unloading, production** — the turn mechanics
   `engine/actions.py` declines to offer rather than guess; each is named in
   its docstring with the reason.

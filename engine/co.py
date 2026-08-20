@@ -138,11 +138,12 @@ def luck(co_id: int, power: bool = False) -> tuple:
     gives a range the same width as everyone else's, slid downward, which is
     what a luck penalty should be.
 
-    ROM-derived and community-corroborated, but NOT confirmed against the game
-    -- no sweep has yet produced a roll outside 0..9. `engine/damage.py`
-    applies it anyway, because for Sonja the alternative is claiming kills are
-    guaranteed when a -15 roll would leave the target standing. See
-    ASSUMPTIONS A11 and `tools/luck_range_check.py`.
+    CONFIRMED twice over: A11's fixtures measured Nell at 19 and Sonja at
+    -13, and the consumption itself is read now (DERIVATION 32) -- the luck
+    block at 0x0802333A computes exactly `draw % (10 + good) - bad`, with a
+    live 16 for Nell and a live -14 for Sonja in the seeded sweep. Given a
+    read of the RNG state, engine/rng.py:strike_luck() turns this range
+    into the exact roll.
     """
     return record(co_id, power).luck
 

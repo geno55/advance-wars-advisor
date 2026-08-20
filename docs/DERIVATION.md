@@ -1647,3 +1647,52 @@ states, `Unit.dived` reads the bit, `actions.py` and `threat_map` thread
 it, and the extractor now pulls the table into `aw1_damage.json` with its
 own assertions. One bullet leaves ASSUMPTIONS whole: nothing about the
 table is undecoded any more.
+
+
+## 32. The luck consumption, and the envelope collapsing to a point
+
+The RNG's generator fell out of the meteor probe (section 30); what
+remained was how the combat luck path consumes it. One `bl` scan for the
+generator's callers put a single site inside the damage function —
+`0x0802333A` — and the block around it reads:
+
+    roll  = next_state() % (10 + good) − bad     good = record +0x2A,
+    total = max(0, damage_so_far + roll)          bad = record +0x2B
+
+The reduction goes through the modulo entry at `0x080796CC`, the good/bad
+bytes are the header pair A11 named, both fetched behind the same
+`[0x03004318]` gate as everything else, and the flooring at 0 is the
+`max(0, raw)` the engine already carried. One branch above it was new:
+**settings byte `+0x06` (`0x03004316`) nonzero skips the RNG entirely and
+adds a flat +5** — a fixed-average-luck mode. Which setup option sets it
+is unread; every capture reads 0.
+
+### Twenty seeded battles, and the draw index the fit forced
+
+The sweep drives the same Tank → Infantry-on-road attack (base 75, zero
+stars, full HP — so `damage − 75` IS the roll), writes the RNG between
+target-select and the confirm tap, and reads both the damage and the state
+after the battle. Three COs give three reductions: Andy `%10`, Nell `%20`,
+Sonja `%25 − 15`.
+
+Every one of the twenty battles advanced the state by **exactly four
+draws**, and the observed roll equals the THIRD draw reduced — the unique
+single index consistent with all twenty rows, which the test asserts by
+refuting indices 1, 2 and 4 individually. Nell rolled a live **16** and
+Sonja a live **−14**, the widened reductions on screen rather than
+inferred. And with the fixed-luck byte written, the whole battle drew
+NOTHING — `rng_after == seed` — and dealt exactly base + 5, which also
+says all four draws of a normal battle come from this one gated block:
+the resolver runs it four times, the strike keeping the third result and
+the counter's draw being made and discarded, which is why A9b's sweeps
+measured a counter with no luck of its own.
+
+### What this changes
+
+Given a read of `0x03001D30` at target-confirm, the strike's damage is a
+POINT: `rng.strike_luck(state, good, bad)` returns the roll and
+`damage_for_luck()` the exact number — 20/20 on the fixture. `resolve()`
+keeps returning the envelope, because the advisor usually cannot read a
+live state; a harness that can, predicts. The one stated boundary: the
+draw index is measured on the standard drive (confirm from the forecast);
+no other UI path into the resolver has been swept.

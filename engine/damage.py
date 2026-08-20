@@ -62,6 +62,13 @@ LUCK_MIN, LUCK_MAX = 0, 9          # the DEFAULT roll; per-CO ranges below
 # MINIMUM, so treating her as a standard CO overstates min_damage and reports
 # kills as guaranteed that are not. Nell's error runs the safe way: it
 # understates the maximum.
+#
+# The ranges are no longer the best the model can do. The consumption is read
+# and measured (DERIVATION 32): given the RNG state at target-confirm,
+# engine/rng.py:strike_luck() returns the exact roll the strike will get,
+# and damage_for_luck() turns it into the exact damage. resolve() keeps
+# returning the envelope because the advisor usually cannot read a live
+# state -- but a harness that can, predicts.
 
 
 # --------------------------------------------------------------------------
