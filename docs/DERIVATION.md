@@ -1696,3 +1696,130 @@ keeps returning the envelope, because the advisor usually cannot read a
 live state; a harness that can, predicts. The one stated boundary: the
 draw index is measured on the standard drive (confirm from the forecast);
 no other UI path into the resolver has been swept.
+
+
+## 33. Supply, repair and the daily burn: three dead guesses and a Recon in disguise
+
+The last hole `engine/actions.py` had named out loud: "Terrain
+repair/resupply on WAIT. Real, unmeasured, absent." The handoff sketched
+four unknowns — the APC's Supply command, property repair, the daily fuel
+burn, the crash at fuel 0 — and, usefully, three hypotheses about where the
+answers lived. All three were wrong, each killed by a read before any
+emulator started, and the truth was better organised than the guesses.
+
+### The statics: everything lives in the unit record
+
+The handoff suggested the "repeats at +0x39.." in the stats table might be
+the dived-sub burn rates, and that a who-repairs-whom table "plausibly sits
+in the terrain record's unread bytes". Neither. Dumping the full records
+showed stats `+0x38..+0x4B` is a **20-entry per-terrain burn table** (one
+slot per terrain id, every entry identical per unit — the uniformity is now
+an extraction assertion), and immediately before it, `+0x24..+0x37`, the
+same shape again: the **service-class table**, nonzero where that terrain
+repairs that unit. Ground: City/HQ/Base. Air: Airport. Naval: Port. The
+terrain record itself held nothing but name pointer, income (1000 on
+exactly the five properties), stars×10 and two graphics pointers — fully
+decoded and boring. The dived rate is not data at all: `movs r6, #5` at
+`0x080239DC`, a code constant.
+
+Three side tables indexed by the 1-based RAM type: `0x08282EE5` is-a-
+supplier (APC, plus the vestigial id 8 — a cut second supplier), `0x08282ECC`
+can-be-supplied (every real unit), `0x08282EFE` the terrain where an OWN
+property exempts the unit from that day's burn (air→Airport, naval→Port).
+
+The repair routine the handoff had already located (`0x08029D9C`) read
+cleanly: per requested bar it charges `(cost/10 + pool[+2]) ×
+header[+0x2D] / 100` funds, adds 10 internal HP capped at 100, and **every
+exit path snaps internal HP up to the display bar's ceiling** — finished,
+broke, or already displaying 10 (91..99 becomes an exact free 100). Broke
+mid-way keeps the paid bars, snaps, stops. That `+0x2D` is header `+09` —
+the byte DERIVATION 27 said no code path had been seen to read. It is the
+repair-cost twin of the charge path's `+0x2C`: Kanbei's 120 makes his
+repairs a fifth dearer, measured later at 840 a bar for a Tank. And the
+walker that calls all this hands it `1 − [0x03004357]` as the charge flag —
+a settings byte that makes repairs free, which the parked VS fixture has
+SET. What menu option writes it joins the fixed-luck byte in the unknowns.
+
+The burn function (`0x08023978`) reads the per-terrain entry, skips loaded
+units, skips a unit standing on its own no-burn terrain — the skip returns
+before the crash check, so an empty copter on an own airport lives — forces
+5 when the dive bit is up, adds the CO pool byte `+0x0A` (Eagle: −2 on the
+five air slots, both blocks, the only nonzero in the game), floors fuel at
+0, and returns "remove me" when fuel hits 0 and the class byte says air or
+naval. The remover zeroes the type byte at `0x080243D8`.
+
+### The dynamics: measured, with two rig lessons and one blunder
+
+The blunder first, because it cost three runs: the fixture peek listed
+"unit70 type=6" next to the APC's cargo pointer, and two whole probe rounds
+supplied nothing because **type 6 is the Recon** — RAM types are 1-based,
+the real APC is type 7 in slot 69, and the "MdTanks" were Mechs. The trace
+run built to explain the failure instead proved the gates: the supplier
+predicate returned 0 for the Recon at exactly `0x08025874`, and the
+auto-supply walker scanned all seven still-standing P2 units and correctly
+found no APC beside anyone. The lesson is old but newly paid for: verify
+the TYPE byte against the table before building a probe on a slot's
+reputation.
+
+Also refuted en passant: DERIVATION 28's "two layers, presumably air and
+ground" reading of the tile→unit index. The layers at map `+0x12` and
+`+0x51A` dumped **identical** across the whole board, and a real move
+updated both — they are copies, like the visibility array's twin, consulted
+by different readers (auto-supply reads `+0x12`, the menu need-scan
+`+0x51A`).
+
+With the real APC:
+
+- **The menu.** `[Drop, Supply, Wait]` with cargo aboard; Supply vanishes
+  when the adjacent Tank is written full (the need-check at `0x0802588C`:
+  fuel AND ammo at the stats maxima), and appears for any adjacent needy
+  same-army unit at the DESTINATION of the move. Driving it filled both
+  neighbours to their maxima — fuel and ammo, free, cargo untouched — and
+  set the APC's acted bit. Supply-after-move works the same.
+- **Turn start, in order**, off one write-PC log: income (`0x0802416A`),
+  the burn walker (fuel writes at `0x08023A80`, slot-ascending, removals
+  inline at `0x080243D8`), the property walker (refuel `0x08029D72` one
+  point per write, re-ammo `0x08029CBC`, repair hp at `0x08029EB0` with the
+  snap at `0x08029F20`, the spend at `0x0802413E`), then auto-supply (same
+  helper PCs, no charge). **Crash beats supply**: two 1-fuel copters, one
+  beside the APC and one far control, both burned to 0 and were removed.
+- **The repair sweeps** reproduced the routine to the digit: 45→70 for
+  1400; 81→**100 for 700** (the second bar is the free snap — the row that
+  kills any "charge per requested bar" reading); 95→100 free; broke at 0
+  funds → 45→**50**, nothing charged (the snap is why a broke army still
+  creeps upward); funds 700 → 60 with an empty treasury; funds 1050 → 60
+  with 350 left. Kanbei paid 840 a bar. A BCopter on an own City got
+  nothing but its burn; on an own Airport it repaired, refueled to 99,
+  re-ammoed to 6 and skipped the burn. A dived sub on an own Port was
+  serviced straight through the dive — and its written ammo 9 wrapped mod
+  16 down to the max 6, fourteen increments on the watch, because the
+  refill loops run until EQUAL, not until ≥.
+- **The funds override lesson**: forcing the treasury at the property
+  walker's first exec write happened BEFORE income and was silently
+  refilled — phase objects execute their entry every frame while waiting
+  on the effect queue. The broke rows only became broke when the override
+  moved to the repair routine's own entry, which re-reads funds per bar.
+
+One free rider: the fuel spent by a move equals the PATH's movement cost,
+not the tile count — a Recon paid 3 for plain+road, an APC 2 for two road
+tiles — so `Action.fuel_after`, which already subtracts the Dijkstra cost,
+was right all along. And the fuel byte's bit 7 is not fuel: both writers
+mask around it, and a written bit rode through a full turn untouched. What
+sets it remains unread.
+
+### What shipped
+
+`tools/extract_supply.py` → `data/aw1_supply.json` (service classes, burn
+table, the three side tables, Kanbei's `+0x2D`, Eagle's `+0x0A`, the code
+constants with their addresses; 78 assertions). `engine/supply.py` replays
+the routine and the measured turn-start order; `engine/actions.py` now
+offers SUPPLY from the supplier table with the menu's own need-gate and
+attaches `turn_start` facts (burn, crash, repair with the exact charge,
+auto-supply) to every action's ending tile — a completing capture is quoted
+as serviced, because the city is yours by morning. The state reader dumps
+the free-repair byte; old dumps get a warning and a charged assumption.
+The two Mesen fixture dumpers that hardcoded `"fuel": 99` now read the
+byte. 26 new tests replay `tests/fixtures/supply_probes.json` and refute
+the shapes the derivation itself had to discard: display-bar repair,
+all-or-nothing charging, additive dive burn, and an APC that could rescue
+a 0-fuel neighbour.

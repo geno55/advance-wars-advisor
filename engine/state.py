@@ -44,6 +44,13 @@ class Unit:
     hp: int          # internal 1..100
     ammo: int
     capture: int     # capture progress, 0..20; a property falls at 20
+    # Record +6 bits 0..6. Bit 7 is NOT fuel: every fuel writer the supply
+    # derivation watched (daily burn 0x08023A68, refill 0x08029D6E) masks it
+    # off and preserves it, and a written bit 7 rides through a full turn
+    # untouched (fixture row B4-fuel-high-bit-survives) -- what, if
+    # anything, ever sets it is still unread. Movement subtracts the PATH's
+    # movement cost from fuel, not the tile count (measured on tires paying
+    # 2 for a plain).
     fuel: int
     acted: bool
     carrying: bool
@@ -129,6 +136,13 @@ class Board:
     # engine/fog.py computes -- but only for THIS board. Anything that moves a
     # unit must drop it, or it describes a position that no longer exists.
     vision: Optional[list] = None
+    # Settings byte 0x03004357 (settings +0x47): nonzero makes property
+    # repairs FREE -- the turn-start walker passes `1 - this` as the charge
+    # flag into the repair routine (0x0802A4D8, DERIVATION 33). The parked
+    # VS fixture reads 1; which setup option writes it is unread. None means
+    # the dump predates the field, and actions.py then assumes repairs
+    # charge, out loud.
+    repair_free: Optional[bool] = None
     warnings: list = field(default_factory=list)
 
     @property
@@ -244,6 +258,8 @@ def load(path) -> Board:
         weather_index=raw.get("weather_index"),
         fog=raw.get("fog"),
         vision=raw.get("vision"),
+        repair_free=(None if raw.get("repair_free") is None
+                     else bool(raw["repair_free"])),
     )
     if raw.get("vision_copies_agree") is False:
         board.warnings.append(

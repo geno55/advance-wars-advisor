@@ -1,0 +1,356 @@
+{
+  "_comment": [
+    "Supply, repair and daily-fuel-burn tables, extracted from the",
+    "code-indexed blocks named in tools/extract_supply.py (DERIVATION",
+    "33). Regenerate with that tool; it exits non-zero on a ROM sha1",
+    "mismatch or any failed assertion.",
+    "",
+    "Rules that live in code, carried with their addresses:",
+    "dived subs burn a flat 5 (0x080239DC) regardless of the table;",
+    "a loaded unit burns nothing (flags bit3 gate at 0x080239B0);",
+    "burn is skipped entirely on an own-side no_burn_on_own_terrain",
+    "match (0x080239C8); fuel floors at 0 and an air or naval unit",
+    "at 0 after burn is removed (class test 0x08023A92, remover",
+    "0x080243D8); property repair is 2 display bars (0x0802A4CC),",
+    "charged at cost/10 * repair_cost_pct/100 per bar unless the",
+    "settings byte 0x03004357 is nonzero, and the routine 0x08029D9C",
+    "always exits by snapping internal HP up to bars*10."
+  ],
+  "game": "Advance Wars (USA) Rev 1",
+  "rom_sha1": "15053499d5b3f49128a941d7f2d84876f5424d0c",
+  "provenance": {
+    "method": "extracted from ROM binary at the offsets the supply code indexes",
+    "service_table": "unit stats +0x24..+0x37, read at 0x0802A3D6",
+    "burn_table": "unit stats +0x38..+0x4B, read at 0x080239AC",
+    "suppliable_table": "0x8282ecc",
+    "supplier_table": "0x8282ee5",
+    "no_burn_table": "0x8282efe",
+    "co_repair_pct": "CO header +0x2D, read at 0x08029E5E",
+    "co_burn_adjust": "CO pool entry byte +0x0A, read at 0x08023A46",
+    "measured_against": "tests/fixtures/supply_probes.json"
+  },
+  "dived_burn": 5,
+  "repair_bars": 2,
+  "units": {
+    "Infantry": {
+      "id": 0,
+      "service_terrains": [
+        6,
+        8,
+        14
+      ],
+      "service_terrain_names": [
+        "City",
+        "HQ",
+        "Base"
+      ],
+      "fuel_per_turn": 0,
+      "can_be_supplied": true,
+      "is_supplier": false,
+      "no_burn_on_own_terrain": null
+    },
+    "Mech": {
+      "id": 1,
+      "service_terrains": [
+        6,
+        8,
+        14
+      ],
+      "service_terrain_names": [
+        "City",
+        "HQ",
+        "Base"
+      ],
+      "fuel_per_turn": 0,
+      "can_be_supplied": true,
+      "is_supplier": false,
+      "no_burn_on_own_terrain": null
+    },
+    "MdTank": {
+      "id": 2,
+      "service_terrains": [
+        6,
+        8,
+        14
+      ],
+      "service_terrain_names": [
+        "City",
+        "HQ",
+        "Base"
+      ],
+      "fuel_per_turn": 0,
+      "can_be_supplied": true,
+      "is_supplier": false,
+      "no_burn_on_own_terrain": null
+    },
+    "Tank": {
+      "id": 4,
+      "service_terrains": [
+        6,
+        8,
+        14
+      ],
+      "service_terrain_names": [
+        "City",
+        "HQ",
+        "Base"
+      ],
+      "fuel_per_turn": 0,
+      "can_be_supplied": true,
+      "is_supplier": false,
+      "no_burn_on_own_terrain": null
+    },
+    "Recon": {
+      "id": 5,
+      "service_terrains": [
+        6,
+        8,
+        14
+      ],
+      "service_terrain_names": [
+        "City",
+        "HQ",
+        "Base"
+      ],
+      "fuel_per_turn": 0,
+      "can_be_supplied": true,
+      "is_supplier": false,
+      "no_burn_on_own_terrain": null
+    },
+    "APC": {
+      "id": 6,
+      "service_terrains": [
+        6,
+        8,
+        14
+      ],
+      "service_terrain_names": [
+        "City",
+        "HQ",
+        "Base"
+      ],
+      "fuel_per_turn": 0,
+      "can_be_supplied": true,
+      "is_supplier": true,
+      "no_burn_on_own_terrain": null
+    },
+    "Artillery": {
+      "id": 9,
+      "service_terrains": [
+        6,
+        8,
+        14
+      ],
+      "service_terrain_names": [
+        "City",
+        "HQ",
+        "Base"
+      ],
+      "fuel_per_turn": 0,
+      "can_be_supplied": true,
+      "is_supplier": false,
+      "no_burn_on_own_terrain": null
+    },
+    "Rockets": {
+      "id": 10,
+      "service_terrains": [
+        6,
+        8,
+        14
+      ],
+      "service_terrain_names": [
+        "City",
+        "HQ",
+        "Base"
+      ],
+      "fuel_per_turn": 0,
+      "can_be_supplied": true,
+      "is_supplier": false,
+      "no_burn_on_own_terrain": null
+    },
+    "AntiAir": {
+      "id": 13,
+      "service_terrains": [
+        6,
+        8,
+        14
+      ],
+      "service_terrain_names": [
+        "City",
+        "HQ",
+        "Base"
+      ],
+      "fuel_per_turn": 0,
+      "can_be_supplied": true,
+      "is_supplier": false,
+      "no_burn_on_own_terrain": null
+    },
+    "Missiles": {
+      "id": 14,
+      "service_terrains": [
+        6,
+        8,
+        14
+      ],
+      "service_terrain_names": [
+        "City",
+        "HQ",
+        "Base"
+      ],
+      "fuel_per_turn": 0,
+      "can_be_supplied": true,
+      "is_supplier": false,
+      "no_burn_on_own_terrain": null
+    },
+    "Fighter": {
+      "id": 15,
+      "service_terrains": [
+        10
+      ],
+      "service_terrain_names": [
+        "Airport"
+      ],
+      "fuel_per_turn": 5,
+      "can_be_supplied": true,
+      "is_supplier": false,
+      "no_burn_on_own_terrain": 10
+    },
+    "Bomber": {
+      "id": 16,
+      "service_terrains": [
+        10
+      ],
+      "service_terrain_names": [
+        "Airport"
+      ],
+      "fuel_per_turn": 5,
+      "can_be_supplied": true,
+      "is_supplier": false,
+      "no_burn_on_own_terrain": 10
+    },
+    "BCopter": {
+      "id": 18,
+      "service_terrains": [
+        10
+      ],
+      "service_terrain_names": [
+        "Airport"
+      ],
+      "fuel_per_turn": 2,
+      "can_be_supplied": true,
+      "is_supplier": false,
+      "no_burn_on_own_terrain": 10
+    },
+    "TCopter": {
+      "id": 19,
+      "service_terrains": [
+        10
+      ],
+      "service_terrain_names": [
+        "Airport"
+      ],
+      "fuel_per_turn": 2,
+      "can_be_supplied": true,
+      "is_supplier": false,
+      "no_burn_on_own_terrain": 10
+    },
+    "Battleship": {
+      "id": 20,
+      "service_terrains": [
+        11
+      ],
+      "service_terrain_names": [
+        "Port"
+      ],
+      "fuel_per_turn": 1,
+      "can_be_supplied": true,
+      "is_supplier": false,
+      "no_burn_on_own_terrain": 11
+    },
+    "Cruiser": {
+      "id": 21,
+      "service_terrains": [
+        11
+      ],
+      "service_terrain_names": [
+        "Port"
+      ],
+      "fuel_per_turn": 1,
+      "can_be_supplied": true,
+      "is_supplier": false,
+      "no_burn_on_own_terrain": 11
+    },
+    "Lander": {
+      "id": 22,
+      "service_terrains": [
+        11
+      ],
+      "service_terrain_names": [
+        "Port"
+      ],
+      "fuel_per_turn": 1,
+      "can_be_supplied": true,
+      "is_supplier": false,
+      "no_burn_on_own_terrain": 11
+    },
+    "Sub": {
+      "id": 23,
+      "service_terrains": [
+        11
+      ],
+      "service_terrain_names": [
+        "Port"
+      ],
+      "fuel_per_turn": 1,
+      "can_be_supplied": true,
+      "is_supplier": false,
+      "no_burn_on_own_terrain": 11
+    }
+  },
+  "co_repair_cost_pct": {
+    "Nell": 100,
+    "Andy": 100,
+    "Max": 100,
+    "Olaf": 100,
+    "Sami": 100,
+    "Grit": 100,
+    "Kanbei": 120,
+    "Sonja": 100,
+    "Eagle": 100,
+    "Drake": 100,
+    "Sturm10": 100,
+    "Sturm11": 100
+  },
+  "co_repair_cost_pct_by_id": {
+    "0": 100,
+    "1": 100,
+    "2": 100,
+    "3": 100,
+    "4": 100,
+    "5": 100,
+    "6": 120,
+    "7": 100,
+    "8": 100,
+    "9": 100,
+    "10": 100,
+    "11": 100
+  },
+  "co_fuel_burn_adjust": {
+    "8": {
+      "normal": {
+        "Fighter": -2,
+        "Bomber": -2,
+        "vestigial17": -2,
+        "BCopter": -2,
+        "TCopter": -2
+      },
+      "power": {
+        "Fighter": -2,
+        "Bomber": -2,
+        "vestigial17": -2,
+        "BCopter": -2,
+        "TCopter": -2
+      }
+    }
+  }
+}

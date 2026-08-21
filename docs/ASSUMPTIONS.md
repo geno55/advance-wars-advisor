@@ -248,6 +248,31 @@ fixtures, and in this file's git history.
   Fixtures `fog_vision_rain/airwood/groundwood.json`; all seven vision rules
   are now load-bearing in the oracle test.
 
+- **Supply, repair and daily fuel burn, whole** (DERIVATION 33; fixtures
+  `supply_probes.json`, tables `data/aw1_supply.json`). The turn-start order,
+  measured off write-PCs: income (`0x0802416A`), daily burn with crashes
+  applied inline (`0x08023978`, remover `0x080243D8`), property
+  repair/resupply (walker `0x0802A334`), APC auto-supply (`0x0802A8A4`) —
+  which is why a 0-fuel air unit beside an APC dies. Burn is the 20-byte
+  per-terrain block at stats `+0x38` (uniform: 0 ground, 2 copters, 5
+  planes, 1 naval), skipped for loaded units and on an OWN
+  Airport/Port (`0x08282EFE` — the skip also bypasses the crash check);
+  dived subs burn a flat 5; Eagle's pool byte `+0x0A` takes 2 off air.
+  Fuel 0 after burn removes air AND naval; ground parks. Property service
+  is owner match + the per-terrain block at stats `+0x24` (ground
+  City/HQ/Base, air Airport, naval Port): free refuel (`0x08029CEC`) and
+  re-ammo (`0x08029C1C`) to the stats maxima, then 2 bars of repair via
+  `0x08029D9C` — per bar `(cost/10) × header[+0x2D]/100` funds (Kanbei
+  120), hp +10 capped at 100, and EVERY exit snaps internal HP up to
+  `bars×10` (91–99 becomes a free exact 100; broke pays what it can, snaps,
+  stops). Charging is off while settings byte `0x03004357` is nonzero (the
+  VS fixture's default). The APC: supplier table `0x08282EE5`, menu item
+  offered only when an adjacent same-army unit is under a stats max
+  (`0x0802588C`), executor fills ALL adjacent friendlies fuel+ammo free and
+  spends the action; turn-start auto-supply does the same without one, and
+  never reaches the transport's own cargo (that is the Cruiser's walker
+  branch, type 0x16 at `0x0802A8F2`).
+
 ## Assumed — these are the ones that will bite
 
 Nothing, currently. Every assumption this file has carried is either in
@@ -258,18 +283,18 @@ A16, both born the day action enumeration was written.
 
 ## Unknown — not modelled
 
-- **Header `+09`.** The value pair's second byte (Kanbei 120). Its partner
-  `+08` is the meter-value multiplier; nothing has been seen reading `+09`.
-- **The tile→unit index.** FOUND but not decoded whole: the fog marker reads
-  per-tile unit-slot arrays at map `+0x51A` (`0x0801EAB8`) and at map
-  `+0x12` (`0x0801E902`) — two layers, presumably air and ground, unpinned
-  which is which. Nothing writes them yet, so the harness rule stands:
-  type/hp/ammo/capture writes are proven transparent, position writes are
-  NOT for selecting your own unit — drive real moves instead. (History: the
-  stay-position probe read `acted 0` with the record written onto the city;
-  a teleported ENEMY is targetable and written terrain carries real defence,
-  so the index gates selection, not combat.) Kill by: writing both layers
-  alongside `x,y` and re-running the stay-position probe.
+- **The tile→unit index.** The two per-tile unit-slot arrays at map `+0x12`
+  and map `+0x51A` are IDENTICAL COPIES, not air/ground layers — dumped
+  matching over a whole fixture board and again after a real move updated
+  both (DERIVATION 33; different readers pick different copies: the
+  auto-supply scan `+0x12`, the Supply menu need-scan `+0x51A`). Nothing
+  writes them from the harness yet, so the rule stands: type/hp/ammo/capture
+  writes are proven transparent, position writes are NOT for selecting your
+  own unit — drive real moves instead. (History: the stay-position probe
+  read `acted 0` with the record written onto the city; a teleported ENEMY
+  is targetable and written terrain carries real defence, so the index gates
+  selection, not combat.) Kill by: writing both copies alongside `x,y` and
+  re-running the stay-position probe.
 - **The identical visibility copy at `0x02017B42`.** Dumped only as a
   cross-check; no known purpose.
 - **When the unit record updates during a move.** The pre-move tile is what a
@@ -282,9 +307,20 @@ A16, both born the day action enumeration was written.
   setup option or mode sets it is unread; every capture reads 0. Until
   then the reader should surface a nonzero value loudly rather than
   predict with the wrong luck model.
-- **Supply, repair, joining, unloading, production** — the turn mechanics
+- **What sets the free-repair byte.** Settings `+0x47` (`0x03004357`)
+  nonzero makes property repairs charge nothing — the walker hands `1 −
+  this` to `0x08029D9C` as its charge flag (measured both ways, fixture
+  rows R1/R2). The parked VS fixture reads 1; which setup option or mode
+  writes it is unread. The reader now dumps it, and `actions.py` assumes
+  charging out loud when a dump predates the field.
+- **The fuel byte's bit 7.** Not fuel: every fuel writer masks it off and
+  preserves it (`0x08023A68`, `0x08029D6E`), and a written bit 7 rides
+  through a full turn untouched (fixture row B4). What, if anything, sets
+  or reads it has not been found.
+- **Joining, unloading, production** — the turn mechanics
   `engine/actions.py` declines to offer rather than guess; each is named in
-  its docstring with the reason.
+  its docstring with the reason. (Supply, repair and fuel burn left this
+  bullet for Established via DERIVATION 33.)
 
 ## Retired — measured, and compressed into Established above
 

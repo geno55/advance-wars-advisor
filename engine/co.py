@@ -85,8 +85,9 @@ class CoRecord:
     id: int
     name: str
     per_unit: dict          # unit name -> (attack, defence), from the pool
-    # +08/+09: the unit-VALUE pair (meter charge / deploy cost), NOT damage.
-    # +08 is what unit_value() applies; +09 has no observed reader.
+    # +08/+09: the unit-VALUE pair, NOT damage. +08 is what unit_value()
+    # applies (meter charge / deploy cost); +09 is the property-repair
+    # cost multiplier engine/supply.py applies (DERIVATION 33).
     header_global: tuple
     header_pair: tuple      # +11/+12, the universal pair the damage path uses
     weather_tables: list
@@ -170,7 +171,8 @@ def universal(co_id: int, power: bool = False) -> tuple:
     +08/+09 is NOT this pair's innate form, as this docstring once guessed:
     +08 is the unit-VALUE multiplier the power charge path reads (Kanbei's
     120 makes his units worth more meter, same as their deploy cost), and
-    +09 has no observed reader. +11/+12 alone is what the damage path wants.
+    +09 is the repair-cost multiplier the property walker charges by
+    (DERIVATION 33). +11/+12 alone is what the damage path wants.
     """
     d = _co_data()
     block = d["records"][co_id]["power" if power else "normal"]
@@ -212,7 +214,8 @@ def unmodelled(co_id: int, power: bool = False) -> dict:
     Empty for every CO now. `+11/+12` used to be listed here and is the reason
     Kanbei and Sturm were refused; it is `universal()`, measured in both
     directions, and applied. `+08/+09` turned out not to be damage at all --
-    +08 is the meter-value multiplier (DERIVATION 27), so nothing is missing.
+    +08 is the meter-value multiplier (DERIVATION 27) and +09 the
+    repair-cost multiplier (DERIVATION 33), so nothing is missing.
 
     Kept, rather than deleted, because it is the hook the refusal hangs on. If
     a later record turns out to carry strength somewhere else, this is where it

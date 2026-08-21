@@ -387,11 +387,25 @@ four naval types are asserted unreadable rather than interpreted — the rate
 read 10/7/5/1 at 100/70/45/9 HP, **moving resets progress** (a written 15
 plus a one-tile move captured at the fresh bar count), and **staying keeps
 it** — a second stationary capture completed 20 and the city fell on
-screen. A15 retired; see `DERIVATION.md` 25 for the headless route. Unloading, joining, production and CO power activation are not
-offered at all rather than offered wrongly; each is named in the module
-docstring with the reason.
+screen. A15 retired; see `DERIVATION.md` 25 for the headless route.
 
-25 regression tests, including the branch ban. The resolution tests assert
+Supply and the turn-start economy joined the enumeration in DERIVATION 33.
+The same table discipline: **SUPPLY** is offered to whichever unit the ROM's
+supplier table names (the APC), on any destination with an adjacent friendly
+under its fuel or ammo maximum -- the game's own menu gate, measured -- and
+lists exactly who gets filled to what, free, action spent. Every action also
+carries `turn_start`: what the owner's next morning does to the unit on that
+tile, in the measured order -- income, fuel burn with the crash at 0 (air AND
+naval; an APC cannot save a 0-fuel neighbour, burn runs first), property
+repair/resupply with the exact funds charge (the routine snaps internal HP
+to bar ceilings; Kanbei pays 120%), then APC auto-supply. A capture that
+completes is quoted as serviced, because the city is yours by morning.
+Unloading, joining and production are still not offered at all rather than
+offered wrongly; each is named in the module docstring with the reason, and
+CO power activation is an ARMY action modelled in `engine/co.py`, waiting on
+an army-actions module.
+
+35 regression tests, including the branch ban. The resolution tests assert
 equality with `engine/damage.py` called directly on the same inputs — what
 this layer adds is *wiring* (the right stars on each side, the right HP, the
 right CO reaching the quote), and the formula itself stays tested where it
@@ -406,6 +420,8 @@ engine/pathing.py         one Dijkstra: reachable, destinations, path
 engine/co.py              CO modifiers, and what it refuses to model
 engine/threat.py          what the enemy can do to you next turn
 engine/actions.py         every legal action a unit has this turn  <- the advisor
+engine/supply.py          supply, property repair, daily fuel burn -- the
+                          turn-start rules, replayed from DERIVATION 33
 engine/fog.py             what you can legally see; reads the game's own array
 engine/rng.py             the derived RNG generator AND the luck consumption:
                           strike_luck() turns a state read into the exact roll
@@ -449,6 +465,9 @@ harness/mesen_dive.lua / _dive2.lua  the Dive bit and the dived-sub damage
 harness/mesen_luck.lua    twenty seeded battles across three luck reductions:
                           the strike's roll is the third of four draws.
                           DERIVATION.md 32
+harness/mesen_supply_*.lua  the supply derivation: fixture recon, the APC menu
+                          probes (peek/menu/menu2/trace/apc/exec), the repair
+                          and burn sweeps (repair/broke). DERIVATION.md 33
 harness/observations.csv  75 recorded battles (14 by hand, 61 swept)
 
 data/aw1_damage.json      damage matrices + provenance + resolved questions
@@ -458,17 +477,23 @@ data/aw1_movecost.json    movement costs, 7 move types x 20 terrains x 3 weather
 data/aw1_army_struct.json army record layout + open CO questions
 data/aw1_co.json          12 CO records, all 12 names measured (Sturm has two)
 data/aw1_unit_stats.json  cost, move, move type, range, vision, fuel, ammo
+data/aw1_supply.json      service classes, burn table, supplier tables, the
+                          repair-cost multiplier, Eagle's burn adjust
 
-tests/test_damage.py      64 regression tests, incl. the dived-sub table
+tests/test_damage.py      83 regression tests, incl. the dived-sub table
 tests/test_pathing.py     22 regression tests, incl. "no unit-type branches"
 tests/test_threat.py      23 regression tests, incl. the same branch ban
 tests/test_fog.py         32 tests, incl. five real-board oracles and branch ban
-tests/test_corpus.py      21 tests: replay every recorded measurement against
+tests/test_corpus.py      23 tests: replay every recorded measurement against
                           the engine, strikes and counters kept apart
 tests/test_co_power.py    28 tests: the power system against its measurements
                           (charge, thresholds, effects, lifetime, Sonja, the
                           meteor's three scans, the RNG generator, and the
                           luck consumption that makes rolls predictable)
+tests/test_actions.py     35 regression tests: the enumeration wiring and the
+                          branch ban
+tests/test_supply.py      26 tests: the measured supply/repair/burn rows
+                          replayed, and the discarded alternatives refuted
 tests/fixtures/           captured boards, seeded sweeps, and the game's own
                           vision array
 harness/fixtures/         mGBA save states parked at target-select, so a sweep
@@ -498,8 +523,9 @@ tools/verify_corpus.py    computes provenance.verified_against_emulator by
 tools/extract_tables.py   ROM -> damage JSON, 17 structural assertions
 tools/extract_movecost.py ROM -> movement cost JSON
 tools/extract_terrain.py  ROM -> terrain JSON, 121 structural assertions
-tools/extract_co.py       ROM -> CO records, 667 structural assertions
+tools/extract_co.py       ROM -> CO records, 724 structural assertions
 tools/extract_units.py    ROM -> unit stats, 179 structural assertions
+tools/extract_supply.py   ROM -> supply/repair/burn tables, 78 assertions
 tools/quote.py            CLI: quote a single matchup
 tools/battle_plan.py      which battles to record, by expected information
 tools/plan_sim.py         simulate recording strategies before spending time

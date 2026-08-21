@@ -85,10 +85,11 @@ local function dump_fixture(path, note)
       local loaded = (fl % 16 >= 8) or (fl % 8 - fl % 2 == 2)
       units[#units + 1] = string.format(
         '    {"slot": %d, "player": %d, "type": "%s", "x": %d, "y": %d, ' ..
-        '"hp": %d, "ammo": %d, "capture": %d, "fuel": 99, "acted": %s, ' ..
+        '"hp": %d, "ammo": %d, "capture": %d, "fuel": %d, "acted": %s, ' ..
         '"carrying": false, "loaded": %s}',
         s, s <= 64 and 1 or 2, NAMES[ty], r8(a + 2), r8(a + 3),
         raw % 128, math.floor(raw / 128) % 16, math.floor(raw / 2048),
+        r8(a + 6) % 128,
         fl % 2 == 1 and "true" or "false", loaded and "true" or "false")
     end
   end

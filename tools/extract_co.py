@@ -47,8 +47,10 @@ cannot pass again.
 Kanbei's header pair at +08/+09 (120/120) is NOT an attack/defence pair: the
 damage path applies +11/+12 (A14), while +08 is the unit-VALUE multiplier the
 CO power charge path reads (DERIVATION 27) -- the same 20% that makes his
-deployments cost more. The power system itself (true header, costs, descriptor
-table) is extracted into 'power_meta'; see DERIVATION 27.
+deployments cost more -- and +09 is the property-REPAIR cost multiplier the
+repair routine reads (DERIVATION 33), the same 20% again on the repair bill.
+The power system itself (true header, costs, descriptor table) is extracted
+into 'power_meta'; see DERIVATION 27.
 """
 import json, hashlib, pathlib, sys, struct
 
@@ -114,8 +116,10 @@ HEADER_NOTES = {
                "charge path reads +08 (record +0x2C) and multiplies the "
                "unit's cost/10 by it (0x0802D344), which is how Kanbei's "
                "120/120 makes his units worth 20% more meter charge -- the "
-               "same pair that makes his deployments cost more. +09 has not "
-               "been observed in any code path yet.",
+               "same pair that makes his deployments cost more. +09 (record "
+               "+0x2D) is the property-REPAIR cost multiplier, read at "
+               "0x08029E5E: Kanbei pays 840 a bar for a Tank where everyone "
+               "else pays 700, measured (DERIVATION 33).",
     "+0A": "heal adjustment: added to Andy-power heal (2 + this + pool[+4], "
            "read at 0x0801C314). Zero on every record.",
     "+0D": "capture-rate shift (A15); 7 on Sami only.",

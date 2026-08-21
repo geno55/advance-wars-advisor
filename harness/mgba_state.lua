@@ -201,6 +201,13 @@ function state(path, probe)
   local fogv = emu:read8(FOG_ADDR)
   w_(string.format('  "fog": %s, "fog_raw": %d,',
     (fogv ~= 0) and "true" or "false", fogv))
+  -- settings +0x47: nonzero = property repairs are free (the turn-start
+  -- walker hands `1 - this` to the repair routine as its charge flag,
+  -- 0x0802A4D8 -- DERIVATION 33). Raw byte shipped for the same reason as
+  -- fog_raw.
+  local repfree = emu:read8(0x03004357)
+  w_(string.format('  "repair_free": %s, "repair_free_raw": %d,',
+    (repfree ~= 0) and "true" or "false", repfree))
 
   -- armies: 1-indexed, record 0 is a dummy
   w_('  "armies": [')
