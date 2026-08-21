@@ -1868,3 +1868,76 @@ merged unit on a board where the target is gone, and the turn-start facts
 of the survivor. `tests/fixtures/join_probes.json` holds the rows;
 `tests/test_join.py` replays them and refutes the internal-sum, lost-excess
 and mover-keeps-capture readings.
+
+
+## 35. Unloading: the transport's table, the passenger's feet, and the tile it just left
+
+The last unit action `actions.py` had refused. Two reasons were on record:
+the reader's single cargo slot, and a rule never put in front of the game.
+Both are closed.
+
+### The read
+
+The action-menu table carries two Drop records (`0x0828BB20`/`BB40`), one
+per cargo slot — their predicates differ only in reading record `+7` or
+`+8`, which also settles the **second cargo slot at `+8`** the Cruiser's
+turn-start cargo walker (DERIVATION 33) had already indexed as `+7+i`. The
+reader dumps `cargo2` now and `transport_has_room` counts both slots. Each
+predicate wants two things:
+
+- the TRANSPORT standing on a terrain its cargo struct flags at
+  `+0x1A+terrain` — the struct's "unidentified" tail, now `unload_from` in
+  the unit-stats extraction: APC anywhere but river/mountain (which it
+  cannot reach anyway), TCopter river and mountain too, **Lander port and
+  shoal only**, Cruiser sea/port/reef plus a river and a shoal it can
+  never stand on — authored over the whole terrain space, like the
+  Lander's cargo mask;
+- at least one neighbour qualifying under `0x080255EC`: in bounds, EMPTY in
+  the tile→unit index, and the **PASSENGER's** stats `+0x4C+terrain` byte
+  ≥ 0. That `+0x4C` block is a per-unit passability table whose SIGN
+  matches the clear movement table on every real terrain (asserted at
+  extraction) but whose magnitudes do not (tires read 4 on Wood where
+  movement says 3) — it is consulted for standing, not moving.
+
+The executors set the slot index and hand off to the drop phase; the apply
+writes are the passenger's flags = acted with the loaded bit cleared
+(`0x0802642E`), its position (`0x08026444/58`), the transport's slot zeroed
+(`0x08026462`) and its carrying bit cleared (`0x08026484`), then the
+ordinary move applier — so the transport is acted too: one drop per turn.
+
+### The drives
+
+Seven cases, APC69 and its Infantry on the slot-2 fixture:
+
+- in place, and after a move: the passenger lands on the selector's
+  default (north), acted, fuel and hp untouched; the transport ends
+  acted with the slot and carrying bit clear.
+- sea written east and west, a Tank real-moved north: the selector held
+  only the south tile and the Infantry landed there — occupancy and
+  terrain both measured in one row.
+- sea on all four sides: the Drop item is gone, the menu reads `[Wait]`.
+- the passenger typed Tank with mountains north and south: only the road
+  east was offered — the PASSENGER's passability, since the APC itself
+  could not enter a mountain in either case; the Infantry control took
+  the mountain.
+- **the origin tile is free**: the APC moved one tile west with sea on its
+  other three neighbours, Drop was still offered, and the Infantry landed
+  on the tile the APC had just left. The index the predicate reads has the
+  mover already gone — `drop_tiles()` ignores the transport's own record
+  accordingly.
+
+Unmeasured and stated as such: the selector's default tile (north in every
+drive with north free; the mask order is W,E,N,S, so the default is not the
+mask's first bit — left as a recorded observation, not a rule), and the
+second-slot drop itself, which no fixture can reach without fabricating a
+loaded state; the model carries it from the two-record read.
+
+### What shipped
+
+`unload_from` and `can_stand` in `data/aw1_unit_stats.json` (extractor
+assertions grew to 402), `cargo2` through reader, `Board` and pathing,
+`engine/unload.py`, DROP actions in `actions.py` — one per passenger and
+landing tile, with the dropped unit's exposure and turn-start facts — the
+seven rows in `tests/fixtures/drop_probes.json`, `tests/test_unload.py`,
+and the report. The "WHAT IS NOT MODELLED" list is down to production and
+power activation, both army actions.

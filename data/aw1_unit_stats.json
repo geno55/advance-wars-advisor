@@ -47,14 +47,16 @@
     "+0x17": "u8 target class bitfield (1 air, 2 naval, 4 ground, 8 sub)",
     "+0x18": "u16 cost/10",
     "+0x20": "u32 pointer to a cargo struct, nonzero only on transports",
-    "+0x38": "u8 fuel burned per turn",
+    "+0x38": "u8 fuel burned per turn (first of a uniform 20-byte per-terrain block)",
+    "+0x4C": "s8[20] per-terrain can-stand block, read by the drop validity check (>= 0 passable); sign agrees with the clear movement table on real terrains",
     "+0x60": "u8 movement type, indexes aw1_movecost movement_types"
   },
   "cargo_struct": {
     "_comment": "Four structs 0x30 apart, reached from unit +0x20. Exactly the shape the design called for -- a capacity plus an allowed-cargo-type mask, no per-unit-type code.",
     "+0x00": "u8 capacity",
     "+0x01..+0x18": "24-byte allowed-cargo mask, indexed by the 1-BASED unit type (entry k is unit id k-1), the same off-by-one as the damage matrices",
-    "+0x19..+0x2F": "unidentified; sparse and different per transport",
+    "+0x1A..+0x2D": "per-terrain UNLOAD-FROM table, read by the Drop predicate at 0x080259FC: nonzero = may unload while standing on that terrain (DERIVATION 35)",
+    "+0x19, +0x2E..+0x2F": "unidentified, zero on all four",
     "note": "Lander's mask also sets four vestigial ids (3, 7, 8, 12). Harmless -- no unit has those ids -- but it means the mask was authored over the full 24-slot space, not the 18 real units, so do not use it to infer which ids are real."
   },
   "unidentified": [
@@ -62,7 +64,7 @@
     "+0x0F holds 1..4 with no pattern that matches any known grouping",
     "+0x13 and +0x1D are nonzero for exactly the same eight units (Infantry, Mech, MdTank, Tank, Recon, Fighter, BCopter, Cruiser) -- a flag and a value for one feature, but not the secondary-weapon set, which would exclude Fighter",
     "+0x15, +0x16, +0x1A, +0x1C, +0x1E unknown",
-    "+0x38 onward repeats the same per-turn fuel value across many offsets; only +0x38 is read here"
+    "+0x38..+0x4B is the per-terrain burn block and +0x24..+0x37 the per-terrain service block -- both read by tools/extract_supply.py"
   ],
   "units": {
     "Infantry": {
@@ -82,6 +84,24 @@
       "targeted_as": "ground",
       "armed": true,
       "can_move_and_fire": true,
+      "can_stand": [
+        1,
+        2,
+        3,
+        4,
+        5,
+        6,
+        8,
+        10,
+        11,
+        12,
+        13,
+        14,
+        15,
+        16,
+        17,
+        18
+      ],
       "capacity": 0,
       "carries": []
     },
@@ -102,6 +122,24 @@
       "targeted_as": "ground",
       "armed": true,
       "can_move_and_fire": true,
+      "can_stand": [
+        1,
+        2,
+        3,
+        4,
+        5,
+        6,
+        8,
+        10,
+        11,
+        12,
+        13,
+        14,
+        15,
+        16,
+        17,
+        18
+      ],
       "capacity": 0,
       "carries": []
     },
@@ -122,6 +160,22 @@
       "targeted_as": "ground",
       "armed": true,
       "can_move_and_fire": true,
+      "can_stand": [
+        1,
+        4,
+        5,
+        6,
+        8,
+        10,
+        11,
+        12,
+        13,
+        14,
+        15,
+        16,
+        17,
+        18
+      ],
       "capacity": 0,
       "carries": []
     },
@@ -142,6 +196,22 @@
       "targeted_as": "ground",
       "armed": true,
       "can_move_and_fire": true,
+      "can_stand": [
+        1,
+        4,
+        5,
+        6,
+        8,
+        10,
+        11,
+        12,
+        13,
+        14,
+        15,
+        16,
+        17,
+        18
+      ],
       "capacity": 0,
       "carries": []
     },
@@ -162,6 +232,22 @@
       "targeted_as": "ground",
       "armed": true,
       "can_move_and_fire": true,
+      "can_stand": [
+        1,
+        4,
+        5,
+        6,
+        8,
+        10,
+        11,
+        12,
+        13,
+        14,
+        15,
+        16,
+        17,
+        18
+      ],
       "capacity": 0,
       "carries": []
     },
@@ -182,13 +268,45 @@
       "targeted_as": "ground",
       "armed": false,
       "can_move_and_fire": null,
+      "can_stand": [
+        1,
+        4,
+        5,
+        6,
+        8,
+        10,
+        11,
+        12,
+        13,
+        14,
+        15,
+        16,
+        17,
+        18
+      ],
       "capacity": 1,
       "carries": [
         "Infantry",
         "Mech"
       ],
       "carries_vestigial_ids": [],
-      "cargo_struct": "0x282ddc"
+      "cargo_struct": "0x282ddc",
+      "unload_from": [
+        1,
+        4,
+        5,
+        6,
+        8,
+        10,
+        11,
+        12,
+        13,
+        14,
+        15,
+        16,
+        17,
+        18
+      ]
     },
     "Artillery": {
       "id": 9,
@@ -207,6 +325,22 @@
       "targeted_as": "ground",
       "armed": true,
       "can_move_and_fire": false,
+      "can_stand": [
+        1,
+        4,
+        5,
+        6,
+        8,
+        10,
+        11,
+        12,
+        13,
+        14,
+        15,
+        16,
+        17,
+        18
+      ],
       "capacity": 0,
       "carries": []
     },
@@ -227,6 +361,22 @@
       "targeted_as": "ground",
       "armed": true,
       "can_move_and_fire": false,
+      "can_stand": [
+        1,
+        4,
+        5,
+        6,
+        8,
+        10,
+        11,
+        12,
+        13,
+        14,
+        15,
+        16,
+        17,
+        18
+      ],
       "capacity": 0,
       "carries": []
     },
@@ -247,6 +397,22 @@
       "targeted_as": "ground",
       "armed": true,
       "can_move_and_fire": true,
+      "can_stand": [
+        1,
+        4,
+        5,
+        6,
+        8,
+        10,
+        11,
+        12,
+        13,
+        14,
+        15,
+        16,
+        17,
+        18
+      ],
       "capacity": 0,
       "carries": []
     },
@@ -267,6 +433,22 @@
       "targeted_as": "ground",
       "armed": true,
       "can_move_and_fire": false,
+      "can_stand": [
+        1,
+        4,
+        5,
+        6,
+        8,
+        10,
+        11,
+        12,
+        13,
+        14,
+        15,
+        16,
+        17,
+        18
+      ],
       "capacity": 0,
       "carries": []
     },
@@ -287,6 +469,28 @@
       "targeted_as": "air",
       "armed": true,
       "can_move_and_fire": true,
+      "can_stand": [
+        0,
+        1,
+        2,
+        3,
+        4,
+        5,
+        6,
+        7,
+        8,
+        9,
+        10,
+        11,
+        12,
+        13,
+        14,
+        15,
+        16,
+        17,
+        18,
+        19
+      ],
       "capacity": 0,
       "carries": []
     },
@@ -307,6 +511,28 @@
       "targeted_as": "air",
       "armed": true,
       "can_move_and_fire": true,
+      "can_stand": [
+        0,
+        1,
+        2,
+        3,
+        4,
+        5,
+        6,
+        7,
+        8,
+        9,
+        10,
+        11,
+        12,
+        13,
+        14,
+        15,
+        16,
+        17,
+        18,
+        19
+      ],
       "capacity": 0,
       "carries": []
     },
@@ -327,6 +553,28 @@
       "targeted_as": "air",
       "armed": true,
       "can_move_and_fire": true,
+      "can_stand": [
+        0,
+        1,
+        2,
+        3,
+        4,
+        5,
+        6,
+        7,
+        8,
+        9,
+        10,
+        11,
+        12,
+        13,
+        14,
+        15,
+        16,
+        17,
+        18,
+        19
+      ],
       "capacity": 0,
       "carries": []
     },
@@ -347,13 +595,53 @@
       "targeted_as": "air",
       "armed": false,
       "can_move_and_fire": null,
+      "can_stand": [
+        0,
+        1,
+        2,
+        3,
+        4,
+        5,
+        6,
+        7,
+        8,
+        9,
+        10,
+        11,
+        12,
+        13,
+        14,
+        15,
+        16,
+        17,
+        18,
+        19
+      ],
       "capacity": 1,
       "carries": [
         "Infantry",
         "Mech"
       ],
       "carries_vestigial_ids": [],
-      "cargo_struct": "0x282e0c"
+      "cargo_struct": "0x282e0c",
+      "unload_from": [
+        1,
+        2,
+        3,
+        4,
+        5,
+        6,
+        8,
+        10,
+        11,
+        12,
+        13,
+        14,
+        15,
+        16,
+        17,
+        18
+      ]
     },
     "Battleship": {
       "id": 20,
@@ -372,6 +660,11 @@
       "targeted_as": "naval",
       "armed": true,
       "can_move_and_fire": false,
+      "can_stand": [
+        7,
+        11,
+        19
+      ],
       "capacity": 0,
       "carries": []
     },
@@ -392,13 +685,25 @@
       "targeted_as": "naval",
       "armed": true,
       "can_move_and_fire": true,
+      "can_stand": [
+        7,
+        11,
+        19
+      ],
       "capacity": 2,
       "carries": [
         "BCopter",
         "TCopter"
       ],
       "carries_vestigial_ids": [],
-      "cargo_struct": "0x282e6c"
+      "cargo_struct": "0x282e6c",
+      "unload_from": [
+        2,
+        7,
+        11,
+        13,
+        19
+      ]
     },
     "Lander": {
       "id": 22,
@@ -417,6 +722,12 @@
       "targeted_as": "naval",
       "armed": false,
       "can_move_and_fire": null,
+      "can_stand": [
+        7,
+        11,
+        13,
+        19
+      ],
       "capacity": 2,
       "carries": [
         "Infantry",
@@ -436,7 +747,11 @@
         8,
         12
       ],
-      "cargo_struct": "0x282e3c"
+      "cargo_struct": "0x282e3c",
+      "unload_from": [
+        11,
+        13
+      ]
     },
     "Sub": {
       "id": 23,
@@ -455,6 +770,11 @@
       "targeted_as": "sub",
       "armed": true,
       "can_move_and_fire": true,
+      "can_stand": [
+        7,
+        11,
+        19
+      ],
       "capacity": 0,
       "carries": []
     }

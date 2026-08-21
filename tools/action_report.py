@@ -117,6 +117,12 @@ def print_unit(board, unit, acts, limit=6):
               f"({a.tile[0]},{a.tile[1]}); the ride "
               f"{exposure_phrase(a.exposure)} (you go with it)")
 
+    for a in (a for a in acts if a.kind == "drop"):
+        print(f"  drop {a.target.type} #{a.target.slot} at "
+              f"({a.drop_tile[0]},{a.drop_tile[1]}) from "
+              f"({a.tile[0]},{a.tile[1]}); it lands acted, "
+              f"{exposure_phrase(a.exposure)}{turn_start_phrase(a)}")
+
     for a in (a for a in acts if a.kind == "join"):
         m = a.merge
         extra = f", refund {m.refund}" if m.refund else ""
@@ -166,6 +172,9 @@ def summary_line(board, unit, acts):
                        else f" ({soonest.capture_turns_left} turns)"))
     if loads:
         bits.append(f"{len(loads)} transport(s) in reach")
+    drops = [a for a in acts if a.kind == "drop"]
+    if drops:
+        bits.append(f"can drop onto {len({a.drop_tile for a in drops})} tile(s)")
     joins = [a for a in acts if a.kind == "join"]
     if joins:
         bits.append(f"can join {len({a.target.slot for a in joins})} unit(s)")

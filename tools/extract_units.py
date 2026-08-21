@@ -32,6 +32,14 @@ is still unknown -- see UNIDENTIFIED at the bottom of the emitted JSON)
     +0x17  u8   target class bitfield: 1 air, 2 naval, 4 ground, 8 sub
     +0x18  u16  cost / 10
     +0x38  u8   fuel burned per turn (0 ground, 2 copters, 5 planes, 1 naval)
+                -- the first of a 20-byte per-terrain block, uniform; see
+                tools/extract_supply.py, which also reads +0x24 (service)
+    +0x4C  s8[20] per-terrain CAN-STAND block: the drop-tile validity check at
+                0x0802564A reads stats[cargo]+0x4C+terrain and accepts >= 0
+                (DERIVATION 35). Signs agree with the clear movement table
+                on every real terrain (asserted); the magnitudes are NOT the
+                clear costs everywhere (tires read 4 on Wood where the
+                movement table says 3) and are not used for movement.
     +0x60  u8   movement type, indexing aw1_movecost.json movement_types
 
 ON canMoveAndFire: there is no such flag anywhere in the record. AW1's rule is
@@ -149,6 +157,9 @@ def main(rom_path, out_path):
             "can_move_and_fire": (rec[0x11] <= 1) if rec[0x11] > 0 else None,
         }
 
+        u["can_stand"] = [t for t in range(20)
+                          if struct.unpack_from("<b", rec, 0x4C + t)[0] >= 0]
+
         check(u["cost"] == COSTS[name],
               f"{name} cost {u['cost']}, build menu says {COSTS[name]}")
         check(rec[0x60] < len(move_types),
@@ -188,9 +199,15 @@ def main(rom_path, out_path):
             u["carries_vestigial_ids"] = [k - 1 for k in range(24)
                                           if rom[c + 1 + k] and (k - 1) not in UNIT_IDS]
             u["cargo_struct"] = hex(c)
+            # +0x1A..+0x2D: the per-terrain UNLOAD-FROM table the Drop
+            # predicate reads at 0x080259FC (cargo struct +0x1A + terrain):
+            # nonzero means the transport may unload while standing there.
+            u["unload_from"] = [t for t in range(20) if rom[c + 0x1A + t]]
             check(1 <= u["capacity"] <= 2,
                   f"{name} capacity {u['capacity']} outside 1..2")
             check(bool(u["carries"]), f"{name} is a transport that carries nothing")
+            check(bool(u["unload_from"]),
+                  f"{name} is a transport that can unload nowhere")
         else:
             u["capacity"] = 0
             u["carries"] = []
@@ -242,6 +259,31 @@ def main(rom_path, out_path):
             check(not v["carries"],
                   f"{name} is not a transport but lists cargo")
 
+    # -- the can-stand block agrees in SIGN with the clear movement table on
+    # -- every real terrain id (vestigial ids 15..18 and Out differ, unused)
+    clear = next(t for t in mc["tables"] if t["weather"] == "Clear")
+    real_terrains = [int(k) for k in mc["terrain_columns"]]
+    for name, v in units.items():
+        row = clear["costs"][v["move_type"]]
+        for t in real_terrains:
+            check((t in v["can_stand"]) == (row[t] != 255),
+                  f"{name}: can-stand block disagrees with the clear movement "
+                  f"table on terrain {t}")
+    # unload-from: the APC's set is inside the TCopter's (the copter adds
+    # River and Mountain), the Lander unloads from Port and Shoal only, and
+    # no transport unloads from a terrain it cannot stand on itself
+    check(set(units["APC"]["unload_from"]) < set(units["TCopter"]["unload_from"]),
+          "APC unload-from should be a strict subset of the TCopter's")
+    check(units["Lander"]["unload_from"] == [11, 13],
+          f"Lander should unload from Port and Shoal, got "
+          f"{units['Lander']['unload_from']}")
+    # The Cruiser's table flags River and Shoal as well as Sea/Port/Reef --
+    # two terrains no ship stands on, so the table was authored over the
+    # whole terrain space (like the Lander's cargo mask) and is not derived
+    # from the transport's own passability. Recorded, not asserted.
+    check(set(units["Cruiser"]["unload_from"]) >= {7, 11, 19},
+          "Cruiser should unload from Sea, Port and Reef at least")
+
     print(f"{checks} structural assertions passed")
     print("cross-check passed: armed/unarmed agrees with the damage matrices")
     print("cargo sets match groupings derived from the unit table itself")
@@ -291,7 +333,11 @@ def main(rom_path, out_path):
             "+0x17": "u8 target class bitfield (1 air, 2 naval, 4 ground, 8 sub)",
             "+0x18": "u16 cost/10",
             "+0x20": "u32 pointer to a cargo struct, nonzero only on transports",
-            "+0x38": "u8 fuel burned per turn",
+            "+0x38": "u8 fuel burned per turn (first of a uniform 20-byte "
+                     "per-terrain block)",
+            "+0x4C": "s8[20] per-terrain can-stand block, read by the drop "
+                     "validity check (>= 0 passable); sign agrees with the "
+                     "clear movement table on real terrains",
             "+0x60": "u8 movement type, indexes aw1_movecost movement_types",
         },
         "cargo_struct": {
@@ -302,7 +348,10 @@ def main(rom_path, out_path):
             "+0x01..+0x18": "24-byte allowed-cargo mask, indexed by the 1-BASED "
                             "unit type (entry k is unit id k-1), the same "
                             "off-by-one as the damage matrices",
-            "+0x19..+0x2F": "unidentified; sparse and different per transport",
+            "+0x1A..+0x2D": "per-terrain UNLOAD-FROM table, read by the Drop "
+                            "predicate at 0x080259FC: nonzero = may unload "
+                            "while standing on that terrain (DERIVATION 35)",
+            "+0x19, +0x2E..+0x2F": "unidentified, zero on all four",
             "note": "Lander's mask also sets four vestigial ids (3, 7, 8, 12). "
                     "Harmless -- no unit has those ids -- but it means the mask "
                     "was authored over the full 24-slot space, not the 18 real "
@@ -316,8 +365,8 @@ def main(rom_path, out_path):
             "-- a flag and a value for one feature, but not the secondary-weapon "
             "set, which would exclude Fighter",
             "+0x15, +0x16, +0x1A, +0x1C, +0x1E unknown",
-            "+0x38 onward repeats the same per-turn fuel value across many "
-            "offsets; only +0x38 is read here",
+            "+0x38..+0x4B is the per-terrain burn block and +0x24..+0x37 the "
+            "per-terrain service block -- both read by tools/extract_supply.py",
         ],
         "units": units,
     }

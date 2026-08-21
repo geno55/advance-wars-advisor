@@ -1,0 +1,183 @@
+{
+  "_comment": [
+    "Measured unloads (DERIVATION 35). Fixture: savestate slot 2, P2 active;",
+    "APC69 at (12,7) carrying Infantry 66 (cargo slot +7). Each case reloads,",
+    "writes the named terrain/type, selects the APC (optionally moving it),",
+    "picks Drop -- the top item -- and confirms the selector's default tile.",
+    "Write-PCs: cargo flags 0x0802642E (acted, loaded bit cleared), cargo",
+    "position 0x08026444/58, transport cargo slot cleared 0x08026462,",
+    "transport flags 0x08026484 (carrying bit cleared), then the ordinary",
+    "move applier (0x08026076/7C, fuel 0x080241A0, acted 0x0802609C).",
+    "Validity per tile (0x080255EC): in bounds, unit index empty, and the",
+    "CARGO type's stats +0x4C+terrain byte >= 0. The Drop item needs the",
+    "transport's cargo-struct +0x1A+terrain byte (unload-from) and at least",
+    "one valid neighbour (0x0802566C returns a direction mask)."
+  ],
+  "rom_sha1": "15053499d5b3f49128a941d7f2d84876f5424d0c",
+  "script": "mesen_drop.lua",
+  "drops": [
+    {
+      "case": "D1-in-place",
+      "apc_at": [
+        12,
+        7
+      ],
+      "cargo": "Infantry",
+      "dropped_to": [
+        12,
+        6
+      ],
+      "cargo_flags_after": 1,
+      "transport_flags_after": 1,
+      "transport_cargo_after": 0,
+      "menu": [
+        "Drop",
+        "Wait"
+      ]
+    },
+    {
+      "case": "D2-after-move",
+      "apc_move": [
+        [
+          12,
+          7
+        ],
+        [
+          10,
+          7
+        ]
+      ],
+      "cargo": "Infantry",
+      "dropped_to": [
+        10,
+        6
+      ],
+      "note": "Supply joined the menu (needy Tank adjacent)"
+    },
+    {
+      "case": "D3-sea-and-occupied",
+      "apc_at": [
+        12,
+        7
+      ],
+      "cargo": "Infantry",
+      "terrain": {
+        "11,7": 7,
+        "13,7": 7
+      },
+      "occupied": [
+        "12,6"
+      ],
+      "dropped_to": [
+        12,
+        8
+      ],
+      "valid_tiles": [
+        [
+          12,
+          8
+        ]
+      ]
+    },
+    {
+      "case": "D4-no-valid-tile",
+      "apc_at": [
+        12,
+        7
+      ],
+      "cargo": "Infantry",
+      "terrain": {
+        "11,7": 7,
+        "13,7": 7,
+        "12,6": 7,
+        "12,8": 7
+      },
+      "menu": [
+        "Wait"
+      ],
+      "offered": false
+    },
+    {
+      "case": "D5-cargo-passability",
+      "apc_at": [
+        12,
+        7
+      ],
+      "cargo": "Tank",
+      "terrain": {
+        "12,6": 3,
+        "12,8": 3,
+        "11,7": 7
+      },
+      "dropped_to": [
+        13,
+        7
+      ],
+      "valid_tiles": [
+        [
+          13,
+          7
+        ]
+      ],
+      "note": "treads cannot stand on Mountain; typed cargo, the check reads the cargo's own +0x4C block"
+    },
+    {
+      "case": "D5b-foot-on-mountain",
+      "apc_at": [
+        12,
+        7
+      ],
+      "cargo": "Infantry",
+      "terrain": {
+        "11,7": 7,
+        "13,7": 7,
+        "12,6": 3,
+        "12,8": 3
+      },
+      "dropped_to": [
+        12,
+        6
+      ],
+      "valid_tiles": [
+        [
+          12,
+          6
+        ],
+        [
+          12,
+          8
+        ]
+      ]
+    },
+    {
+      "case": "D6-origin-tile-is-free",
+      "apc_move": [
+        [
+          12,
+          7
+        ],
+        [
+          11,
+          7
+        ]
+      ],
+      "cargo": "Infantry",
+      "terrain": {
+        "10,7": 7,
+        "11,6": 7,
+        "11,8": 7
+      },
+      "dropped_to": [
+        12,
+        7
+      ],
+      "valid_tiles": [
+        [
+          12,
+          7
+        ]
+      ],
+      "note": "the only valid neighbour was the tile the APC had just left; Drop was offered and the Infantry landed there"
+    }
+  ]
+}

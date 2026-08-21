@@ -56,7 +56,12 @@ class Unit:
     carrying: bool
     loaded: bool     # sitting inside a transport
     state: int       # raw +1 byte, kept so unrecognised bits stay visible
-    cargo: int       # slot of the carried unit, 0 = empty
+    cargo: int       # slot of the carried unit in record +7, 0 = empty
+    # Second cargo slot, record +8 -- the Lander's and Cruiser's second
+    # passenger (the Cruiser's cargo walker and the second Drop predicate
+    # both index +7+i, DERIVATION 33/35). 0 = empty; dumps that predate
+    # the field load as 0.
+    cargo2: int = 0
 
     @property
     def bars(self) -> int:
@@ -212,7 +217,7 @@ class Board:
         transport, so two records legitimately share a tile. Returning the
         passenger would make a transport look like an infantryman.
         """
-        carried = {u.cargo for u in self.units if u.cargo}
+        carried = {c for u in self.units for c in (u.cargo, u.cargo2) if c}
         return next((u for u in self.units
                      if u.x == x and u.y == y and u.slot not in carried), None)
 
@@ -246,7 +251,8 @@ def load(path) -> Board:
                     u["hp"], u["ammo"], u.get("capture", 0), u["fuel"],
                     u.get("acted", False), u.get("carrying", False),
                     u.get("loaded", False),
-                    u.get("state", 0), u.get("cargo", 0))
+                    u.get("state", 0), u.get("cargo", 0),
+                    u.get("cargo2", 0))
                for u in raw["units"]],
         armies=[Army(a["player"], a["funds"], a["income"], a.get("power", 0),
                      a.get("co_id"), a.get("power_active", False))
@@ -349,7 +355,7 @@ def summarise(b: Board) -> str:
             continue
         out.append(f"  P{a.player}: {a.funds} funds (+{a.income}), "
                    f"power {a.power}, {len(us)} units, {len(props)} properties")
-        carried = {x.cargo for x in b.units if x.cargo}
+        carried = {c for x in b.units for c in (x.cargo, x.cargo2) if c}
         for u in sorted(us, key=lambda u: (u.y, u.x)):
             if u.slot in carried:
                 continue        # listed under its transport instead

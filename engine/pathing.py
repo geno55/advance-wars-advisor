@@ -31,12 +31,11 @@ WHAT IS NOT MODELLED, deliberately and visibly
 
   * Fog of war, and therefore movement being interrupted by discovering a
     hidden unit. The state reader does not report fog.
-  * Joining two damaged units of the same type on one tile.
-  * A second passenger. The unit record exposes ONE cargo slot at +7, so a
-    Lander at capacity 2 that is already carrying something reads as full. See
-    `transport_has_room`. This under-reports destinations rather than inventing
-    them, which is the safe direction, but it is a real limitation and it comes
-    from the reader, not from here.
+  * Joining two damaged units of the same type on one tile -- that is an
+    ACTION, enumerated by engine/actions.py from reachable() and the pair rule
+    (DERIVATION 34); destinations() keeps refusing the friendly's tile.
+  * (Closed in DERIVATION 35: the second cargo slot is record +8, the reader
+    dumps it as `cargo2`, and `transport_has_room` counts both.)
 """
 from __future__ import annotations
 
@@ -76,14 +75,16 @@ def allowance(unit) -> int:
 def transport_has_room(board, transport, passenger_type: str) -> bool:
     """Whether `transport` can accept a unit of this type right now.
 
-    Capacity and the permitted cargo types are both ROM data. The occupancy
-    check is the weak part: the unit record exposes a single cargo slot, so a
-    capacity-2 transport that is already carrying one unit is treated as full.
+    Capacity and the permitted cargo types are both ROM data, and so are the
+    two cargo slots: record +7 and +8 (DERIVATION 35), so a capacity-2
+    transport with one passenger still has room.
     """
     st = unit_stats(transport.type)
     if not st["capacity"] or passenger_type not in st["carries"]:
         return False
-    return transport.cargo == 0
+    aboard = sum(1 for c in (transport.cargo, getattr(transport, "cargo2", 0))
+                 if c)
+    return aboard < st["capacity"]
 
 
 def _occupancy(board) -> Dict[Coord, object]:
@@ -93,7 +94,8 @@ def _occupancy(board) -> Dict[Coord, object]:
     so two records legitimately share a tile; counting the passenger would make
     a transport's tile look doubly blocked.
     """
-    carried = {u.cargo for u in board.units if u.cargo}
+    carried = {c for u in board.units
+               for c in (u.cargo, getattr(u, "cargo2", 0)) if c}
     return {(u.x, u.y): u for u in board.units if u.slot not in carried}
 
 

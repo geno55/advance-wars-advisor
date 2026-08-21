@@ -283,6 +283,18 @@ fixtures, and in this file's git history.
   record survives acted and the target's type byte is zeroed
   (`0x08026710`). A full-HP target refuses the destination outright.
 
+- **Unloading, whole** (DERIVATION 35; fixture `drop_probes.json`). The
+  Drop item needs the TRANSPORT on a terrain its cargo-struct
+  `+0x1A+terrain` byte flags (`unload_from`: Lander port/shoal only) and
+  one neighbour that is in bounds, empty in the tile index, and on which
+  the PASSENGER's stats `+0x4C+terrain` byte is ≥ 0 (`can_stand`; a
+  Tank-typed cargo refused the mountain its Infantry twin accepted). The
+  passenger lands acted, loaded bit cleared, hp/fuel/ammo untouched; the
+  transport's slot and carrying bit clear and it is acted — one drop a
+  turn. The tile the transport just vacated is free (it dropped back onto
+  it). Cargo slot 2 is record `+8` (the second Drop predicate reads it);
+  the reader dumps it as `cargo2`.
+
 ## Assumed — these are the ones that will bite
 
 Nothing, currently. Every assumption this file has carried is either in
@@ -327,10 +339,14 @@ A16, both born the day action enumeration was written.
   preserves it (`0x08023A68`, `0x08029D6E`), and a written bit 7 rides
   through a full turn untouched (fixture row B4). What, if anything, sets
   or reads it has not been found.
-- **Unloading, production** — the turn mechanics `engine/actions.py`
-  declines to offer rather than guess; each is named in its docstring with
-  the reason. (Supply, repair and fuel burn left this bullet for Established
-  via DERIVATION 33, joining via DERIVATION 34.)
+- **Production** — the one unit-adjacent mechanic `engine/actions.py` still
+  declines to offer rather than guess; named in its docstring with the
+  reason. (Supply, repair and fuel burn left this bullet for Established via
+  DERIVATION 33, joining via 34, unloading via 35.)
+- **The drop selector's default tile.** Every drive with the north tile
+  free landed north, and the validity mask is ordered W,E,N,S — so the
+  default is not the mask's first bit and is not modelled; the advisor
+  offers every valid tile instead.
 
 ## Retired — measured, and compressed into Established above
 

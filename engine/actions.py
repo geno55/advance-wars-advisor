@@ -60,10 +60,16 @@ WHAT IS MODELLED
     target -- all measured (DERIVATION 34, engine/join.py). The exposure is
     the MERGED unit's on that tile, on the board with the target gone.
 
+  * DROP a passenger from any destination the transport's unload-from table
+    allows, onto any neighbour the PASSENGER can stand on and nobody
+    occupies -- the three table parts and the occupancy check measured in
+    DERIVATION 35 (engine/unload.py); the tile the transport just left is
+    free. One action per (passenger, tile); both cargo slots are read now.
+    The exposure is the dropped unit's, on its tile, with the transport
+    parked beside it.
+
 WHAT IS NOT MODELLED, deliberately and visibly
 
-  * Unloading. The reader's single cargo slot under-reports a transport's
-    state, so it is not offered rather than offered wrongly.
   * Production. Buying units is the army's action, not a unit's, and the
     factory rules have not been measured. A later module.
   * CO power activation. The whole system is modelled in engine/co.py --
@@ -100,6 +106,7 @@ from typing import Dict, List, Optional, Tuple
 try:                                    # imported as engine.actions by tools/
     from . import co as co_mod
     from . import damage, join as join_mod, pathing, supply as supply_mod, threat
+    from . import unload as unload_mod
 except ImportError:                     # imported as actions, engine/ on path
     import co as co_mod
     import damage
@@ -107,6 +114,7 @@ except ImportError:                     # imported as actions, engine/ on path
     import pathing
     import supply as supply_mod
     import threat
+    import unload as unload_mod
 
 Coord = Tuple[int, int]
 DATA = pathlib.Path(__file__).resolve().parent.parent / "data"
@@ -132,11 +140,14 @@ def _capturable() -> frozenset:
 class Action:
     """One legal thing one unit can do this turn, with the facts attached.
 
-    `kind` is one of "attack", "capture", "join", "load", "supply", "wait".
-    The optional fields are populated per kind and None/zero otherwise:
+    `kind` is one of "attack", "capture", "drop", "join", "load", "supply",
+    "wait". The optional fields are populated per kind and None/zero
+    otherwise:
 
       attack   target (the enemy unit), strike, counter, hp_after
       capture  target=None; progress_after, captures_now, capture_turns_left
+      drop     target (the passenger), drop_tile (where it lands, acted);
+               exposure and turn_start describe the PASSENGER there
       join     target (the friendly merged into); hp_after, fuel_after and
                merge (join.Merge: ammo, refund, inherited capture progress)
       load     target (the transport); exposure describes the TRANSPORT
@@ -172,6 +183,7 @@ class Action:
     turn_start: Optional[object] = None        # supply.TurnStart
     supplies: Tuple = ()                       # SupplyFill per refilled unit
     merge: Optional[object] = None             # join.Merge on a join
+    drop_tile: Optional[Coord] = None          # where a drop lands
 
 
 @dataclass(frozen=True)
@@ -309,6 +321,30 @@ def _merged_board(board, unit, partner, m):
     return dataclasses.replace(board, units=units, vision=None), me
 
 
+def _dropped_board(board, transport, passenger, tile, land):
+    """The board after a drop: transport on `tile` (slot freed, acted), the
+    passenger standing on `land`, acted; everything else unchanged."""
+    units = []
+    walker = None
+    for u in board.units:
+        if u.slot == transport.slot:
+            kw = dict(x=tile[0], y=tile[1], acted=True)
+            if u.cargo == passenger.slot:
+                kw["cargo"] = 0
+            elif getattr(u, "cargo2", 0) == passenger.slot:
+                kw["cargo2"] = 0
+            left = kw.get("cargo", u.cargo) or kw.get("cargo2",
+                                                      getattr(u, "cargo2", 0))
+            units.append(dataclasses.replace(u, carrying=bool(left), **kw))
+        elif u.slot == passenger.slot:
+            walker = dataclasses.replace(u, x=land[0], y=land[1], loaded=False,
+                                         acted=True)
+            units.append(walker)
+        else:
+            units.append(u)
+    return dataclasses.replace(board, units=units, vision=None), walker
+
+
 # --------------------------------------------------------------------------
 # enumeration
 # --------------------------------------------------------------------------
@@ -347,8 +383,8 @@ def _co_of(board, player, co_ids):
         return None
 
 
-_KIND_ORDER = {"attack": 0, "capture": 1, "join": 2, "supply": 3, "load": 4,
-               "wait": 5}
+_KIND_ORDER = {"attack": 0, "capture": 1, "join": 2, "drop": 3, "supply": 4,
+               "load": 5, "wait": 6}
 
 
 def _neighbours(board, tile):
@@ -501,6 +537,34 @@ def actions_for(board, unit, *, co_ids: Optional[dict] = None,
                 captures_now=gained >= remaining,
                 capture_turns_left=-(-remaining // max(1, gained)),
                 **facts(tile)))
+
+    # -- drops ------------------------------------------------------------------
+    # one action per (passenger, landing tile), on every destination the
+    # transport's unload-from table allows; the transport's own origin
+    # counts as free (the game dropped onto it -- fixture row D6).
+    passengers = [board.cargo_of(unit)] if unit.cargo else []
+    if getattr(unit, "cargo2", 0):
+        p2 = next((u for u in board.units if u.slot == unit.cargo2), None)
+        if p2 is not None:
+            passengers.append(p2)
+    for tile, cost in dests.items():
+        blocker = board.unit_at(*tile)
+        if blocker is not None and blocker.slot != unit.slot:
+            continue                            # a load destination, not ours
+        for p in passengers:
+            if p is None:
+                continue
+            for land in unload_mod.drop_tiles(board, unit, tile, p.type):
+                hypo, walker = _dropped_board(board, unit, p, tile, land)
+                ff = threat.focus_fire(hypo, walker, land, co_ids=co_ids,
+                                       weather=weather, fog=fog,
+                                       fog_rules=fog_rules, warnings=warnings)
+                ts = _turn_start_facts(hypo, walker, land, walker.fuel,
+                                       co_ids, warnings)
+                out.append(Action(kind="drop", unit=unit, tile=tile,
+                                  move_cost=cost, exposure=ff, target=p,
+                                  drop_tile=land, hp_after=p.hp,
+                                  turn_start=ts, **facts(tile)))
 
     # -- joins ------------------------------------------------------------------
     # destinations() refuses tiles a friendly stands on unless it is a
