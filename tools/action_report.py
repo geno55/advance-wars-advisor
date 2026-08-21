@@ -64,6 +64,28 @@ def strike_phrase(a):
     return out
 
 
+def turn_start_phrase(a):
+    """The next-morning facts on this tile, when there are any (DERIVATION 33
+    via engine/supply.py: burn, the crash at 0, property service, APC
+    auto-supply -- in the game's own order)."""
+    ts = a.turn_start
+    if ts is None:
+        return ""
+    bits = []
+    if ts.crashes:
+        return "  RUNS DRY: removed at turn start"
+    if ts.serviced:
+        heal = (f"repairs to {screen_bars(ts.hp_after)} bars"
+                + (f" for {ts.repair_spent}" if ts.repair_spent else " free")
+                if ts.hp_after > a.unit.hp else "resupplies")
+        bits.append(heal)
+    elif ts.auto_supplied:
+        bits.append("APC tops it up")
+    if not bits and ts.burn and ts.fuel_after <= 3 * ts.burn:
+        bits.append(f"fuel {ts.fuel_after} after burn")
+    return f"  [{', '.join(bits)} at turn start]" if bits else ""
+
+
 def print_unit(board, unit, acts, limit=6):
     here = (unit.x, unit.y)
     print(f"\n{unit.type} #{unit.slot} ({unit.x},{unit.y}) "
@@ -95,6 +117,15 @@ def print_unit(board, unit, acts, limit=6):
               f"({a.tile[0]},{a.tile[1]}); the ride "
               f"{exposure_phrase(a.exposure)} (you go with it)")
 
+    for a in (a for a in acts if a.kind == "supply"):
+        who = ", ".join(
+            f"{f.target.type} #{f.target.slot} (fuel {f.target.fuel}->"
+            f"{f.fuel_to}" + (f", ammo {f.target.ammo}->{f.ammo_to})"
+                              if f.ammo_to else ")")
+            for f in a.supplies)
+        print(f"  supply from ({a.tile[0]},{a.tile[1]}): fills {who} -- "
+              f"free; {exposure_phrase(a.exposure)}")
+
     waits = sorted((a for a in acts if a.kind == "wait"),
                    key=lambda a: (a.exposure.worst_damage, a.move_cost, a.tile))
     print(f"  wait ({len(waits)} tiles, least exposed first):")
@@ -102,7 +133,8 @@ def print_unit(board, unit, acts, limit=6):
         mark = " <- here" if a.tile == here else ""
         star = f"{a.stars}*" if a.stars else "  "
         print(f"    ({a.tile[0]:2d},{a.tile[1]:2d}) {a.terrain:10s} {star} "
-              f"cost {a.move_cost:2d}  {exposure_phrase(a.exposure)}{mark}")
+              f"cost {a.move_cost:2d}  {exposure_phrase(a.exposure)}"
+              f"{turn_start_phrase(a)}{mark}")
     if len(waits) > limit:
         print(f"    ... and {len(waits) - limit} more")
 
@@ -126,6 +158,10 @@ def summary_line(board, unit, acts):
                        else f" ({soonest.capture_turns_left} turns)"))
     if loads:
         bits.append(f"{len(loads)} transport(s) in reach")
+    sups = [a for a in acts if a.kind == "supply"]
+    if sups:
+        needy = len({f.target.slot for a in sups for f in a.supplies})
+        bits.append(f"can supply {needy} unit(s)")
     if waits:
         calmest = min(a.exposure.worst_damage for a in waits)
         bits.append(f"{len(waits)} tiles"
