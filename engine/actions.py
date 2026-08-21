@@ -54,12 +54,16 @@ WHAT IS MODELLED
   * LOAD into a friendly transport `destinations()` already offers. The
     exposure reported is the TRANSPORT's, because that is what a shot would
     hit -- a passenger dies with its ride.
+  * JOIN onto a damaged friendly of the same type anywhere `reachable()`
+    goes: the pair rule, the display-bar sum, the refund for bars over 10,
+    the capped fuel and ammo, the capture progress inherited from the
+    target -- all measured (DERIVATION 34, engine/join.py). The exposure is
+    the MERGED unit's on that tile, on the board with the target gone.
 
 WHAT IS NOT MODELLED, deliberately and visibly
 
-  * Unloading, and joining two damaged units. The reader's single cargo slot
-    under-reports a transport's state, and the join rule has never been put in
-    front of the game, so neither is offered rather than offered wrongly.
+  * Unloading. The reader's single cargo slot under-reports a transport's
+    state, so it is not offered rather than offered wrongly.
   * Production. Buying units is the army's action, not a unit's, and the
     factory rules have not been measured. A later module.
   * CO power activation. The whole system is modelled in engine/co.py --
@@ -95,10 +99,11 @@ from typing import Dict, List, Optional, Tuple
 
 try:                                    # imported as engine.actions by tools/
     from . import co as co_mod
-    from . import damage, pathing, supply as supply_mod, threat
+    from . import damage, join as join_mod, pathing, supply as supply_mod, threat
 except ImportError:                     # imported as actions, engine/ on path
     import co as co_mod
     import damage
+    import join as join_mod
     import pathing
     import supply as supply_mod
     import threat
@@ -127,11 +132,13 @@ def _capturable() -> frozenset:
 class Action:
     """One legal thing one unit can do this turn, with the facts attached.
 
-    `kind` is one of "attack", "capture", "load", "supply", "wait". The
-    optional fields are populated per kind and None/zero otherwise:
+    `kind` is one of "attack", "capture", "join", "load", "supply", "wait".
+    The optional fields are populated per kind and None/zero otherwise:
 
       attack   target (the enemy unit), strike, counter, hp_after
       capture  target=None; progress_after, captures_now, capture_turns_left
+      join     target (the friendly merged into); hp_after, fuel_after and
+               merge (join.Merge: ammo, refund, inherited capture progress)
       load     target (the transport); exposure describes the TRANSPORT
       supply   supplies: one SupplyFill per adjacent friendly this refills
       wait     nothing extra
@@ -164,6 +171,7 @@ class Action:
     capture_turns_left: Optional[int] = None
     turn_start: Optional[object] = None        # supply.TurnStart
     supplies: Tuple = ()                       # SupplyFill per refilled unit
+    merge: Optional[object] = None             # join.Merge on a join
 
 
 @dataclass(frozen=True)
@@ -282,6 +290,25 @@ def _loaded_board(board, unit, transport):
     return hypo, rider
 
 
+def _merged_board(board, unit, partner, m):
+    """The board after a join: the partner gone, `unit` on its tile at the
+    merged HP/fuel/ammo, carrying the partner's capture progress."""
+    units = []
+    me = None
+    for u in board.units:
+        if u.slot == partner.slot:
+            continue
+        if u.slot == unit.slot:
+            me = dataclasses.replace(u, x=partner.x, y=partner.y,
+                                     hp=m.hp_after, fuel=m.fuel_after,
+                                     ammo=m.ammo_after,
+                                     capture=m.capture_after)
+            units.append(me)
+        else:
+            units.append(u)
+    return dataclasses.replace(board, units=units, vision=None), me
+
+
 # --------------------------------------------------------------------------
 # enumeration
 # --------------------------------------------------------------------------
@@ -320,7 +347,8 @@ def _co_of(board, player, co_ids):
         return None
 
 
-_KIND_ORDER = {"attack": 0, "capture": 1, "supply": 2, "load": 3, "wait": 4}
+_KIND_ORDER = {"attack": 0, "capture": 1, "join": 2, "supply": 3, "load": 4,
+               "wait": 5}
 
 
 def _neighbours(board, tile):
@@ -473,6 +501,42 @@ def actions_for(board, unit, *, co_ids: Optional[dict] = None,
                 captures_now=gained >= remaining,
                 capture_turns_left=-(-remaining // max(1, gained)),
                 **facts(tile)))
+
+    # -- joins ------------------------------------------------------------------
+    # destinations() refuses tiles a friendly stands on unless it is a
+    # transport with room; a join ENDS on a friendly, so it comes from the
+    # pass-through reachable set instead, filtered by the pair rule.
+    if not unit.cargo and not unit.carrying:
+        for tile, cost in pathing.reachable(board, unit, weather).items():
+            if tile in dests:
+                continue
+            partner = board.unit_at(*tile)
+            if partner is None or not join_mod.can_join(unit, partner):
+                continue
+            co = _co_of(board, unit.player, co_ids)
+            try:
+                power = board.army(unit.player).power_active
+            except (StopIteration, AttributeError):
+                power = False
+            m = join_mod.merge(unit.type, mover_hp=unit.hp,
+                               target_hp=partner.hp,
+                               mover_fuel_after_move=max(0, unit.fuel - cost),
+                               target_fuel=partner.fuel, mover_ammo=unit.ammo,
+                               target_ammo=partner.ammo,
+                               target_capture=partner.capture,
+                               co_id=co, power=power)
+            hypo, me = _merged_board(board, unit, partner, m)
+            ff = threat.focus_fire(hypo, me, tile, co_ids=co_ids,
+                                   weather=weather, fog=fog,
+                                   fog_rules=fog_rules, warnings=warnings)
+            ts = _turn_start_facts(hypo, me, tile, m.fuel_after, co_ids,
+                                   warnings)
+            out.append(Action(kind="join", unit=unit, tile=tile,
+                              move_cost=cost, exposure=ff, target=partner,
+                              hp_after=m.hp_after, merge=m, turn_start=ts,
+                              terrain=board.terrain_name(*tile),
+                              stars=board.defence_for(tile[0], tile[1], my_move),
+                              fuel_after=m.fuel_after))
 
     # -- attacks ---------------------------------------------------------------
     for enemy in enemies:

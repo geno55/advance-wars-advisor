@@ -273,6 +273,16 @@ fixtures, and in this file's git history.
   never reaches the transport's own cargo (that is the Cruiser's walker
   branch, type 0x16 at `0x0802A8F2`).
 
+- **Joining, whole** (DERIVATION 34; fixture `join_probes.json`). Pair rule
+  at `0x08024664`: same type, same army, neither carrying, TARGET under 10
+  display bars (the mover's HP is not read). Merge at `0x0802649C`: display
+  bars add, survivor HP = `bars×10` (45+45 → 100), bars over 10 refunded at
+  `cost/10 × header[+0x2C]/100` per bar (2100 for a 7+6 Tank, Kanbei 2520),
+  fuel = mover's post-move fuel + target's and ammo = sum, both capped at
+  the stats maxima, capture progress taken from the TARGET, the mover's
+  record survives acted and the target's type byte is zeroed
+  (`0x08026710`). A full-HP target refuses the destination outright.
+
 ## Assumed — these are the ones that will bite
 
 Nothing, currently. Every assumption this file has carried is either in
@@ -317,10 +327,10 @@ A16, both born the day action enumeration was written.
   preserves it (`0x08023A68`, `0x08029D6E`), and a written bit 7 rides
   through a full turn untouched (fixture row B4). What, if anything, sets
   or reads it has not been found.
-- **Joining, unloading, production** — the turn mechanics
-  `engine/actions.py` declines to offer rather than guess; each is named in
-  its docstring with the reason. (Supply, repair and fuel burn left this
-  bullet for Established via DERIVATION 33.)
+- **Unloading, production** — the turn mechanics `engine/actions.py`
+  declines to offer rather than guess; each is named in its docstring with
+  the reason. (Supply, repair and fuel burn left this bullet for Established
+  via DERIVATION 33, joining via DERIVATION 34.)
 
 ## Retired — measured, and compressed into Established above
 

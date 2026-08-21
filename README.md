@@ -400,10 +400,14 @@ naval; an APC cannot save a 0-fuel neighbour, burn runs first), property
 repair/resupply with the exact funds charge (the routine snaps internal HP
 to bar ceilings; Kanbei pays 120%), then APC auto-supply. A capture that
 completes is quoted as serviced, because the city is yours by morning.
-Unloading, joining and production are still not offered at all rather than
-offered wrongly; each is named in the module docstring with the reason, and
-CO power activation is an ARMY action modelled in `engine/co.py`, waiting on
-an army-actions module.
+**JOIN** followed in DERIVATION 34: onto any reachable damaged twin, display
+bars summed and written as `bars×10` (two five-bar units make a perfect
+one), the bars over 10 refunded at the unit's value (Kanbei 120%), fuel and
+ammo summed and capped, the target's capture progress inherited -- five
+predictions, five exact. Unloading and production are still not offered at
+all rather than offered wrongly; each is named in the module docstring with
+the reason, and CO power activation is an ARMY action modelled in
+`engine/co.py`, waiting on an army-actions module.
 
 35 regression tests, including the branch ban. The resolution tests assert
 equality with `engine/damage.py` called directly on the same inputs — what
@@ -422,6 +426,7 @@ engine/threat.py          what the enemy can do to you next turn
 engine/actions.py         every legal action a unit has this turn  <- the advisor
 engine/supply.py          supply, property repair, daily fuel burn -- the
                           turn-start rules, replayed from DERIVATION 33
+engine/join.py            the merge: pair rule, bar sum, refund, caps
 engine/fog.py             what you can legally see; reads the game's own array
 engine/rng.py             the derived RNG generator AND the luck consumption:
                           strike_luck() turns a state read into the exact roll
@@ -468,6 +473,8 @@ harness/mesen_luck.lua    twenty seeded battles across three luck reductions:
 harness/mesen_supply_*.lua  the supply derivation: fixture recon, the APC menu
                           probes (peek/menu/menu2/trace/apc/exec), the repair
                           and burn sweeps (repair/broke). DERIVATION.md 33
+harness/mesen_join.lua    five driven joins against the merge routine's
+                          predictions. DERIVATION.md 34
 harness/observations.csv  75 recorded battles (14 by hand, 61 swept)
 
 data/aw1_damage.json      damage matrices + provenance + resolved questions
@@ -494,6 +501,8 @@ tests/test_actions.py     35 regression tests: the enumeration wiring and the
                           branch ban
 tests/test_supply.py      26 tests: the measured supply/repair/burn rows
                           replayed, and the discarded alternatives refuted
+tests/test_join.py        10 tests: the five joins replayed, the internal-sum
+                          and lost-excess readings refuted
 tests/fixtures/           captured boards, seeded sweeps, and the game's own
                           vision array
 harness/fixtures/         mGBA save states parked at target-select, so a sweep

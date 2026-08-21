@@ -1,0 +1,35 @@
+{
+  "_comment": [
+    "Measured joins (DERIVATION 34). Fixture: savestate slot 2, P2 active,",
+    "funds 19000, Andy unless noted. Recon70 at (14,2) and Mech67 at (13,4)",
+    "both typed Tank (RAM 5); 70 real-moves left,down,down (three road",
+    "tiles, fuel -3) onto 67 and picks Join, the only menu item.",
+    "PCs: hp write 0x0802661E, byte+5 (capture/ammo-high) 0x08026632,",
+    "ammo 0x08026694, move fuel spend 0x080241A0, fuel sum 0x0802670A,",
+    "target type zeroed 0x08026710, refund via the funds-add writer",
+    "0x0802416A (the same writer income uses), position 0x08026076/7C.",
+    "mover = the unit that moves (slot 70), target = the one on the tile."
+  ],
+  "rom_sha1": "15053499d5b3f49128a941d7f2d84876f5424d0c",
+  "script": "mesen_join.lua",
+  "unit_type": "Tank",
+  "move_cost": 3,
+  "joins": [
+    {"case": "J1-five-plus-five", "mover": {"hp": 50, "fuel": 30, "ammo": 4, "capture": 3},
+     "target": {"hp": 50, "fuel": 30, "ammo": 4, "capture": 7},
+     "after": {"hp": 100, "fuel": 57, "ammo": 8, "capture": 7}, "refund": 0,
+     "target_removed": true, "mover_acted": true},
+    {"case": "J2-display-bars-not-internal", "mover": {"hp": 45, "fuel": 60, "ammo": 6},
+     "target": {"hp": 45, "fuel": 50, "ammo": 6},
+     "after": {"hp": 100, "fuel": 70, "ammo": 9}, "refund": 0},
+    {"case": "J3-excess-refunded", "mover": {"hp": 70, "fuel": 50, "ammo": 9},
+     "target": {"hp": 60, "fuel": 50, "ammo": 9},
+     "after": {"hp": 100, "fuel": 70, "ammo": 9}, "refund": 2100},
+    {"case": "J4-kanbei-refund-120", "co": 6, "mover": {"hp": 70, "fuel": 50, "ammo": 9},
+     "target": {"hp": 60, "fuel": 50, "ammo": 9},
+     "after": {"hp": 100, "fuel": 70, "ammo": 9}, "refund": 2520},
+    {"case": "J5-full-target-refuses", "mover": {"hp": 50, "fuel": 50, "ammo": 9},
+     "target": {"hp": 100, "fuel": 50, "ammo": 9}, "offered": false,
+     "note": "the destination confirm is refused outright -- no menu, records untouched"}
+  ]
+}

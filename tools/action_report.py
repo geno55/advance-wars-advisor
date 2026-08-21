@@ -117,6 +117,14 @@ def print_unit(board, unit, acts, limit=6):
               f"({a.tile[0]},{a.tile[1]}); the ride "
               f"{exposure_phrase(a.exposure)} (you go with it)")
 
+    for a in (a for a in acts if a.kind == "join"):
+        m = a.merge
+        extra = f", refund {m.refund}" if m.refund else ""
+        print(f"  join {a.target.type} #{a.target.slot} at "
+              f"({a.tile[0]},{a.tile[1]}): {screen_bars(a.hp_after)} bars, "
+              f"fuel {a.fuel_after}, ammo {m.ammo_after}{extra}; "
+              f"{exposure_phrase(a.exposure)}{turn_start_phrase(a)}")
+
     for a in (a for a in acts if a.kind == "supply"):
         who = ", ".join(
             f"{f.target.type} #{f.target.slot} (fuel {f.target.fuel}->"
@@ -158,6 +166,9 @@ def summary_line(board, unit, acts):
                        else f" ({soonest.capture_turns_left} turns)"))
     if loads:
         bits.append(f"{len(loads)} transport(s) in reach")
+    joins = [a for a in acts if a.kind == "join"]
+    if joins:
+        bits.append(f"can join {len({a.target.slot for a in joins})} unit(s)")
     sups = [a for a in acts if a.kind == "supply"]
     if sups:
         needy = len({f.target.slot for a in sups for f in a.supplies})

@@ -1823,3 +1823,48 @@ byte. 26 new tests replay `tests/fixtures/supply_probes.json` and refute
 the shapes the derivation itself had to discard: display-bar repair,
 all-or-nothing charging, additive dive burn, and an APC that could rescue
 a 0-fuel neighbour.
+
+
+## 34. Joining: display bars add, and the change comes back as funds
+
+The handoff had set joining aside unless it fell out of the supply work for
+free. It did not, so it was taken on its own: one static read, one run,
+five cases, all five predicted before the run and all five exact.
+
+The Join record in the action-menu table (`0x0828BB60`) names its executor
+`0x0802E239`, which calls the merge routine **`0x0802649C`** and then the
+ordinary move applier. The menu predicate is the generic destination check
+`0x0802DA6C`, whose pair test at **`0x08024664`** is the whole rule: same
+type byte, same army (slot & 0xC0), NEITHER record carrying cargo, and the
+TARGET — the unit already on the tile — displaying fewer than 10 bars. The
+mover's HP is not read. The merge itself:
+
+- **display bars are added**, `bars_target + bars_mover`, and the survivor's
+  internal HP is written as `bars × 10` (`0x0802661E`). 45 + 45 internal
+  is not 90: it is 100, two five-bar units making a perfect one (J2).
+- bars over 10 are **refunded** at the unit's value per bar —
+  `cost/10 × header[+0x2C]/100`, the same unit-value multiplier the meter
+  charge uses — through the generic funds-add writer at `0x0802416A` (the
+  one income also uses). A 7+6 Tank join paid 2100 (J3) and 2520 under
+  Kanbei (J4).
+- fuel is the mover's **post-move** fuel plus the target's, capped at the
+  stats max (30 − 3 + 30 = 57 in J1, 110 → 70 in J2); ammo is the sum,
+  capped (4+4 = 8; 6+6 → 9). The fuel byte's bit 7 is OR-ed in from the
+  target — another writer that carries the bit without explaining it.
+- **capture progress comes from the target** (`0x08026632` copies byte +5
+  above the ammo bits): J1 set the mover to 3 and the target to 7, and the
+  merged unit read 7.
+- the mover's record survives, acted, and the target's type byte is zeroed
+  at `0x08026710`.
+
+J5 is the refusal: a full-HP target does not even accept the destination
+confirm — no menu opens and nothing is written. The join menu itself, when
+it opens, is the single item `[Join]`.
+
+`engine/join.py` replays the routine; `actions.py` offers JOIN from the
+pass-through reachable set (destinations() refuses friendly tiles except
+transports) filtered by the pair rule, with the exposure computed for the
+merged unit on a board where the target is gone, and the turn-start facts
+of the survivor. `tests/fixtures/join_probes.json` holds the rows;
+`tests/test_join.py` replays them and refutes the internal-sum, lost-excess
+and mover-keeps-capture readings.
