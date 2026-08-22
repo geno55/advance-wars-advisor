@@ -108,6 +108,13 @@ class Army:
     # it, the caster's next turn start clears it -- DERIVATION 27). Selects
     # the power stat block everywhere, including the fog vision bonus.
     power_active: bool = False
+    # Army +0x25: activations so far; the threshold is cost*(100+20*uses)/100
+    # capped at 200% (co.power_threshold). None = dump predates the field.
+    power_uses: Optional[int] = None
+    # Army +0x24: the one-shot "power available" latch the game sets when the
+    # meter reaches the threshold. Informational: the map-menu Power item is
+    # gated on the meter, not on this byte (DERIVATION 37).
+    power_ready: Optional[bool] = None
 
 
 @dataclass
@@ -255,7 +262,8 @@ def load(path) -> Board:
                     u.get("cargo2", 0))
                for u in raw["units"]],
         armies=[Army(a["player"], a["funds"], a["income"], a.get("power", 0),
-                     a.get("co_id"), a.get("power_active", False))
+                     a.get("co_id"), a.get("power_active", False),
+                     a.get("power_uses"), a.get("power_ready"))
                 for a in raw["armies"]],
         terrain=[r["t"] for r in rows],
         owner=[r["owner"] for r in rows],

@@ -245,6 +245,29 @@ def main():
             u = next(x for x in board.units if x.slot == slot)
             print(f"  {u.type:10s} #{slot:<3d} ({u.x:2d},{u.y:2d})  "
                   f"{summary_line(board, u, acts)}")
+        pw = actions.power_action(board, player, warnings=warnings)
+        if pw is not None:
+            f = pw.power
+            bits = [f"meter {f.meter}/{f.threshold}, use #{f.uses + 1}, "
+                    f"next threshold {f.next_threshold}"]
+            if f.heals:
+                bits.append("heals " + ", ".join(
+                    f"#{u.slot} to {screen_bars(hp)}" for u, hp in f.heals))
+            if f.refreshes:
+                bits.append("refreshes " + ", ".join(f"#{u.slot}" for u in f.refreshes))
+            if f.damages:
+                bits.append("hits " + ", ".join(
+                    f"#{u.slot} to {screen_bars(hp)}" for u, hp in f.damages))
+            if f.weather:
+                bits.append(f"weather -> {f.weather}")
+            for strat, center, victims in f.meteors:
+                bits.append(f"meteor (strategy {strat}) on "
+                            + (f"({center[0]},{center[1]})" if center else "nobody")
+                            + (": " + ", ".join(f"#{u.slot}->{screen_bars(hp)}"
+                                                for u, hp in victims) if victims else ""))
+            print(f"\nP{player} CO power READY -- {f.co_name}: " + "; ".join(bits))
+            for n in f.notes:
+                print(f"  note: {n}")
         builds = actions.build_actions(board, player, weather=a.weather,
                                        fog=a.fog, warnings=warnings)
         if builds:

@@ -412,8 +412,14 @@ slots are read now. **BUILD** is the army's action (DERIVATION 36):
 `build_actions()` lists every own empty factory's shop -- the ROM's one
 shop list filtered by class mask, priced with the CO's value multiplier
 (Kanbei ×1.2), affordable at `funds >= price`, fifty units an army -- with
-the new unit's exposure on the factory tile. CO power activation remains
-the one army action modelled in `engine/co.py` and not yet enumerated.
+the new unit's exposure on the factory tile. **POWER** closes the list
+(DERIVATION 37): `power_action()` is offered when the meter meets the
+uses-scaled threshold -- the map-menu gate, measured to the unit; the ready
+latch turned out to be a bystander -- and carries what activation does to
+this board: Andy's per-unit heals through the repair routine, Eagle's
+refreshed units, Drake's per-enemy damage, Sturm's three candidate meteors,
+Olaf's snow, everyone's power stat block. Nothing the docstrings once
+declined is left un-offered.
 
 35 regression tests, including the branch ban. The resolution tests assert
 equality with `engine/damage.py` called directly on the same inputs — what
@@ -436,6 +442,8 @@ engine/join.py            the merge: pair rule, bar sum, refund, caps
 engine/unload.py          the drop: unload-from table, passenger passability,
                           occupancy with the vacated origin free
 engine/production.py      the shops, prices, the slot cap -- army builds
+engine/power.py           activation as an action: the meter gate and what
+                          firing the power does to this board
 engine/fog.py             what you can legally see; reads the game's own array
 engine/rng.py             the derived RNG generator AND the luck consumption:
                           strike_luck() turns a state read into the exact roll
@@ -489,6 +497,8 @@ harness/mesen_drop.lua    seven driven drops: occupancy, passenger passability,
 harness/mesen_build.lua / _build2.lua  written factories: the three shops,
                           purchases, broke/exact funds, slot reuse, the gates
                           that open the map menu instead. DERIVATION.md 36
+harness/mesen_power_menu.lua  eight map-menu presses: meter vs latch vs
+                          active vs uses as the Power item's gate. DERIVATION.md 37
 harness/observations.csv  75 recorded battles (14 by hand, 61 swept)
 
 data/aw1_damage.json      damage matrices + provenance + resolved questions
@@ -522,6 +532,8 @@ tests/test_unload.py      10 tests: the seven drops replayed, the rule's three
                           table parts kept apart
 tests/test_production.py  9 tests: shops, prices, the >= edge, slot allocation
                           and the fifty cap, build_actions gating
+tests/test_power_action.py  9 tests: the eight menu rows replayed, the effects
+                          composed per CO, power_action gating
 tests/fixtures/           captured boards, seeded sweeps, and the game's own
                           vision array
 harness/fixtures/         mGBA save states parked at target-select, so a sweep

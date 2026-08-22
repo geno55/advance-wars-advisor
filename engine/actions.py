@@ -78,14 +78,17 @@ WHAT IS MODELLED
     the game greys them, and a quote that omits them would hide the one
     number a saving plan needs.
 
+  * POWER -- the other army action, `power_action(board, player)`: offered
+    when the meter is at the uses-scaled threshold (the map-menu gate,
+    measured in DERIVATION 37), with what activating does to THIS board
+    from engine/power.py -- Andy's heals per unit, Eagle's refreshed units,
+    Drake's damage per enemy, Sturm's three candidate meteors, Olaf's snow,
+    the power stat block everyone gets. The facts do not re-enumerate the
+    turn after activation; a caller that wants "Eagle refreshes, then the
+    Tank attacks" composes it from actions_for on the refreshed board.
+
 WHAT IS NOT MODELLED, deliberately and visibly
 
-  * CO power activation. The whole system is modelled in engine/co.py --
-    charge formula, threshold (`power_threshold`), per-CO effects
-    (DERIVATION 27) -- but activating is an ARMY action like production, and
-    this module enumerates unit actions. When an army module exists it
-    should offer activation from co.py's numbers; nothing here models a
-    power firing mid-turn.
   * Hidden units interrupting movement under fog. Pathing does not model the
     ambush rule, so under fog a long move may be more optimistic than the game.
 
@@ -114,6 +117,7 @@ from typing import Dict, List, Optional, Tuple
 try:                                    # imported as engine.actions by tools/
     from . import co as co_mod
     from . import damage, join as join_mod, pathing, supply as supply_mod, threat
+    from . import power as power_mod
     from . import production as prod_mod
     from . import unload as unload_mod
     from .state import Unit as _Unit
@@ -124,6 +128,7 @@ except ImportError:                     # imported as actions, engine/ on path
     import pathing
     import supply as supply_mod
     import threat
+    import power as power_mod
     import production as prod_mod
     import unload as unload_mod
     from state import Unit as _Unit
@@ -159,6 +164,7 @@ class Action:
       attack   target (the enemy unit), strike, counter, hp_after
       build    unit=None (an army action); build_type, cost, affordable,
                target = the unit as it will stand on the tile (acted)
+      power    unit=None (an army action); power = power.Activation
       capture  target=None; progress_after, captures_now, capture_turns_left
       drop     target (the passenger), drop_tile (where it lands, acted);
                exposure and turn_start describe the PASSENGER there
@@ -199,6 +205,7 @@ class Action:
     merge: Optional[object] = None             # join.Merge on a join
     drop_tile: Optional[Coord] = None          # where a drop lands
     build_type: Optional[str] = None           # what a build buys
+    power: Optional[object] = None             # power.Activation on a power
     cost: int = 0                              # its price
     affordable: bool = True                    # funds >= cost
 
@@ -401,7 +408,7 @@ def _co_of(board, player, co_ids):
 
 
 _KIND_ORDER = {"attack": 0, "capture": 1, "join": 2, "drop": 3, "supply": 4,
-               "load": 5, "wait": 6, "build": 7}
+               "load": 5, "wait": 6, "build": 7, "power": 8}
 
 
 def _neighbours(board, tile):
@@ -726,6 +733,25 @@ def build_actions(board, player: int, *, co_ids: Optional[dict] = None,
                     hp_after=100, turn_start=ts, build_type=off.unit_type,
                     cost=off.price, affordable=off.affordable))
     return out
+
+
+def power_action(board, player: int, *, co_ids: Optional[dict] = None,
+                 warnings: Optional[list] = None) -> Optional[Action]:
+    """The CO power as an action, when the meter is there -- DERIVATION 37.
+
+    None when the CO is unknown or the meter is short; the Activation
+    facts (meter, threshold, what the power does to this board) ride on
+    `Action.power`. The Action has no tile: it is the army's, not a
+    unit's, and costs no move.
+    """
+    warnings = warnings if warnings is not None else []
+    co = _co_of(board, player, co_ids)
+    facts = power_mod.activation(board, player, co_id=co, warnings=warnings)
+    if facts is None or not facts.available:
+        return None
+    return Action(kind="power", unit=None, tile=(-1, -1), move_cost=0,
+                  terrain="", stars=0, fuel_after=0, exposure=None,
+                  power=facts)
 
 
 def all_actions(board, player: int, *, co_ids: Optional[dict] = None,

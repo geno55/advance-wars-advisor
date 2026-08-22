@@ -305,6 +305,15 @@ fixtures, and in this file's git history.
   of `base+1..base+50` (`0x080240EC`) — fifty units an army — and the spend
   is also tallied at army `+4` and a per-type counter at `+0x36+type`.
 
+- **The power menu gate** (DERIVATION 37; fixture `power_menu.json`). The
+  map-menu Power item appears iff the METER (`+0x20`, u32) is at or above
+  the uses-scaled threshold `cost × (100+20·uses)/100` — measured to the
+  unit at uses 1 (35990 no, 36000 yes); the ready latch `+0x24` is ignored
+  (set with an empty meter: no item), and a running power does not hide
+  the item by itself (unreachable in play). `engine/power.py` composes
+  DERIVATION 27's effects for the board in hand; the reader dumps
+  `power_active/ready/uses` and the meter as u32.
+
 ## Assumed — these are the ones that will bite
 
 Nothing, currently. Every assumption this file has carried is either in
@@ -349,11 +358,12 @@ A16, both born the day action enumeration was written.
   preserves it (`0x08023A68`, `0x08029D6E`), and a written bit 7 rides
   through a full turn untouched (fixture row B4). What, if anything, sets
   or reads it has not been found.
-- **CO power activation as an offered action** — fully modelled in
-  `engine/co.py` (threshold, effects, lifetime; DERIVATION 27) and not yet
-  enumerated beside `build_actions`. (Supply, repair and fuel burn left the
-  old "turn mechanics" bullet for Established via DERIVATION 33, joining via
-  34, unloading via 35, production via 36.)
+- **The turn after a power.** `power_action` states what activation does
+  to the board; re-enumerating the refreshed or healed units' actions is
+  left to the caller (one `dataclasses.replace` per unit, then
+  `actions_for`). (Supply, repair and fuel burn left the old "turn
+  mechanics" bullet for Established via DERIVATION 33, joining via 34,
+  unloading via 35, production via 36, power activation via 37.)
 - **The drop selector's default tile.** Every drive with the north tile
   free landed north, and the validity mask is ordered W,E,N,S — so the
   default is not the mask's first bit and is not modelled; the advisor

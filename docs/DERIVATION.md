@@ -1995,3 +1995,44 @@ lines. With that, every unit-facing mechanic the advisor once declined is
 enumerated from measured data; what remains un-offered is CO power
 activation, which `engine/co.py` models and an army module can now pick
 up beside `build_actions`.
+
+
+## 37. CO power activation, offered: the meter is the gate, the latch is a bystander
+
+DERIVATION 27 derived the power system whole and left one thing
+un-offered: activation as an action. What was missing was not the effects
+— those are measured and modelled in `engine/co.py` — but the GATE: which
+army field makes the map menu's Power item appear, so the advisor can say
+"you could fire it now" from a dump.
+
+Eight map-menu presses on the slot-2 fixture, each after writing the
+army's meter (`+0x20`), ready latch (`+0x24`), power-active block (`+0x1E`)
+and activation count (`+0x25`):
+
+- latch set, meter empty: no item. Meter at the cost, latch clear: **item**.
+  Both: item. So the menu reads the METER and ignores the one-shot latch.
+- meter at the cost with the power-active block already set: item — which
+  normal play cannot reach, since activation zeroes the meter and the adder
+  skips charging while the block is up; the model excludes it and says why.
+- uses written to 1: meter 30000 no item, 36000 item, **35990 no item** —
+  the comparison is `meter >= cost × (100 + 20·uses) / 100`, the threshold
+  function DERIVATION 27 read at `0x0801C018`, to the unit.
+
+`engine/power.py` turns this into facts for the board in hand: available
+or not, meter against threshold, what the next threshold will be, and what
+activating does — Andy's heals per unit through the same snap-to-bar
+repair routine (45 → 70, free), Eagle's refreshed units (acted, non-foot,
+not loaded), Drake's per-enemy damage floored at 1, Sturm's three candidate
+meteors with their victims (the RNG draw picks one; a state read would
+pin it), Olaf's snow, and the power stat block everyone gets. The reader
+now dumps the meter as the u32 it is, plus `power_active`, `power_ready`
+and `power_uses`; old dumps get the uses assumed 0, out loud.
+`actions.power_action(board, player)` offers it beside `build_actions()`.
+Not composed here: the turn AFTER activation (Eagle's refreshed Tank
+attacking) — a caller builds that from `actions_for` on the refreshed
+board, which is one `dataclasses.replace` per refreshed unit.
+
+With this, nothing the advisor's docstrings once declined is left
+un-offered: every unit action and both army actions enumerate from
+measured data. The remaining gap in the action layer is the fog ambush
+rule in pathing, which is stated where it lives.

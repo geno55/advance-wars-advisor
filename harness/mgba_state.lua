@@ -216,16 +216,25 @@ function state(path, probe)
     local a = abase + p * ARMY_STRIDE
     funds[p] = emu:read32(a)
     -- +0x20 is the CO power meter, cumulative from 0. Both the dealer and the
-    -- receiver of damage charge. Scale and activation threshold unknown.
+    -- receiver of damage charge (engine/co.py charge_gains, DERIVATION 27).
     -- +0x1D is the CO id, 0..11, indexing the CO record table as co*292. It is
     -- the field that named eleven of the twelve records by being written and
     -- read back off the screen, so it is confirmed rather than inferred.
     -- Without it every damage prediction quietly assumes a neutral CO, and Max
     -- at 150/100 would make that wrong by half.
+    -- +0x20 is a u32 (DERIVATION 27; older dumps read the low half). +0x1E
+    -- is the power-active block, +0x24 the one-shot ready latch, +0x25 the
+    -- activation count that scales the threshold. The map-menu Power item
+    -- is gated on the METER against that threshold, not on the latch
+    -- (DERIVATION 37) -- all four ship so the advisor can say which.
     rows[#rows + 1] = string.format(
-      '    {"player": %d, "funds": %d, "income": %d, "power": %d, "co_id": %d}',
-      p, emu:read32(a), emu:read32(a + 8), emu:read16(a + 0x20),
-      emu:read8(a + 0x1D))
+      '    {"player": %d, "funds": %d, "income": %d, "power": %d, "co_id": %d, '
+      .. '"power_active": %s, "power_ready": %s, "power_uses": %d}',
+      p, emu:read32(a), emu:read32(a + 8), emu:read32(a + 0x20),
+      emu:read8(a + 0x1D),
+      (emu:read8(a + 0x1E) ~= 0) and "true" or "false",
+      (emu:read8(a + 0x24) ~= 0) and "true" or "false",
+      emu:read8(a + 0x25))
   end
   w_(table.concat(rows, ",\n"))
   w_("  ],")

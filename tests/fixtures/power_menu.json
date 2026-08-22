@@ -1,0 +1,28 @@
+{
+  "_comment": [
+    "Which army fields open the map-menu Power item (DERIVATION 37).",
+    "Fixture: savestate slot 2, P2 (Andy, cost 30000) active. Each row",
+    "reloads, writes army2 +0x20 (meter, u32), +0x24 (ready latch), +0x1E",
+    "(power-active block) and +0x25 (uses), presses A on an empty tile and",
+    "screenshots the map menu. power_item = whether Power appeared as the",
+    "third item (Unit, Intel, Power, Save, Options, End).",
+    "Result: the METER against the uses-scaled threshold decides (>=); the",
+    "latch is ignored; a running power does not hide the item by itself",
+    "(unreachable in play: activation zeroes the meter and charging pauses",
+    "while the block is up)."
+  ],
+  "rom_sha1": "15053499d5b3f49128a941d7f2d84876f5424d0c",
+  "script": "mesen_power_menu.lua",
+  "co": 1,
+  "cost": 30000,
+  "rows": [
+    {"case": "M1-latch-only", "meter": 0, "latch": 1, "active": 0, "uses": 0, "power_item": false},
+    {"case": "M2-meter-only", "meter": 30000, "latch": 0, "active": 0, "uses": 0, "power_item": true},
+    {"case": "M3-both", "meter": 30000, "latch": 1, "active": 0, "uses": 0, "power_item": true},
+    {"case": "M4-both-but-active", "meter": 30000, "latch": 1, "active": 1, "uses": 0, "power_item": true},
+    {"case": "M5-latch-active", "meter": 0, "latch": 1, "active": 1, "uses": 0, "power_item": false},
+    {"case": "M6-uses1-meter30000", "meter": 30000, "latch": 0, "active": 0, "uses": 1, "power_item": false},
+    {"case": "M7-uses1-meter36000", "meter": 36000, "latch": 0, "active": 0, "uses": 1, "power_item": true},
+    {"case": "M8-uses1-meter35990", "meter": 35990, "latch": 0, "active": 0, "uses": 1, "power_item": false}
+  ]
+}
