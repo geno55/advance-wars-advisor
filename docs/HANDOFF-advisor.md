@@ -11,8 +11,10 @@ repo says which of the enumerated actions to take. That is the advisor.
 The repo's rule still applies, and it is the whole design problem here:
 **every number so far is a fact the game can be asked to check; a
 recommendation is the first number it cannot.** The advisor must keep the
-two apart in code, in output, and in tests — and then find a way to let
-the game check it anyway (below).
+two apart in code, in output, and in tests. Do not try to talk the game
+into checking the opinion — the way to honour the rule here is to make
+everything the opinion COMPOSES from game-checkable, and to say plainly
+that the weights on top are not (§3).
 
 ## Established — the inventory you compose from
 
@@ -64,7 +66,9 @@ re-derive; import.
 ## What the advisor phase has to decide
 
 1. **Where the line goes.** Facts stay in `engine/actions.py` and friends;
-   the opinion layer is a NEW module (`engine/advisor.py` or a package)
+   `engine/sim.py` (§2) is also below the line — it composes facts into a
+   next board and is game-checkable like any of them. Above it, the
+   opinion layer is a NEW module (`engine/advisor.py` or a package)
    that consumes `Action`s and returns a ranked plan. Nothing in the
    existing modules should grow a "score" field. Every number the opinion
    layer prints must either be a fact it is quoting or be labelled as a
@@ -73,25 +77,57 @@ re-derive; import.
    and the power, in an ORDER — order matters (a supply before a move, a
    power before attacks, a join that frees a slot before a build). The
    facts are per-action on the current board; a plan needs the board
-   re-evaluated after each committed action (`dataclasses.replace` on
-   units, the same trick `_after_trade`, `_merged_board`, `_dropped_board`
-   already use). Build that re-evaluation once, in the opinion layer, and
-   keep it honest: a plan's second step quotes facts on the board its
-   first step leaves behind.
-3. **How to let the game check an opinion.** Two routes, both real:
-   - *Facts-regression by play.* Drive the advisor's chosen plan on the
-     real game through the headless rig and, every step, compare what the
-     game did (positions, hp, funds, the records) with what the facts
-     predicted. An opinion cannot be wrong that way, but every fact it
-     quoted can — and this turns each played turn into a free, broad
-     regression of the entire engine on boards no fixture ever built.
-     The hardest part is the DRIVER (below), not the check.
-   - *Outcome evaluation.* Play whole matches against the game's CPU and
-     count. AW1 VS supports a COM player; the parked fixture is human vs
-     human, so a **new savestate with P1 = COM is needed — ask the user to
-     park one** (do not scan for files, do not touch `Documents/Mesen2/
-     Saves`). Win rate against the CPU is a coarse number, but it is a
-     number the game produces, which is the repo's standard.
+   re-evaluated after each committed action. That re-evaluation is a
+   FORWARD MODEL, and four fifths of it is already written as one-off
+   hypotheticals inside `actions.py` (`_after_trade`, `_loaded_board`,
+   `_merged_board`, `_dropped_board`, `_turn_start_facts`, all
+   `dataclasses.replace` on units). Factor them out into `engine/sim.py`
+   behind one entry point, `apply(board, action) -> board`, BEFORE
+   writing any planner. It is the load-bearing piece of this phase: with
+   it, planning, search, weight tuning and self-play all run in Python at
+   whatever speed they need; without it the only way to advance a board
+   is the emulator, which is the mistake an earlier draft of this handoff
+   made. Keep it honest: a plan's second step quotes facts on the board
+   its first step leaves behind.
+3. **What the emulator is for now.** Three clocks, and only one of them
+   can afford the game:
+   - *Advice time* — a dump in, a ranked plan out. Milliseconds. The
+     emulator is never in this path.
+   - *Search and tuning* — comparing two weight sets, or any planner that
+     looks past greedy, needs 10^4–10^6 hypothetical boards. The emulator
+     is categorically excluded here; this is `sim.py`'s job.
+   - *Validation* — offline, rare, minutes are fine. The only place the
+     game runs.
+
+   An opinion cannot be measured wrong. `apply()` can, and so can every
+   fact it composes — so spend the whole emulator budget certifying
+   `apply()`, as a BOUNDED DIFFERENTIAL TEST, not a loop: N parked
+   states, ONE action each; dump → `apply()` in Python → drive that one
+   action on the game → dump again → diff the after-states field by
+   field. A fixed corpus (~40–60 cases: every action kind, both army
+   actions, the turn-start economy) run once, and again whenever
+   `sim.py` changes. `mesen_drive.lua` is still needed, but only to
+   execute a SINGLE Action with read-back verification; nothing ever
+   chains it.
+
+   Do NOT build win-rate-against-the-CPU evaluation. The cost is not
+   emulation speed (headless Mesen runs well over realtime) but the
+   driver: cursor taps, menu animation frames, a read-back and a
+   retry-with-B per action, hundreds of actions per game — and resolving
+   a 5% difference between two weight sets needs on the order of 200
+   games, so the metric's own noise multiplies that by two orders of
+   magnitude. AW1's CPU is weak enough that a mediocre planner probably
+   saturates it, so it would not discriminate even if it were free. No
+   COM fixture is needed; do not ask the user to park one.
+
+   What checks the WEIGHTS instead is advisor-vs-advisor self-play in
+   Python, free once `apply()` exists, giving a relative ranking without
+   the game's CPU. Write its failure mode down where the planner lives:
+   a bug in `apply()` becomes a shared delusion both players believe, and
+   self-play will happily converge on exploiting it. That is the whole
+   argument for spending the emulator budget on `apply()` — and for
+   weighting the differential corpus toward the action kinds the planner
+   actually picks.
 4. **What the first opinion should be.** Start thin and explicit: a
    one-turn greedy planner whose scoring is a handful of named terms over
    facts (expected damage dealt vs taken from the envelopes, funds value
@@ -101,8 +137,9 @@ re-derive; import.
    should be invariant under (board translation, unit slot renumbering,
    CO-neutral boards giving the same answer as Andy). Do not start with
    search depth; start with a planner whose every preference can be
-   traced to a quoted fact, then let the game-check route say where it is
-   naive.
+   traced to a quoted fact. Then two different critics say where it is
+   naive: the differential corpus for the facts and boards it composed
+   wrongly, Python self-play for the weights.
 
 ## Unknowns, each with its designed measurement
 
@@ -114,18 +151,20 @@ re-derive; import.
   Base (terrain byte `| 0x40`), End Turn twice, diff the delta; then the
   fixture's VS setup screen for the rule. A funds forecast is load-bearing
   for any build plan, so this comes first.
-- **The CPU opponent** (only if outcome evaluation is wanted): none of its
-  behaviour is modelled or needs to be; what is needed is the COM fixture
-  and a driver that can wait through its turn.
+- **Wall clock for one driven action, headless.** Unmeasured, and it is
+  the number that sizes the differential corpus — a 3-minute test or a
+  3-hour one. Measure it first from a parked state (select, move, confirm,
+  menu pick, read back) before committing to a corpus size. Nothing else
+  in the plan depends on it.
 - **A headless state dumper.** `mgba_state.lua` is an mGBA console script;
   the headless Mesen runs have no equivalent writer of the loader schema
   (only the two fixture dumpers, `mesen_sonja_fix.lua` /
   `mesen_vision_rules.lua`, which skip cargo, armies' power fields, the
   repair-free byte). Port the full dumper to Mesen's API (`emu.read*`,
   the same addresses) as `harness/mesen_state.lua`, and assert it against
-  an mGBA dump of the same fixture tile for tile. Without it the advisor
-  cannot be run inside the loop.
-- **A driver that executes an Action.** The pieces exist across the probe
+  an mGBA dump of the same fixture tile for tile. Without it the
+  differential test has no before/after.
+- **A driver that executes ONE Action.** The pieces exist across the probe
   scripts: select at a tile (`goto_tile` + A, map mode only), move by
   COUNTED direction taps along `pathing.path()` (the cursor bytes do not
   track in move-select, DERIVATION 29), confirm, pick the menu item by its
@@ -135,10 +174,13 @@ re-derive; import.
   with the fog card and B-cancels from DERIVATION 38). Build it once as a
   library with verification after every step (read the record back; the
   position write PCs are `0x08026076/7C`) and a retry-with-B on failure.
+  This is the expensive part of the phase, and the reason nothing chains
+  it: one Action per parked state, then back to Python.
 - **Whether the drawn route matters.** `trap_tiles` assumes the cheapest
   approach; the game walks the arrow the player drew. A driver that taps
-  the path tile by tile draws exactly `pathing.path()`, so inside the loop
-  this is not a divergence — state it where the driver lives.
+  the path tile by tile draws exactly `pathing.path()`, so in the
+  differential test this is not a divergence — state it where the driver
+  lives. `sim.py` must make the same assumption explicitly.
 - **Unit record `+9..+11`.** Still unread (`+11` reads 0 foot / 4 vehicle
   in old captures; spawn writes 1 then 0 at `0x0802423C/46`). Not needed
   for advice; listed so nobody rediscovers it.
@@ -182,16 +224,21 @@ re-derive; import.
 
 ## Deliverables, repo-style
 
+- `engine/sim.py` first, before any planner: `apply(board, action) ->
+  board`, the forward model factored out of `actions.py`'s one-off
+  hypotheticals, plus the turn-start economy.
 - `engine/advisor.py` (opinion layer, weights in one place, every
   preference traceable to a quoted fact) and `tools/advise.py` (the
   user-facing plan, facts and opinions visibly separate).
 - `harness/mesen_state.lua` (headless dumper, asserted against mGBA) and
-  `harness/mesen_drive.lua` (the Action executor with read-back
-  verification), then `tools/selfplay.py` that loops dump → advise → drive
-  → compare, logging every fact the game contradicted.
+  `harness/mesen_drive.lua` (single-Action executor with read-back
+  verification), then `tools/sim_diff.py` over a checked-in corpus of
+  parked states: dump → `apply()` → drive one action → dump → diff,
+  logging every field the game contradicted.
 - DERIVATION 39+ for anything measured on the way (income first); a new
   `docs/ADVISOR.md` for the opinion layer's own rules — the line, the
-  weights, what the game-check route has and has not caught.
-- Tests: invariance and scenario tests for the planner; the selfplay
-  comparison log as a checked-in fixture once it runs clean.
+  weights, what the differential corpus has and has not caught, and the
+  shared-delusion caveat on Python self-play.
+- Tests: invariance and scenario tests for the planner; the `sim_diff`
+  corpus and its result log as checked-in fixtures once it runs clean.
 - Single-sentence-finding commit subjects, straight to main, push.
