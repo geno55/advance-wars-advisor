@@ -155,6 +155,12 @@ class Board:
     # the dump predates the field, and actions.py then assumes repairs
     # charge, out loud.
     repair_free: Optional[bool] = None
+    # Settings +0x28 (0x03004338): funds paid per owned property at turn
+    # start, and the only amount the income path reads. A SETTING, not a
+    # constant -- the VS fixtures hold 9500, the others 1000 -- so None means
+    # the dump predates the field and engine/economy.py derives the rate from
+    # an army's own income instead of assuming one.
+    funds_per_property: Optional[int] = None
     warnings: list = field(default_factory=list)
 
     @property
@@ -274,6 +280,7 @@ def load(path) -> Board:
         vision=raw.get("vision"),
         repair_free=(None if raw.get("repair_free") is None
                      else bool(raw["repair_free"])),
+        funds_per_property=raw.get("funds_per_property"),
     )
     if raw.get("vision_copies_agree") is False:
         board.warnings.append(

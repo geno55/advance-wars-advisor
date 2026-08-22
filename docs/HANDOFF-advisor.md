@@ -143,14 +143,14 @@ re-derive; import.
 
 ## Unknowns, each with its designed measurement
 
-- **Income.** Every P2 turn start in the supply runs wrote funds +9500 at
-  `0x0802416A` (the generic funds-add writer). `income_per_property` is
-  1000 in the terrain table and P2 owns only its HQ on the fixture map, so
-  9500 is NOT 1000×owned. Unread: what the VS "funds" rule multiplies, and
-  whether HQ counts. Measure: write owner bits onto one extra City and one
-  Base (terrain byte `| 0x40`), End Turn twice, diff the delta; then the
-  fixture's VS setup screen for the rule. A funds forecast is load-bearing
-  for any build plan, so this comes first.
+- **Income — CLOSED, DERIVATION 39.** `income = rate × owned properties`
+  over {City, HQ, Airport, Port, Base}, HQ included, rate = u32 at
+  `0x03004338` (settings +0x28). Read off the jump table at `0x08025150`,
+  confirmed against `Army.income` on all eleven full-board fixtures at two
+  rate settings. `engine/economy.py`. Campaign uses the same path — only
+  the cell's value can differ, and `funds_rate()` derives it from the board
+  when the dump lacks the cell, so mode never has to be known. What campaign
+  writes there is the one open item, and it blocks nothing.
 - **Wall clock for one driven action, headless.** Unmeasured, and it is
   the number that sizes the differential corpus — a 3-minute test or a
   3-hour one. Measure it first from a parked state (select, move, confirm,

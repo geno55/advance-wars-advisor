@@ -379,6 +379,18 @@ A16, both born the day action enumeration was written.
   `actions_for`). (Supply, repair and fuel burn left the old "turn
   mechanics" bullet for Established via DERIVATION 33, joining via 34,
   unloading via 35, production via 36, power activation via 37.)
+- **What campaign writes as the funds rate.** Income is
+  `rate × owned properties` with the rate a u32 at settings `+0x28`
+  (`0x03004338`) — one code path, no mode branch, so campaign differs only in
+  that cell's value (DERIVATION 39). The parked VS fixtures hold 9500 and
+  1000; no campaign state has been dumped. `economy.funds_rate()` derives the
+  rate from any property-holding army rather than assuming, so nothing is
+  blocked — but the expectation that campaign holds 1000 is an expectation.
+  Kill by: one read of `0x03004338` on any parked campaign state.
+- **What sets the CO income gate.** Settings `+0x08` selects between the
+  army's CO record and record 1 for the two income terms the payer adds.
+  Both terms are zero for every CO, so the gate is unobservable through
+  income; which option writes it is unread and does not matter.
 - **The drop selector's default tile.** Every drive with the north tile
   free landed north, and the validity mask is ordered W,E,N,S — so the
   default is not the mask's first bit and is not modelled; the advisor

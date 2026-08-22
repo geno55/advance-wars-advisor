@@ -19,7 +19,7 @@ import sys
 
 ROOT = pathlib.Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT))
-from engine import actions, fog                                # noqa: E402
+from engine import actions, economy, fog                       # noqa: E402
 from engine.damage import screen_bars                          # noqa: E402
 from engine.state import load, summarise                       # noqa: E402
 
@@ -278,6 +278,23 @@ def main():
             print(f"\nP{player} CO power READY -- {f.co_name}: " + "; ".join(bits))
             for n in f.notes:
                 print(f"  note: {n}")
+        inc = economy.income(board, player)
+        funds = next((x.funds for x in board.armies if x.player == player), 0)
+        rate_note = {"dump": "", "derived": " (rate derived from the board)",
+                     "default": " (RATE UNKNOWN -- assuming 1000/property)",
+                     "given": ""}[inc.rate_source]
+        print(f"\nP{player} treasury -- {funds} funds, "
+              f"+{inc.amount}/turn from {inc.properties} "
+              f"{'property' if inc.properties == 1 else 'properties'} "
+              f"at {inc.rate}{rate_note}")
+        if inc.agrees is False:
+            print(f"  !! the game reports income {inc.reported}, not "
+                  f"{inc.amount} -- see engine/economy.check()")
+        # A projection, not a fact: it holds the property set still.
+        print(f"  projection, if nothing is captured or lost: "
+              + ", ".join(f"day +{d} -> {economy.forecast(board, player, d)}"
+                          for d in (1, 2, 3)))
+
         builds = actions.build_actions(board, player, weather=a.weather,
                                        fog=a.fog, warnings=warnings)
         if builds:

@@ -2096,3 +2096,132 @@ because a board that knows where the hidden units are should say "that
 tile ends your move at (7,7)" rather than pretend it is a destination. The
 rows are `tests/fixtures/ambush_probes.json`; `tests/test_ambush.py`
 replays the grid against the model's reach with fog on and off.
+
+## 39. Income: one multiplication, and the 9500 was never a mystery
+
+The supply runs left a loose number. Every P2 turn start wrote **+9500** at
+the generic funds-add writer, and `income_per_property` in the terrain
+struct reads **1000**, and P2 owned exactly its HQ. So the obvious reading —
+1000 × owned — was off by an order of magnitude, and the obvious escape
+hatch — "HQ must not count" — makes it worse, predicting zero.
+
+Both readings are wrong in the same place: the terrain struct's income field
+is not what the income path reads.
+
+### The path, top to bottom
+
+Three call sites reach the funds-add writer (`0x08024154`, army `+0`, capped
+at `0x000F423F` = 999,999). The turn-start one is `0x080253C2`, the tail of
+the payer at `0x08025310`, which sits directly after the property walker
+that ends at `0x0802530A`. The walker accumulates into **army `+0x08`** —
+the field the reader already ships as `Army.income` — bumping per-type
+counters at `+0x0D/+0x0E/+0x0F` as it goes, and it gets each tile's
+contribution from a helper at `0x08025138`.
+
+That helper is the whole answer:
+
+```
+08025138  lsls/lsrs r0, #24        ; terrain id, byte
+0802513C  subs  r0, #6             ; ids below 6 fall out
+0802513E  cmp   r0, #0xc
+08025140  bhi   0x08025190         ; ... and above 18
+08025142  lsls  r0, #2
+08025144  ldr   r1, =0x08025150    ; the jump table
+0802514A  mov   pc, r0
+...
+08025184  ldr   r0, =0x03004310    ; the battle-settings struct
+08025186  ldr   r0, [r0, #0x28]    ; THE RATE
+08025188  b     0x08025192         ; bx lr
+08025190  movs  r0, #0             ; pays nothing
+```
+
+Thirteen jump-table entries, ids 6..18, and every one of them points at
+either `0x08025184` or `0x08025190`. There is no third body, no per-terrain
+amount, no read of the terrain struct anywhere on the path. Reading the
+table settles which terrains pay without driving anything:
+
+| pays | id 6 City · 8 HQ · 10 Airport · 11 Port · 14 Base | (+ unused slots 17, 18) |
+|---|---|---|
+| pays nothing | 7 Sea · 9 Sky · 12 Bridge · 13 Shoal · 15 · 16 | |
+
+**HQ pays.** And the amount is a single u32 at **`0x03004338`** — battle
+settings `+0x28`, the same struct that holds weather at `+0x2C`, fog at
+`+0x0D`, fixed-luck at `+0x06` and free-repair at `+0x47`. It is a SETTING.
+The parked VS fixture has it at 9500 because that was picked on the VS setup
+screen; one HQ × 9500 = 9500, exactly what the writer logged.
+
+### Two dead terms, closed by exhaustion
+
+The payer does not just forward the walker's sum. It reads the CO record —
+`0x08284A0C + co*292 + block*128`, the table `aw1_co.json` already
+describes, indexed by army `+0x1D` and `+0x1E` — and adds the signed
+halfword at `+0x28`; when the turn block's day reads 1 it adds `+0x26` as
+well. Two candidate rules sitting right there in the code: a per-CO income
+modifier and a day-one bonus.
+
+Both fields read **zero for all twelve COs in both stat blocks**. That is
+the entire domain, so this is not evidence, it is proof: no AW1 CO modifies
+income, and there is no day-one bonus. `test_the_co_income_terms_are_dead`
+re-reads all 48 halfwords rather than trusting this paragraph. (The gate on
+the CO term, settings `+0x08`, falls back to CO record index 1 when clear —
+the same shape as the `+0x07` CO-power rule byte at `0x03004317`.)
+
+So income collapses to:
+
+```
+income(player) = rate × |{tiles owned by player, terrain ∈ {City, HQ, Airport, Port, Base}}|
+```
+
+### Checked against eleven boards it was not fitted to
+
+`Army.income` is the game's own running total, so every parked state already
+carries the answer — the model just has to reproduce it. Across the eleven
+full-board fixtures, **two maps, two rate settings, property counts 0 to 9,
+four armies each**: every single army matches to the funds.
+
+| fixture | rate | armies (properties → income) |
+|---|---|---|
+| `fog_vision_15x10` | 1000 | P1 2→2000, P2 1→1000, P3/P4 0→0 |
+| `fog_vision_19x16_*` | 1000 | P1 8→8000, P2 7→7000, P3 9→9000 |
+| `sonja_vision_*`, `fog_vision_airwood/groundwood/rain` | 9500 | P1 1→9500, P2 1→9500 |
+
+The 1000 rows and the 9500 rows are the same rule with a different cell, and
+having both is what makes the claim testable at all: a corpus at one rate
+cannot tell a setting from a constant. The 9500 rows refute "terrain
+constant"; the HQ-only rows refute "HQ is not a property"; the neutral
+Cities on the 19×16 map refute "count every property on the board".
+
+### Campaign, without a campaign savestate
+
+Campaign is the advisor's real target and no campaign state has been dumped.
+It does not matter, and that is a claim about the code rather than a hope:
+the helper at `0x08025138` has no mode branch, the game has exactly one
+income path, and the only three callers of the funds writer are this one,
+the join refund and the shop. Campaign can differ only in **what value it
+writes into `0x03004338`**, never in the rule.
+
+Better still, the advisor need not read that cell at all. Any army holding
+at least one property publishes the rate through its own `+0x08`:
+`rate = income / properties`. So `funds_rate()` prefers the dumped cell,
+falls back to deriving it from the board, and only then to 1000 — and says
+which of the three it did, so a plan built on the guess can refuse to quote
+a forecast. A campaign dump gets the right rate whatever the campaign sets.
+
+**Still unread:** which value campaign writes there (almost certainly 1000,
+the terrain struct's parallel constant, but that is an expectation and it is
+labelled as one), and which setup option writes the `+0x08` CO gate. Neither
+blocks anything: one read of `0x03004338` on any parked campaign state
+closes the first.
+
+### What shipped
+
+`engine/economy.py`: `FUNDING_TERRAIN` from the jump table, `properties()`,
+`property_tiles()`, `funds_rate()` with its source label, `income()`
+returning an `Income` record that carries the game's own figure beside the
+model's, `check()` for the per-dump regression, and `forecast()` — the one
+function here that is an ASSUMPTION rather than a fact, because it holds the
+property set still, and it says so. `harness/mgba_state.lua` ships
+`funds_per_property`; `state.py` carries it as `Board.funds_per_property`,
+`None` for dumps that predate the field. `tests/test_economy.py` replays all
+eleven boards, refutes the four wrong readings, and re-derives the jump
+table and the dead CO terms from the ROM.

@@ -208,6 +208,16 @@ function state(path, probe)
   local repfree = emu:read8(0x03004357)
   w_(string.format('  "repair_free": %s, "repair_free_raw": %d,',
     (repfree ~= 0) and "true" or "false", repfree))
+  -- settings +0x28: funds per property per turn. The ONLY amount the income
+  -- path reads -- the terrain struct's own income field is a parallel
+  -- constant nothing here touches. Read straight out of the paying body of
+  -- the terrain switch at 0x08025184:
+  --     ldr r0, =0x03004310 ; ldr r0, [r0, #0x28] ; bx lr
+  -- It is a SETTING (VS setup writes it; the parked fixture holds 9500), so
+  -- it ships per dump rather than being compiled in. engine/economy.py can
+  -- also derive it from any army that owns property, and cross-checks the
+  -- two.
+  w_(string.format('  "funds_per_property": %d,', emu:read32(0x03004338)))
 
   -- armies: 1-indexed, record 0 is a dummy
   w_('  "armies": [')
