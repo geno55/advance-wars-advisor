@@ -116,6 +116,7 @@ try:                                    # imported as engine.actions by tools/
     from . import damage, join as join_mod, pathing, supply as supply_mod, threat
     from . import production as prod_mod
     from . import unload as unload_mod
+    from .state import Unit as _Unit
 except ImportError:                     # imported as actions, engine/ on path
     import co as co_mod
     import damage
@@ -125,6 +126,7 @@ except ImportError:                     # imported as actions, engine/ on path
     import threat
     import production as prod_mod
     import unload as unload_mod
+    from state import Unit as _Unit
 
 Coord = Tuple[int, int]
 DATA = pathlib.Path(__file__).resolve().parent.parent / "data"
@@ -704,7 +706,7 @@ def build_actions(board, player: int, *, co_ids: Optional[dict] = None,
             for off in prod_mod.offers(tid, funds if funds is not None else -1,
                                        co, power):
                 st = pathing.unit_stats(off.unit_type)
-                fresh = board.units[0].__class__(
+                fresh = _Unit(
                     slot=slot, player=player, type=off.unit_type, x=x, y=y,
                     hp=100, ammo=st["max_ammo"], capture=0,
                     fuel=st["max_fuel"], acted=True, carrying=False,
