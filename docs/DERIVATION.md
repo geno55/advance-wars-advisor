@@ -1941,3 +1941,57 @@ landing tile, with the dropped unit's exposure and turn-start facts — the
 seven rows in `tests/fixtures/drop_probes.json`, `tests/test_unload.py`,
 and the report. The "WHAT IS NOT MODELLED" list is down to production and
 power activation, both army actions.
+
+
+## 36. Production: one list, three masks, fifty slots
+
+The last refusal in `actions.py`. The fixture map has no factory, which
+turned out not to matter: terrain writes are transparent, so a Base, an
+Airport and a Port were written under an empty plain and pressed.
+
+### The read
+
+The build menu is **one 18-entry list at `0x08080D14`**, `-1`-terminated, in
+the menu's order — Infantry, Mech, Recon, Tank, MdTank, APC, Artillery,
+Rockets, AntiAir, Missiles, then the four air units, then the four ships.
+The shop builder (`0x0802E818`) walks it and keeps every unit whose class
+byte (stats `+0x14`) intersects a mask the factory terrain selected:
+terrain id − 8 indexes a jump table at `0x0802E7C0`, landing on **7 for a
+Base, `0x10` for an Airport, `0x20` for a Port** (a fourth branch, `8`,
+answers to no real terrain). Per entry it prices the unit — `(cost/10 ×
+header[+0x2C] / 100) × 10`, the unit-value multiplier yet again — and
+flags it unaffordable when `funds < price` (`0x0802E904`, so exact funds
+buy). A purchase goes through `0x0802425C`: the **free-slot finder at
+`0x080240EC` scans `base+1 .. base+50`** and returns nothing past that —
+fifty units an army, no exceptions — then the unit is initialised at
+`0x080241DC` (acted, hp 100, fuel and ammo at the stats maxima, capture and
+cargo zero), positioned, and the spend routine (`0x08024128`) takes the
+price and adds it to the army's lifetime spend at `+4`, capped at 999999.
+The spawn also bumps a per-army per-type built counter at `army+0x36+type`.
+
+### The drives
+
+Eleven presses on written factories, two scripts:
+
+- the three shops on screen, lists and prices matching the read exactly;
+  Kanbei's Airport read 24000/26400/10800/6000 — ×1.2 across the board.
+- Infantry bought for 1000 at Andy's Base, for 1200 at Kanbei's; the new
+  record in slot 73 (lowest free above the eight in 65..72) with flags 1,
+  fuel 99, ammo 0, hp 100; after freeing slot 65 the next purchase took 65.
+- funds 900: the shop opened, Infantry greyed at 1000, A did nothing;
+  funds 1000: bought, treasury 0.
+- A on the own HQ, a neutral Base and an enemy Base: the map menu, not a
+  shop, every time.
+
+### What shipped
+
+`shop_order` in the unit-stats extraction, `engine/production.py` (shops,
+prices, offers, the slot finder and its cap), `actions.build_actions()` —
+the army's purchases as Actions with the new unit's exposure and
+turn-start facts, unaffordable offers listed and flagged rather than
+hidden, a warning when all fifty slots are full — `tests/fixtures/
+build_probes.json`, `tests/test_production.py`, and the report's factory
+lines. With that, every unit-facing mechanic the advisor once declined is
+enumerated from measured data; what remains un-offered is CO power
+activation, which `engine/co.py` models and an army module can now pick
+up beside `build_actions`.

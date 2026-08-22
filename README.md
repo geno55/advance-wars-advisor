@@ -408,9 +408,12 @@ predictions, five exact. **DROP** closed the list in DERIVATION 35: from any
 destination the transport's unload-from table allows, onto any neighbour the
 PASSENGER can stand on that nobody occupies -- the tile the transport just
 left included -- the passenger landing acted, one drop a turn; both cargo
-slots are read now. Production is the one unit-adjacent mechanic still not
-offered rather than offered wrongly, and CO power activation is an ARMY
-action modelled in `engine/co.py`, waiting on an army-actions module.
+slots are read now. **BUILD** is the army's action (DERIVATION 36):
+`build_actions()` lists every own empty factory's shop -- the ROM's one
+shop list filtered by class mask, priced with the CO's value multiplier
+(Kanbei ×1.2), affordable at `funds >= price`, fifty units an army -- with
+the new unit's exposure on the factory tile. CO power activation remains
+the one army action modelled in `engine/co.py` and not yet enumerated.
 
 35 regression tests, including the branch ban. The resolution tests assert
 equality with `engine/damage.py` called directly on the same inputs — what
@@ -432,6 +435,7 @@ engine/supply.py          supply, property repair, daily fuel burn -- the
 engine/join.py            the merge: pair rule, bar sum, refund, caps
 engine/unload.py          the drop: unload-from table, passenger passability,
                           occupancy with the vacated origin free
+engine/production.py      the shops, prices, the slot cap -- army builds
 engine/fog.py             what you can legally see; reads the game's own array
 engine/rng.py             the derived RNG generator AND the luck consumption:
                           strike_luck() turns a state read into the exact roll
@@ -482,6 +486,9 @@ harness/mesen_join.lua    five driven joins against the merge routine's
                           predictions. DERIVATION.md 34
 harness/mesen_drop.lua    seven driven drops: occupancy, passenger passability,
                           no-tile refusal, the vacated origin. DERIVATION.md 35
+harness/mesen_build.lua / _build2.lua  written factories: the three shops,
+                          purchases, broke/exact funds, slot reuse, the gates
+                          that open the map menu instead. DERIVATION.md 36
 harness/observations.csv  75 recorded battles (14 by hand, 61 swept)
 
 data/aw1_damage.json      damage matrices + provenance + resolved questions
@@ -491,7 +498,7 @@ data/aw1_movecost.json    movement costs, 7 move types x 20 terrains x 3 weather
 data/aw1_army_struct.json army record layout + open CO questions
 data/aw1_co.json          12 CO records, all 12 names measured (Sturm has two)
 data/aw1_unit_stats.json  cost, move, move type, range, vision, fuel, ammo,
-                          cargo, unload-from and can-stand tables
+                          cargo, unload-from, can-stand, the shop order
 data/aw1_supply.json      service classes, burn table, supplier tables, the
                           repair-cost multiplier, Eagle's burn adjust
 
@@ -513,6 +520,8 @@ tests/test_join.py        10 tests: the five joins replayed, the internal-sum
                           and lost-excess readings refuted
 tests/test_unload.py      10 tests: the seven drops replayed, the rule's three
                           table parts kept apart
+tests/test_production.py  9 tests: shops, prices, the >= edge, slot allocation
+                          and the fifty cap, build_actions gating
 tests/fixtures/           captured boards, seeded sweeps, and the game's own
                           vision array
 harness/fixtures/         mGBA save states parked at target-select, so a sweep
@@ -543,7 +552,7 @@ tools/extract_tables.py   ROM -> damage JSON, 17 structural assertions
 tools/extract_movecost.py ROM -> movement cost JSON
 tools/extract_terrain.py  ROM -> terrain JSON, 121 structural assertions
 tools/extract_co.py       ROM -> CO records, 724 structural assertions
-tools/extract_units.py    ROM -> unit stats, 402 structural assertions
+tools/extract_units.py    ROM -> unit stats, 404 structural assertions
 tools/extract_supply.py   ROM -> supply/repair/burn tables, 78 assertions
 tools/quote.py            CLI: quote a single matchup
 tools/battle_plan.py      which battles to record, by expected information

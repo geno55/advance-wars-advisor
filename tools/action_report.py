@@ -245,6 +245,21 @@ def main():
             u = next(x for x in board.units if x.slot == slot)
             print(f"  {u.type:10s} #{slot:<3d} ({u.x:2d},{u.y:2d})  "
                   f"{summary_line(board, u, acts)}")
+        builds = actions.build_actions(board, player, weather=a.weather,
+                                       fog=a.fog, warnings=warnings)
+        if builds:
+            print(f"\nP{player} factories -- what the treasury buys this turn:")
+            by_tile = {}
+            for bd in builds:
+                by_tile.setdefault(bd.tile, []).append(bd)
+            for tile, offs in sorted(by_tile.items()):
+                can = [f"{o.build_type} {o.cost}" for o in offs if o.affordable]
+                cant = [o.build_type for o in offs if not o.affordable]
+                line = (f"  {offs[0].terrain:8s} ({tile[0]:2d},{tile[1]:2d})  "
+                        + (", ".join(can) if can else "nothing affordable"))
+                if cant:
+                    line += f"  [too dear: {', '.join(cant)}]"
+                print(line)
         print("\n  --unit N for the full list, with counters and exposure")
 
     # focus_fire warns about fog per hypothetical board, and the unlit count

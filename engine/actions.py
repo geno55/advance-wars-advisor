@@ -68,10 +68,18 @@ WHAT IS MODELLED
     The exposure is the dropped unit's, on its tile, with the transport
     parked beside it.
 
+  * BUILD -- the army's action, kept apart from the per-unit enumeration in
+    `build_actions(board, player)`: every own EMPTY factory, every unit its
+    shop lists (the ROM's shop order filtered by class mask), priced with
+    the CO's value multiplier, flagged affordable, with the new unit's
+    exposure on the factory tile (it is created acted, full, and sits there
+    until morning) and its turn-start facts. DERIVATION 36,
+    engine/production.py. Unaffordable offers are listed, not hidden --
+    the game greys them, and a quote that omits them would hide the one
+    number a saving plan needs.
+
 WHAT IS NOT MODELLED, deliberately and visibly
 
-  * Production. Buying units is the army's action, not a unit's, and the
-    factory rules have not been measured. A later module.
   * CO power activation. The whole system is modelled in engine/co.py --
     charge formula, threshold (`power_threshold`), per-CO effects
     (DERIVATION 27) -- but activating is an ARMY action like production, and
@@ -106,6 +114,7 @@ from typing import Dict, List, Optional, Tuple
 try:                                    # imported as engine.actions by tools/
     from . import co as co_mod
     from . import damage, join as join_mod, pathing, supply as supply_mod, threat
+    from . import production as prod_mod
     from . import unload as unload_mod
 except ImportError:                     # imported as actions, engine/ on path
     import co as co_mod
@@ -114,6 +123,7 @@ except ImportError:                     # imported as actions, engine/ on path
     import pathing
     import supply as supply_mod
     import threat
+    import production as prod_mod
     import unload as unload_mod
 
 Coord = Tuple[int, int]
@@ -140,11 +150,13 @@ def _capturable() -> frozenset:
 class Action:
     """One legal thing one unit can do this turn, with the facts attached.
 
-    `kind` is one of "attack", "capture", "drop", "join", "load", "supply",
-    "wait". The optional fields are populated per kind and None/zero
-    otherwise:
+    `kind` is one of "attack", "build", "capture", "drop", "join", "load",
+    "supply", "wait". The optional fields are populated per kind and
+    None/zero otherwise:
 
       attack   target (the enemy unit), strike, counter, hp_after
+      build    unit=None (an army action); build_type, cost, affordable,
+               target = the unit as it will stand on the tile (acted)
       capture  target=None; progress_after, captures_now, capture_turns_left
       drop     target (the passenger), drop_tile (where it lands, acted);
                exposure and turn_start describe the PASSENGER there
@@ -184,6 +196,9 @@ class Action:
     supplies: Tuple = ()                       # SupplyFill per refilled unit
     merge: Optional[object] = None             # join.Merge on a join
     drop_tile: Optional[Coord] = None          # where a drop lands
+    build_type: Optional[str] = None           # what a build buys
+    cost: int = 0                              # its price
+    affordable: bool = True                    # funds >= cost
 
 
 @dataclass(frozen=True)
@@ -384,7 +399,7 @@ def _co_of(board, player, co_ids):
 
 
 _KIND_ORDER = {"attack": 0, "capture": 1, "join": 2, "drop": 3, "supply": 4,
-               "load": 5, "wait": 6}
+               "load": 5, "wait": 6, "build": 7}
 
 
 def _neighbours(board, tile):
@@ -643,6 +658,71 @@ def actions_for(board, unit, *, co_ids: Optional[dict] = None,
 
     out.sort(key=lambda a: (_KIND_ORDER[a.kind], a.tile,
                             a.target.slot if a.target else -1))
+    return out
+
+
+def build_actions(board, player: int, *, co_ids: Optional[dict] = None,
+                  weather: Optional[str] = None, fog: Optional[bool] = None,
+                  fog_rules: Optional[dict] = None,
+                  warnings: Optional[list] = None) -> List[Action]:
+    """Every purchase the army could make this turn, one Action per
+    (factory, unit), affordable or not -- DERIVATION 36.
+
+    A factory is an own Base/Airport/Port with no unit on it. The new unit
+    is acted, full, and stands there until morning, so its exposure is
+    focus fire on that tile as the board stands, and its turn_start facts
+    are the factory's own service (free resupply of a full unit: nothing).
+    When the army's 50 slots are full no action is offered and a warning
+    says why; when funds are unknown every offer is flagged unaffordable
+    out loud.
+    """
+    warnings = warnings if warnings is not None else []
+    out: List[Action] = []
+    try:
+        army = board.army(player)
+        funds, power = army.funds, army.power_active
+    except (StopIteration, AttributeError):
+        funds, power = None, False
+        note = "no army record for this player -- builds are listed unpriced as unaffordable"
+        if note not in warnings:
+            warnings.append(note)
+    co = _co_of(board, player, co_ids)
+    slot = prod_mod.free_slot(board, player)
+    if slot is None:
+        note = (f"P{player} holds all {prod_mod.ARMY_SLOTS} unit slots -- the "
+                f"game builds nothing until one frees up")
+        if note not in warnings:
+            warnings.append(note)
+        return out
+    for y in range(board.height):
+        for x in range(board.width):
+            tid = board.terrain[y][x]
+            if not prod_mod.is_factory(tid) or board.owner[y][x] != player:
+                continue
+            if board.unit_at(x, y) is not None:
+                continue
+            for off in prod_mod.offers(tid, funds if funds is not None else -1,
+                                       co, power):
+                st = pathing.unit_stats(off.unit_type)
+                fresh = board.units[0].__class__(
+                    slot=slot, player=player, type=off.unit_type, x=x, y=y,
+                    hp=100, ammo=st["max_ammo"], capture=0,
+                    fuel=st["max_fuel"], acted=True, carrying=False,
+                    loaded=False, state=1, cargo=0)
+                hypo = dataclasses.replace(board, units=board.units + [fresh],
+                                           vision=None)
+                ff = threat.focus_fire(hypo, fresh, (x, y), co_ids=co_ids,
+                                       weather=weather, fog=fog,
+                                       fog_rules=fog_rules, warnings=warnings)
+                ts = _turn_start_facts(hypo, fresh, (x, y), fresh.fuel,
+                                       co_ids, warnings)
+                out.append(Action(
+                    kind="build", unit=None, tile=(x, y), move_cost=0,
+                    terrain=board.terrain_name(x, y),
+                    stars=board.defence_for(x, y, st["move_type"]),
+                    fuel_after=fresh.fuel, exposure=ff, target=fresh,
+                    hp_after=100, turn_start=ts, build_type=off.unit_type,
+                    cost=off.price, affordable=off.affordable))
     return out
 
 

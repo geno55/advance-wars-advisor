@@ -1,0 +1,51 @@
+{
+  "_comment": [
+    "Measured production (DERIVATION 36). Fixture: savestate slot 2, P2",
+    "active (army tag 0x40, base slot 64, units in 65..72), funds 19000,",
+    "Andy unless noted. The map has no factories, so each case writes one",
+    "(terrain id | owner tag) under the empty plain at (11,6) and presses A.",
+    "Purchases pick the shop's top item with write-watches on the unit array",
+    "and the army funds. PCs: unit init 0x080241DC (type, flags=1 acted,",
+    "fuel/ammo to stats maxima, hp 100, capture/cargo zero), position",
+    "0x08024286/88, spend 0x0802413E, slot search 0x080240EC, spawn",
+    "0x0802425C which also bumps the per-army per-type built counter at",
+    "army+0x36+type.",
+    "The shop list is one 18-entry table at 0x08080D14 in menu order,",
+    "filtered by the unit class byte (stats +0x14) against a mask chosen by",
+    "the factory terrain: Base 7 (foot|tires|treads), Airport 0x10, Port",
+    "0x20 (dispatch 0x0802E7A4; terrain id-8 indexes a jump table).",
+    "Price = (cost/10 * CO header[+0x2C] / 100) * 10, affordable when",
+    "funds >= price (0x0802E904)."
+  ],
+  "rom_sha1": "15053499d5b3f49128a941d7f2d84876f5424d0c",
+  "scripts": ["mesen_build.lua", "mesen_build2.lua"],
+  "shops": {
+    "Base": ["Infantry", "Mech", "Recon", "Tank", "MdTank", "APC", "Artillery",
+             "Rockets", "AntiAir", "Missiles"],
+    "Airport": ["Fighter", "Bomber", "BCopter", "TCopter"],
+    "Port": ["Battleship", "Cruiser", "Lander", "Sub"]
+  },
+  "prices_seen": {
+    "Andy": {"Infantry": 1000, "Mech": 3000, "Recon": 4000, "Tank": 7000,
+             "MdTank": 16000, "APC": 5000, "Artillery": 6000,
+             "Fighter": 20000, "Bomber": 22000, "BCopter": 9000, "TCopter": 5000,
+             "Battleship": 28000, "Cruiser": 18000, "Lander": 12000, "Sub": 20000},
+    "Kanbei": {"Fighter": 24000, "Bomber": 26400, "BCopter": 10800, "TCopter": 6000}
+  },
+  "builds": [
+    {"case": "B1-base-infantry", "factory": 14, "co": 1, "funds": [19000, 18000],
+     "unit": "Infantry", "slot": 73, "flags": 1, "hp": 100, "fuel": 99, "ammo": 0},
+    {"case": "B4-kanbei-infantry", "factory": 14, "co": 6, "funds": [19000, 17800],
+     "unit": "Infantry", "slot": 73},
+    {"case": "B5-broke", "factory": 14, "co": 1, "funds": [900, 900],
+     "bought": false, "note": "Infantry 1000 > 900; A did nothing"},
+    {"case": "R4-exact-funds", "factory": 14, "co": 1, "funds": [1000, 0],
+     "unit": "Infantry", "slot": 73},
+    {"case": "R5-lowest-free-slot", "factory": 14, "co": 1, "funds": [19000, 18000],
+     "freed": 65, "slot": 65, "unit": "Infantry"},
+    {"case": "R1-own-HQ", "tile": [14, 1], "terrain": 8, "shop": false,
+     "note": "the map menu opened instead"},
+    {"case": "R2-neutral-base", "factory": 14, "owner": 0, "shop": false},
+    {"case": "R3-enemy-base", "factory": 14, "owner": 1, "shop": false}
+  ]
+}

@@ -295,6 +295,16 @@ fixtures, and in this file's git history.
   it). Cargo slot 2 is record `+8` (the second Drop predicate reads it);
   the reader dumps it as `cargo2`.
 
+- **Production, whole** (DERIVATION 36; fixture `build_probes.json`). One
+  `-1`-terminated shop list at `0x08080D14` in menu order, filtered per
+  factory by the class byte against Base 7 / Airport 0x10 / Port 0x20
+  (`0x0802E7C0` jump table); HQ and every other terrain open the map menu.
+  Price `(cost/10 × header[+0x2C]/100) × 10` (Kanbei ×1.2 measured on both
+  Base and Airport), affordable at `funds ≥ price` (exact funds bought).
+  The unit is created acted with full hp/fuel/ammo in the LOWEST FREE slot
+  of `base+1..base+50` (`0x080240EC`) — fifty units an army — and the spend
+  is also tallied at army `+4` and a per-type counter at `+0x36+type`.
+
 ## Assumed — these are the ones that will bite
 
 Nothing, currently. Every assumption this file has carried is either in
@@ -339,10 +349,11 @@ A16, both born the day action enumeration was written.
   preserves it (`0x08023A68`, `0x08029D6E`), and a written bit 7 rides
   through a full turn untouched (fixture row B4). What, if anything, sets
   or reads it has not been found.
-- **Production** — the one unit-adjacent mechanic `engine/actions.py` still
-  declines to offer rather than guess; named in its docstring with the
-  reason. (Supply, repair and fuel burn left this bullet for Established via
-  DERIVATION 33, joining via 34, unloading via 35.)
+- **CO power activation as an offered action** — fully modelled in
+  `engine/co.py` (threshold, effects, lifetime; DERIVATION 27) and not yet
+  enumerated beside `build_actions`. (Supply, repair and fuel burn left the
+  old "turn mechanics" bullet for Established via DERIVATION 33, joining via
+  34, unloading via 35, production via 36.)
 - **The drop selector's default tile.** Every drive with the north tile
   free landed north, and the validity mask is ordered W,E,N,S — so the
   default is not the mask's first bit and is not modelled; the advisor

@@ -51,6 +51,27 @@
     "+0x4C": "s8[20] per-terrain can-stand block, read by the drop validity check (>= 0 passable); sign agrees with the clear movement table on real terrains",
     "+0x60": "u8 movement type, indexes aw1_movecost movement_types"
   },
+  "shop_order": [
+    "Infantry",
+    "Mech",
+    "Recon",
+    "Tank",
+    "MdTank",
+    "APC",
+    "Artillery",
+    "Rockets",
+    "AntiAir",
+    "Missiles",
+    "Fighter",
+    "Bomber",
+    "BCopter",
+    "TCopter",
+    "Battleship",
+    "Cruiser",
+    "Lander",
+    "Sub"
+  ],
+  "shop_order_note": "the build menu lists units in this order, read from the -1-terminated table at 0x08080D14; each factory shows the entries whose class byte (+0x14) intersects its mask -- Base 7, Airport 0x10, Port 0x20 (DERIVATION 36)",
   "cargo_struct": {
     "_comment": "Four structs 0x30 apart, reached from unit +0x20. Exactly the shape the design called for -- a capacity plus an allowed-cargo-type mask, no per-unit-type code.",
     "+0x00": "u8 capacity",

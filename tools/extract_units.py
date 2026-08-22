@@ -54,6 +54,7 @@ EXPECT_SHA1 = "15053499d5b3f49128a941d7f2d84876f5424d0c"
 ROM_BASE = 0x08000000
 BASE, STRIDE, N = 0x2830C8, 0x70, 24
 DAMAGE_PRIMARY = 0x283B48        # the table must end exactly here
+SHOP_ORDER = 0x080D14            # the build menu's unit list, -1 terminated
 
 UNIT_IDS = {
     0: "Infantry", 1: "Mech", 2: "MdTank", 4: "Tank", 5: "Recon", 6: "APC",
@@ -284,6 +285,18 @@ def main(rom_path, out_path):
     check(set(units["Cruiser"]["unload_from"]) >= {7, 11, 19},
           "Cruiser should unload from Sea, Port and Reef at least")
 
+    # -- the shop list: one -1-terminated table of 1-based RAM types in menu
+    # -- order, filtered per factory by the class byte (DERIVATION 36)
+    shop = []
+    i = SHOP_ORDER
+    while rom[i] != 0xFF:
+        shop.append(UNIT_IDS[rom[i] - 1]); i += 1
+    check(len(shop) == 18 and len(set(shop)) == 18,
+          f"the shop list should name all 18 units once, got {shop}")
+    check(shop[:3] == ["Infantry", "Mech", "Recon"] and shop[-4:] ==
+          ["Battleship", "Cruiser", "Lander", "Sub"],
+          f"shop order does not match the measured menus: {shop}")
+
     print(f"{checks} structural assertions passed")
     print("cross-check passed: armed/unarmed agrees with the damage matrices")
     print("cargo sets match groupings derived from the unit table itself")
@@ -340,6 +353,12 @@ def main(rom_path, out_path):
                      "clear movement table on real terrains",
             "+0x60": "u8 movement type, indexes aw1_movecost movement_types",
         },
+        "shop_order": shop,
+        "shop_order_note": "the build menu lists units in this order, read "
+                           "from the -1-terminated table at 0x08080D14; each "
+                           "factory shows the entries whose class byte "
+                           "(+0x14) intersects its mask -- Base 7, Airport "
+                           "0x10, Port 0x20 (DERIVATION 36)",
         "cargo_struct": {
             "_comment": "Four structs 0x30 apart, reached from unit +0x20. "
                         "Exactly the shape the design called for -- a capacity "
