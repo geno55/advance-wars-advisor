@@ -87,10 +87,19 @@ WHAT IS MODELLED
     turn after activation; a caller that wants "Eagle refreshes, then the
     Tank attacks" composes it from actions_for on the refreshed board.
 
+  * TRAP -- under fog, the tiles the game's own move grid would offer that
+    hold a HIDDEN enemy (DERIVATION 38: enterable, never expanded through).
+    Picking one moves the unit to the tile before it, charges fuel for the
+    tiles travelled, and spends the action with no menu. Offered as kind
+    "trap" with `drop_tile` = where the unit actually stops and the
+    exposure and turn-start facts THERE, so a board that knows where the
+    hidden units stand says so instead of pretending the tile is a
+    destination. reachable()/destinations() are already the game's fill
+    for everything else: hidden enemies block passage exactly like visible
+    ones, so no move is more optimistic than the game.
+
 WHAT IS NOT MODELLED, deliberately and visibly
 
-  * Hidden units interrupting movement under fog. Pathing does not model the
-    ambush rule, so under fog a long move may be more optimistic than the game.
 
 Exposure on an ATTACK action is computed on the board AFTER the trade, worst
 case for you throughout one consistent world -- the low opening roll: the
@@ -168,6 +177,8 @@ class Action:
       capture  target=None; progress_after, captures_now, capture_turns_left
       drop     target (the passenger), drop_tile (where it lands, acted);
                exposure and turn_start describe the PASSENGER there
+      trap     target (the hidden enemy), tile = what the player would pick,
+               drop_tile = where the unit really stops; facts are there
       join     target (the friendly merged into); hp_after, fuel_after and
                merge (join.Merge: ammo, refund, inherited capture progress)
       load     target (the transport); exposure describes the TRANSPORT
@@ -408,7 +419,7 @@ def _co_of(board, player, co_ids):
 
 
 _KIND_ORDER = {"attack": 0, "capture": 1, "join": 2, "drop": 3, "supply": 4,
-               "load": 5, "wait": 6, "build": 7, "power": 8}
+               "load": 5, "wait": 6, "trap": 7, "build": 8, "power": 9}
 
 
 def _neighbours(board, tile):
@@ -561,6 +572,33 @@ def actions_for(board, unit, *, co_ids: Optional[dict] = None,
                 captures_now=gained >= remaining,
                 capture_turns_left=-(-remaining // max(1, gained)),
                 **facts(tile)))
+
+    # -- traps ------------------------------------------------------------------
+    # under fog, the hidden enemies' tiles the game's grid offers: picking
+    # one ends the move one tile short, acted, no menu (DERIVATION 38)
+    if fog_on:
+        seen = {u.slot for u in threat.fog_mod.visible_units(board, unit.player,
+                                                             fog_rules)}
+        hidden = {u.slot for u in board.units
+                  if u.player != unit.player and u.player != 0
+                  and u.slot not in seen}
+        for h, (stop, paid) in pathing.trap_tiles(board, unit, hidden,
+                                                   weather).items():
+            enemy = board.unit_at(*h)
+            me = dataclasses.replace(unit, x=stop[0], y=stop[1], acted=True,
+                                     fuel=max(0, unit.fuel - paid))
+            hypo = dataclasses.replace(
+                board, units=[me if u.slot == unit.slot else u
+                              for u in board.units], vision=None)
+            ff = threat.focus_fire(hypo, me, stop, co_ids=co_ids,
+                                   weather=weather, fog=fog,
+                                   fog_rules=fog_rules, warnings=warnings)
+            ts = _turn_start_facts(hypo, me, stop, me.fuel, co_ids, warnings)
+            out.append(Action(kind="trap", unit=unit, tile=h, move_cost=paid,
+                              terrain=board.terrain_name(*stop),
+                              stars=board.defence_for(stop[0], stop[1], my_move),
+                              fuel_after=me.fuel, exposure=ff, target=enemy,
+                              drop_tile=stop, hp_after=unit.hp, turn_start=ts))
 
     # -- drops ------------------------------------------------------------------
     # one action per (passenger, landing tile), on every destination the

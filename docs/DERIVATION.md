@@ -2036,3 +2036,63 @@ With this, nothing the advisor's docstrings once declined is left
 un-offered: every unit action and both army actions enumerate from
 measured data. The remaining gap in the action layer is the fog ambush
 rule in pathing, which is stated where it lives.
+
+
+## 38. The fog ambush: enterable, not expandable, and the move ends where it stops
+
+The one caveat left in `actions.py`: "Hidden units interrupting movement
+under fog. Pathing does not model the ambush rule." Measured now, and the
+rule is smaller and sharper than the sentence.
+
+### Building a hidden enemy
+
+The fixture's P1 units all sit in P2's sight, so the board was arranged:
+fog written on (`0x0300431D`, proven to drive the vision array), P1's Mech
+real-moved from (7,6) onto the road at (6,7) during P1's own turn, and P2's
+Tank at (9,7) typed to an APC (vision 1) before P2's turn began, so that at
+P2's turn start the Mech three tiles west read 0 in the game's vision array.
+Two rig lessons on the way: under fog the turn-start card waits for a
+press, and the cursor then rests ON a unit, so the dismissing taps select it
+and freeze the cursor bytes (DERIVATION 29's trap in a new coat) — the
+driver now cancels with B after every turn change.
+
+### The grid says it first
+
+With the APC selected, the game's own move-select grid
+(`[0x03003600 + y·4][x]`, DERIVATION 13) read, row 7, from x=5: **255, 3,
+2, 1, 0** under fog — the hidden Mech's tile (6,7) is reachable at its
+honest path cost, and (5,7) beyond it, reachable only through the Mech, is
+not. With fog off the same row reads 255, **255**, 2, 1, 0: the visible
+enemy's tile is excluded as always, and nothing else changes. So **a hidden
+enemy's tile is enterable but not expandable**: the fill marks it as a
+destination and refuses to continue through it. The overlay therefore
+does not reach past a hidden unit — only around it, if another route
+exists.
+
+### The drive says the rest
+
+Three confirms, each from the same prepared board:
+
+- two tiles west (7,7): an ordinary move — fuel −2, the action menu, Wait.
+- three tiles west, **onto the hidden tile**: the unit moved to (7,7) and
+  stopped; fuel −2, for the two tiles actually travelled; the acted bit
+  set at once (`0x0802609C`) with no menu — the action is spent. The
+  Trap. The Mech was lit afterwards, but the mover's own vision 1 reaches
+  it from (7,7), so whether the game reveals an ambusher independently of
+  vision is not separable on this board and is not claimed.
+- four tiles west, past it: the confirm was refused outright, as the grid
+  predicted.
+
+### What shipped
+
+`engine/pathing.py` keeps `reachable()` as the true pass-through set and
+adds `trap_tiles()`: the hidden-enemy tiles the game's grid would offer,
+each with the tile the mover would stop on (the cheapest adjacent reachable
+tile — the game walks its drawn route, so a tie between approaches is a
+stated caveat) and the cost actually paid. `actions.py` offers them as
+kind `"trap"`: the tile the player would pick, `stop_tile`, fuel for the
+tiles travelled, acted, exposure and turn-start facts AT THE STOP TILE —
+because a board that knows where the hidden units are should say "that
+tile ends your move at (7,7)" rather than pretend it is a destination. The
+rows are `tests/fixtures/ambush_probes.json`; `tests/test_ambush.py`
+replays the grid against the model's reach with fog on and off.

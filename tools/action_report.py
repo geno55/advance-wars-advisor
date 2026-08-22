@@ -117,6 +117,13 @@ def print_unit(board, unit, acts, limit=6):
               f"({a.tile[0]},{a.tile[1]}); the ride "
               f"{exposure_phrase(a.exposure)} (you go with it)")
 
+    for a in (a for a in acts if a.kind == "trap"):
+        print(f"  TRAP if you pick ({a.tile[0]},{a.tile[1]}): a hidden "
+              f"{a.target.type} is there -- you stop at "
+              f"({a.drop_tile[0]},{a.drop_tile[1]}) with fuel {a.fuel_after}, "
+              f"action spent; {exposure_phrase(a.exposure)}"
+              f"{turn_start_phrase(a)}")
+
     for a in (a for a in acts if a.kind == "drop"):
         print(f"  drop {a.target.type} #{a.target.slot} at "
               f"({a.drop_tile[0]},{a.drop_tile[1]}) from "
@@ -172,6 +179,9 @@ def summary_line(board, unit, acts):
                        else f" ({soonest.capture_turns_left} turns)"))
     if loads:
         bits.append(f"{len(loads)} transport(s) in reach")
+    traps = [a for a in acts if a.kind == "trap"]
+    if traps:
+        bits.append(f"{len(traps)} trap tile(s) under fog")
     drops = [a for a in acts if a.kind == "drop"]
     if drops:
         bits.append(f"can drop onto {len({a.drop_tile for a in drops})} tile(s)")

@@ -1,0 +1,42 @@
+{
+  "_comment": [
+    "The fog ambush rule, measured (DERIVATION 38). Fixture: savestate slot 2",
+    "with fog written on (0x0300431D = 1); P1's Mech #3 real-moved (7,6)->(6,7)",
+    "on P1's turn; P2's Tank 71 at (9,7) typed APC (RAM 7, vision 1) before",
+    "P2's turn so the Mech three tiles west is UNLIT at P2's turn start (the",
+    "game's vision array read 0 at (6,7) and (7,7)). Row y=7 is road from",
+    "x=1 to x=13; (5,7) is reachable only through (6,7) (mountains north and",
+    "south of it). The APC's move is 6.",
+    "grid rows are the game's own move-select grid at [0x03003600+y*4][x]",
+    "(cost spent, 255 unreachable), x = 0..14, read with the APC selected.",
+    "PCs on the trapped move: fuel 0x080241A0, position 0x08026076/7C, acted",
+    "0x0802609C -- the ordinary move applier, with the path cut short."
+  ],
+  "rom_sha1": "15053499d5b3f49128a941d7f2d84876f5424d0c",
+  "scripts": ["mesen_ambush.lua", "mesen_ambush2.lua"],
+  "mover": {"slot": 71, "type_written": "APC", "at": [9, 7], "fuel": 64, "move": 6},
+  "hidden_enemy": {"slot": 3, "type": "Mech", "at": [6, 7]},
+  "grid": {
+    "fog_on": {
+      "6": [255, 255, 255, 255, 255, 255, 4, 3, 2, 255, 255, 3, 4, 5, 6],
+      "7": [255, 255, 255, 255, 255, 255, 3, 2, 1, 0, 1, 2, 3, 4, 5],
+      "8": [255, 255, 255, 255, 255, 255, 5, 3, 2, 1, 2, 3, 4, 6, 6]
+    },
+    "fog_off": {
+      "6": [255, 255, 255, 255, 255, 255, 4, 3, 2, 255, 255, 3, 4, 5, 6],
+      "7": [255, 255, 255, 255, 255, 255, 255, 2, 1, 0, 1, 2, 3, 4, 5],
+      "8": [255, 255, 255, 255, 255, 255, 5, 3, 2, 1, 2, 3, 4, 6, 6]
+    },
+    "reading": "a hidden enemy's tile is marked reachable at its path cost (3) but the fill does not expand out of it -- (5,7) stays 255 under fog exactly as with the Mech visible, where (6,7) itself is 255"
+  },
+  "drives": [
+    {"case": "T1-two-west", "picked": [7, 7], "ended": [7, 7], "fuel_after": 62,
+     "acted_after_menu": true, "menu": true,
+     "note": "normal move short of the Mech; Wait picked from the menu"},
+    {"case": "T2-onto-hidden-tile", "picked": [6, 7], "ended": [7, 7], "fuel_after": 62,
+     "acted_immediately": true, "menu": false, "mech_lit_after": true,
+     "note": "Trap: stops on the tile before the hidden unit, fuel charged for the two tiles travelled, action spent with no menu; the Mech is lit afterwards (the mover's own vision 1 reaches it -- a separate reveal rule is not distinguishable here)"},
+    {"case": "T3-beyond-hidden-tile", "picked": [5, 7], "ended": null,
+     "note": "confirm refused: (5,7) is 255 in the grid (only route is through the Mech)"}
+  ]
+}

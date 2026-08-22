@@ -418,8 +418,12 @@ uses-scaled threshold -- the map-menu gate, measured to the unit; the ready
 latch turned out to be a bystander -- and carries what activation does to
 this board: Andy's per-unit heals through the repair routine, Eagle's
 refreshed units, Drake's per-enemy damage, Sturm's three candidate meteors,
-Olaf's snow, everyone's power stat block. Nothing the docstrings once
-declined is left un-offered.
+Olaf's snow, everyone's power stat block. And the last caveat -- the fog
+**ambush** -- is measured (DERIVATION 38): the game's grid marks a hidden
+enemy's tile reachable but never expands through it, and confirming onto it
+stops you one tile short, fuel for the tiles travelled, action spent; those
+tiles are offered as `"trap"` actions with the stop tile's facts. Nothing
+the docstrings once declined is left un-offered.
 
 35 regression tests, including the branch ban. The resolution tests assert
 equality with `engine/damage.py` called directly on the same inputs — what
@@ -499,6 +503,9 @@ harness/mesen_build.lua / _build2.lua  written factories: the three shops,
                           that open the map menu instead. DERIVATION.md 36
 harness/mesen_power_menu.lua  eight map-menu presses: meter vs latch vs
                           active vs uses as the Power item's gate. DERIVATION.md 37
+harness/mesen_ambush.lua / _ambush2.lua  a hidden Mech on a P2 road under
+                          written fog: three confirms and the game's own move
+                          grid, fog on and off. DERIVATION.md 38
 harness/observations.csv  75 recorded battles (14 by hand, 61 swept)
 
 data/aw1_damage.json      damage matrices + provenance + resolved questions
@@ -534,6 +541,8 @@ tests/test_production.py  9 tests: shops, prices, the >= edge, slot allocation
                           and the fifty cap, build_actions gating
 tests/test_power_action.py  9 tests: the eight menu rows replayed, the effects
                           composed per CO, power_action gating
+tests/test_ambush.py      6 tests: the game's grid replayed fog on/off, the trap
+                          action's stop tile, fuel and acted state
 tests/fixtures/           captured boards, seeded sweeps, and the game's own
                           vision array
 harness/fixtures/         mGBA save states parked at target-select, so a sweep

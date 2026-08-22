@@ -30,7 +30,10 @@ WHAT IS MODELLED, and where each rule comes from
 WHAT IS NOT MODELLED, deliberately and visibly
 
   * Fog of war, and therefore movement being interrupted by discovering a
-    hidden unit. The state reader does not report fog.
+    hidden unit. Measured in DERIVATION 38: the game's grid marks a hidden
+    enemy's tile reachable but never expands through it, and confirming
+    onto it stops the mover one tile short with the action spent --
+    `trap_tiles()` below; actions.py offers those tiles as "trap".
   * Joining two damaged units of the same type on one tile -- that is an
     ACTION, enumerated by engine/actions.py from reachable() and the pair rule
     (DERIVATION 34); destinations() keeps refusing the friendly's tile.
@@ -150,6 +153,45 @@ def destinations(board, unit, weather: Optional[str] = None) -> Dict[Coord, int]
         elif (blocker.player == unit.player
               and transport_has_room(board, blocker, unit.type)):
             out[tile] = cost                       # loading into a transport
+    return out
+
+
+def trap_tiles(board, unit, hidden_slots, weather: Optional[str] = None) -> Dict:
+    """Hidden-enemy tiles the game's move grid offers this unit, mapped to
+    (stop_tile, cost_paid) -- the fog ambush, DERIVATION 38.
+
+    The game's fill marks a HIDDEN enemy's tile reachable at its honest path
+    cost and never expands out of it (measured on the game's own grid: the
+    tile 3, the tile beyond it 255 while the Mech was unlit; 255 itself
+    when lit). Confirming onto it moves the unit to the tile before it,
+    charges fuel for the tiles travelled, and spends the action.
+
+    `hidden_slots` is the caller's statement of which enemies the player
+    cannot see (fog.visible_units decides). The stop tile is the cheapest
+    reachable approach; the game walks the arrow the player drew, so when
+    two approaches tie the real stop may differ -- a stated caveat.
+    """
+    reach = reachable(board, unit, weather)
+    st = unit_stats(unit.type)
+    budget = allowance(unit)
+    out = {}
+    for enemy in board.units:
+        if enemy.slot not in hidden_slots or enemy.loaded:
+            continue
+        h = (enemy.x, enemy.y)
+        if h in reach:
+            continue                           # cannot happen: enemies block
+        step = board.move_cost(h[0], h[1], st["move_type"], weather)
+        if step is None:
+            continue
+        best = None
+        for n in ((h[0] - 1, h[1]), (h[0] + 1, h[1]), (h[0], h[1] - 1),
+                  (h[0], h[1] + 1)):
+            if n in reach and reach[n] + step <= budget:
+                if best is None or (reach[n], n) < (reach[best], best):
+                    best = n
+        if best is not None:
+            out[h] = (best, reach[best])
     return out
 
 

@@ -314,6 +314,17 @@ fixtures, and in this file's git history.
   DERIVATION 27's effects for the board in hand; the reader dumps
   `power_active/ready/uses` and the meter as u32.
 
+- **The fog ambush** (DERIVATION 38; fixture `ambush_probes.json`). The
+  game's move grid marks a HIDDEN enemy's tile reachable at its path cost
+  and does not expand out of it (beyond-tiles 255 unless another route);
+  a visible enemy's tile is 255. Confirming onto the hidden tile moves the
+  unit to the tile before it, charges fuel for the tiles travelled, sets
+  the acted bit at once with no menu. `pathing.trap_tiles()` and the
+  `"trap"` action kind model it; the stop tile assumes the cheapest
+  approach (a tie between approaches follows the drawn route and is not
+  modelled), and whether an ambusher is revealed independently of the
+  mover's own vision was not separable on the board.
+
 ## Assumed — these are the ones that will bite
 
 Nothing, currently. Every assumption this file has carried is either in
@@ -358,6 +369,10 @@ A16, both born the day action enumeration was written.
   preserves it (`0x08023A68`, `0x08029D6E`), and a written bit 7 rides
   through a full turn untouched (fixture row B4). What, if anything, sets
   or reads it has not been found.
+- **The game's route on a tie.** `trap_tiles()` stops the mover on the
+  cheapest adjacent approach to the hidden tile; the game follows the arrow
+  the player drew or its own auto-route, which can differ when two
+  approaches tie. Stated on the action.
 - **The turn after a power.** `power_action` states what activation does
   to the board; re-enumerating the refreshed or healed units' actions is
   left to the caller (one `dataclasses.replace` per unit, then
