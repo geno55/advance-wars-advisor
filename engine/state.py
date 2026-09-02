@@ -18,6 +18,10 @@ from typing import Optional
 
 DATA = pathlib.Path(__file__).resolve().parent.parent / "data"
 IMPASSABLE = 255
+# Unit flags byte (record +1) bit 0x20: the Dive state. Set by the Dive
+# command at 0x08066E90, cleared by Rise at 0x08066EAC (DERIVATION 31);
+# the action layer toggles it to score a dive before it is made.
+DIVE_FLAG = 0x20
 
 
 @functools.lru_cache(maxsize=None)
@@ -74,7 +78,7 @@ class Unit:
         0x08066E90 and cleared by Rise at 0x08066EAC; while it is up, only
         Cruisers and Subs can hurt this unit -- the damage path swaps its
         primary lookup for the table at 0x08283FC8 (DERIVATION 31)."""
-        return bool(self.state & 0x20)
+        return bool(self.state & DIVE_FLAG)
 
     @property
     def capture_turns_left(self) -> Optional[int]:

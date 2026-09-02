@@ -422,10 +422,22 @@ Olaf's snow, everyone's power stat block. And the last caveat -- the fog
 **ambush** -- is measured (DERIVATION 38): the game's grid marks a hidden
 enemy's tile reachable but never expands through it, and confirming onto it
 stops you one tile short, fuel for the tiles travelled, action spent; those
-tiles are offered as `"trap"` actions with the stop tile's facts. Nothing
-the docstrings once declined is left un-offered.
+tiles are offered as `"trap"` actions with the stop tile's facts. **DIVE**
+and **RISE** were the two menu items still missing (DERIVATION 40): the
+menu's own predicates, read off the twelve-entry table at `0x0828BA80`,
+offer Dive to the one unit whose RAM type the code compares against -- a
+code constant, emitted by the extractor as `can_dive` and labelled as one
+-- while its dive bit is clear, and Rise to anything with the bit set, type
+untested; both on every destination that is neither a load nor a join, no
+terrain test. Either flips the bit and ends the action, and is offered with
+the exposure and turn-start facts for the unit as it will then stand:
+submerged, only the dived table's hunters reach it and it burns a flat 5.
+Wiring that up caught a bug in threat projection, which had been building
+every enemy attack without the defender's dive state. Nothing the
+docstrings once declined is left un-offered; the one caveat that remains,
+the enemy's view of a submerged sub, is stated where it lives.
 
-35 regression tests, including the branch ban. The resolution tests assert
+45 regression tests, including the branch ban. The resolution tests assert
 equality with `engine/damage.py` called directly on the same inputs — what
 this layer adds is *wiring* (the right stars on each side, the right HP, the
 right CO reaching the quote), and the formula itself stays tested where it
@@ -521,7 +533,7 @@ data/aw1_supply.json      service classes, burn table, supplier tables, the
 
 tests/test_damage.py      83 regression tests, incl. the dived-sub table
 tests/test_pathing.py     22 regression tests, incl. "no unit-type branches"
-tests/test_threat.py      23 regression tests, incl. the same branch ban
+tests/test_threat.py      25 regression tests, incl. the same branch ban
 tests/test_fog.py         32 tests, incl. five real-board oracles and branch ban
 tests/test_corpus.py      23 tests: replay every recorded measurement against
                           the engine, strikes and counters kept apart
@@ -529,8 +541,8 @@ tests/test_co_power.py    28 tests: the power system against its measurements
                           (charge, thresholds, effects, lifetime, Sonja, the
                           meteor's three scans, the RNG generator, and the
                           luck consumption that makes rolls predictable)
-tests/test_actions.py     35 regression tests: the enumeration wiring and the
-                          branch ban
+tests/test_actions.py     45 regression tests: the enumeration wiring, the
+                          dive/rise gates and the branch ban
 tests/test_supply.py      26 tests: the measured supply/repair/burn rows
                           replayed, and the discarded alternatives refuted
 tests/test_join.py        10 tests: the five joins replayed, the internal-sum

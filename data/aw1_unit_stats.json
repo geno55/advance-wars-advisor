@@ -13,6 +13,12 @@
     "",
     "cost is stored as cost/10 in a u16 at +0x18.",
     "",
+    "can_dive is DERIVED FROM CODE: the action menu's Dive predicate at",
+    "0x0802DE4C compares the 1-based RAM type byte with an immediate",
+    "(read off the instruction, asserted) and requires flags bit 0x20",
+    "clear; Rise (0x0802DE88) checks only the bit. No table column marks",
+    "the diver (DERIVATION 40).",
+    "",
     "can_move_and_fire is DERIVED (max_range <= 1), not read from the",
     "record. No such flag exists in the table -- the behaviour falls out",
     "of range, so there is no per-unit branch to find. The rule itself",
@@ -50,6 +56,13 @@
     "+0x38": "u8 fuel burned per turn (first of a uniform 20-byte per-terrain block)",
     "+0x4C": "s8[20] per-terrain can-stand block, read by the drop validity check (>= 0 passable); sign agrees with the clear movement table on real terrains",
     "+0x60": "u8 movement type, indexes aw1_movecost movement_types"
+  },
+  "dive_gate": {
+    "predicate": "0x0802DE4C",
+    "type_compare_at": "0x802de54",
+    "ram_type": 24,
+    "unit": "Sub",
+    "note": "Dive offered iff type == this, flags & 0x20 == 0, and the destination is neither a join nor a load (the Join and Load predicates are called and must refuse). Rise (0x0802DE88) drops the type test and requires the bit SET. Both actions (0x0802E30C/0x0802E348) flip the bit, end the unit's action and change nothing else (DERIVATION 40)."
   },
   "shop_order": [
     "Infantry",
@@ -123,6 +136,7 @@
         17,
         18
       ],
+      "can_dive": false,
       "capacity": 0,
       "carries": []
     },
@@ -161,6 +175,7 @@
         17,
         18
       ],
+      "can_dive": false,
       "capacity": 0,
       "carries": []
     },
@@ -197,6 +212,7 @@
         17,
         18
       ],
+      "can_dive": false,
       "capacity": 0,
       "carries": []
     },
@@ -233,6 +249,7 @@
         17,
         18
       ],
+      "can_dive": false,
       "capacity": 0,
       "carries": []
     },
@@ -269,6 +286,7 @@
         17,
         18
       ],
+      "can_dive": false,
       "capacity": 0,
       "carries": []
     },
@@ -305,6 +323,7 @@
         17,
         18
       ],
+      "can_dive": false,
       "capacity": 1,
       "carries": [
         "Infantry",
@@ -362,6 +381,7 @@
         17,
         18
       ],
+      "can_dive": false,
       "capacity": 0,
       "carries": []
     },
@@ -398,6 +418,7 @@
         17,
         18
       ],
+      "can_dive": false,
       "capacity": 0,
       "carries": []
     },
@@ -434,6 +455,7 @@
         17,
         18
       ],
+      "can_dive": false,
       "capacity": 0,
       "carries": []
     },
@@ -470,6 +492,7 @@
         17,
         18
       ],
+      "can_dive": false,
       "capacity": 0,
       "carries": []
     },
@@ -512,6 +535,7 @@
         18,
         19
       ],
+      "can_dive": false,
       "capacity": 0,
       "carries": []
     },
@@ -554,6 +578,7 @@
         18,
         19
       ],
+      "can_dive": false,
       "capacity": 0,
       "carries": []
     },
@@ -596,6 +621,7 @@
         18,
         19
       ],
+      "can_dive": false,
       "capacity": 0,
       "carries": []
     },
@@ -638,6 +664,7 @@
         18,
         19
       ],
+      "can_dive": false,
       "capacity": 1,
       "carries": [
         "Infantry",
@@ -686,6 +713,7 @@
         11,
         19
       ],
+      "can_dive": false,
       "capacity": 0,
       "carries": []
     },
@@ -711,6 +739,7 @@
         11,
         19
       ],
+      "can_dive": false,
       "capacity": 2,
       "carries": [
         "BCopter",
@@ -749,6 +778,7 @@
         13,
         19
       ],
+      "can_dive": false,
       "capacity": 2,
       "carries": [
         "Infantry",
@@ -796,6 +826,7 @@
         11,
         19
       ],
+      "can_dive": true,
       "capacity": 0,
       "carries": []
     }

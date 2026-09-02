@@ -1,7 +1,8 @@
 # Handoff: building the advisor
 
 For the session that picks this up. The measurement programme is complete:
-every unit action (wait, attack, capture, load, join, drop, supply, trap),
+every unit action (wait, attack, capture, load, join, drop, supply, dive,
+rise, trap),
 both army actions (build, power), the turn-start economy (burn, crash,
 repair, resupply, auto-supply) and the fog ambush are enumerated from
 tables read off the ROM and rules measured on the running game
@@ -28,7 +29,7 @@ re-derive; import.
   slots), `Army` (funds, CO id, meter, `power_active/uses/ready`).
 - **Facts per unit**: `engine/actions.actions_for(board, unit, ...)` →
   `Action` records of kind attack / capture / join / drop / supply / load /
-  wait / trap, each with exposure (`threat.FocusFire` at the ENDING tile,
+  wait / dive / rise / trap, each with exposure (`threat.FocusFire` at the ENDING tile,
   worst case in one consistent world), strike/counter envelopes
   (`damage.Outcome`), `turn_start` facts (`supply.TurnStart`: burn, crash,
   repair with the exact funds charge, auto-supply), and per-kind fields
@@ -56,8 +57,9 @@ re-derive; import.
   surface; `tools/quote.py` for one matchup.
 - **Menu orders, for a driver**: map menu Unit / Intel / [Power] / Save /
   Options / End (End is last; up from the top wraps to it). Unit action
-  menu, in table order (`0x0828BB00`): Fire, Capt, Load, Drop, Drop(2nd
-  slot), Join, Supply, Wait, Dive, Rise — only the offered items show
+  menu, in table order (`0x0828BA80`, twelve entries, DERIVATION 40): Fire,
+  Fire, Capt, Capt, Load, Drop, Drop(2nd slot), Join, Supply, Wait, Dive,
+  Rise — only the offered items show
   (observed `[Drop, Supply, Wait]`, `[Capt, Wait]`, `[Wait, Dive]`,
   `[Join]`). Shops list in `aw1_unit_stats.json` `shop_order` filtered per
   factory. The drop selector starts on the north tile when free (recorded,

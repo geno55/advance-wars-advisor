@@ -225,7 +225,17 @@ fixtures, and in this file's git history.
   gate complete. Measured: Cruiser 95 into dived and surfaced alike
   (90+5), BCopter refused Fire against dived and dealt 30 (25+5) to the
   surfaced control. `select_weapon(defender_dived=)`, `Unit.dived`,
-  `tests/fixtures/dive_probes.json`.
+  `tests/fixtures/dive_probes.json`. **Who is offered the two commands**
+  is read off the action-menu predicate table at `0x0828BA80` (DERIVATION
+  40): Dive (`0x0802DE4C`) requires RAM type `0x18` — the Sub, a code
+  constant, emitted by the extractor as `can_dive` and labelled as such —
+  the bit clear, and a destination that is neither a join nor a load; Rise
+  (`0x0802DE88`) requires only the bit SET, with no type test, and the same
+  exclusions. Neither checks terrain. The actions (`0x0802E30C/48`) flip
+  the bit and end the unit's action, writing nothing else. `actions_for`
+  offers `"dive"`/`"rise"` on every wait destination with the exposure
+  and turn-start facts for the toggled unit; `threat.py` passes both dive
+  states into every projected attack.
 - **Meteor Strike, whole** (DERIVATION 30). The meteor centres on an enemy
   UNIT picked by one of three scans, chosen by a single RNG draw mod 3:
   funds value / raw internal HP / funds value with indirects doubled — each
@@ -391,6 +401,13 @@ A16, both born the day action enumeration was written.
   army's CO record and record 1 for the two income terms the payer adds.
   Both terms are zero for every CO, so the gate is unobservable through
   income; which option writes it is unread and does not matter.
+- **A dived sub's concealment.** The game is expected to hide a submerged
+  sub from the enemy unless one of their units stands adjacent; no probe
+  has looked, and nothing in the harness reads the opponent's view of the
+  board (README, Known gaps). The action layer's dive exposure therefore
+  counts every hunter that can reach the tile, which is the conservative
+  side. Kill by: a dived P1 sub, a P2 Cruiser at distance 3, and P2's
+  own Intel/Fire menus on its turn — offered or not.
 - **The drop selector's default tile.** Every drive with the north tile
   free landed north, and the validity mask is ordered W,E,N,S — so the
   default is not the mask's first bit and is not modelled; the advisor

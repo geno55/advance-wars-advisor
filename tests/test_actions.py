@@ -38,10 +38,15 @@ def board(rows, units=(), owner=None, armies=()):
 
 
 def unit(utype, x, y, player=1, slot=1, hp=100, fuel=99, ammo=9, acted=False,
-         loaded=False, cargo=0, capture=0):
+         loaded=False, cargo=0, capture=0, state=0):
     return Unit(slot=slot, player=player, type=utype, x=x, y=y, hp=hp,
                 ammo=ammo, capture=capture, fuel=fuel, acted=acted,
-                carrying=bool(cargo), loaded=loaded, state=0, cargo=cargo)
+                carrying=bool(cargo), loaded=loaded, state=state, cargo=cargo)
+
+
+STATS = json.loads((ROOT / "data" / "aw1_unit_stats.json")
+                   .read_text(encoding="utf-8"))
+DIVED = 0x20                     # unit flags bit, the Dive state (DERIVATION 31)
 
 
 def of_kind(acts, kind):
@@ -467,6 +472,122 @@ class TestFog(unittest.TestCase):
         fogged = of_kind(actions.actions_for(b, b.units[0], fog=True,
                                              warnings=[]), "attack")
         self.assertEqual(len(fogged), 1)
+
+
+class TestDiveRise(unittest.TestCase):
+    """The action menu's own gates, read off its predicate table
+    (DERIVATION 40): Dive is offered to the unit the predicate's type
+    compare names -- emitted by the extractor as `can_dive`, a code
+    constant, not a table column -- while its dive bit is clear; Rise to
+    anything with the bit set, type untested; both on every destination that
+    is neither a load nor a join. Either flips the bit and ends the action.
+    Nothing in actions.py names the Sub to get any of this."""
+
+    def test_the_table_names_one_diver_and_it_is_the_dived_tables_subject(self):
+        """Two independent ROM reads agree: the Dive predicate's immediate
+        and the target-class byte's `sub` bit pick out the same unit."""
+        divers = [n for n, u in STATS["units"].items() if u["can_dive"]]
+        self.assertEqual(len(divers), 1)
+        self.assertEqual(STATS["units"][divers[0]]["targeted_as"], "sub")
+        self.assertEqual(STATS["dive_gate"]["unit"], divers[0])
+
+    def test_a_surfaced_diver_may_dive_wherever_it_may_wait_and_not_rise(self):
+        b = board([[SEA] * 6], [unit("Sub", 2, 0)])
+        acts = actions.actions_for(b, b.units[0], warnings=[])
+        self.assertEqual({a.tile for a in of_kind(acts, "dive")},
+                         {a.tile for a in of_kind(acts, "wait")})
+        self.assertEqual(of_kind(acts, "rise"), [])
+
+    def test_a_submerged_unit_may_rise_wherever_it_may_wait_and_not_dive(self):
+        b = board([[SEA] * 6], [unit("Sub", 2, 0, state=DIVED)])
+        acts = actions.actions_for(b, b.units[0], warnings=[])
+        self.assertEqual({a.tile for a in of_kind(acts, "rise")},
+                         {a.tile for a in of_kind(acts, "wait")})
+        self.assertEqual(of_kind(acts, "dive"), [])
+
+    def test_only_the_tables_diver_dives(self):
+        """Cruiser and Battleship are naval, armed and on the same sea; the
+        one field that separates them from the Sub is can_dive."""
+        for kind in ("Cruiser", "Battleship"):
+            b = board([[SEA] * 6], [unit(kind, 2, 0)])
+            acts = actions.actions_for(b, b.units[0], warnings=[])
+            self.assertEqual(of_kind(acts, "dive"), [], kind)
+            self.assertEqual(of_kind(acts, "rise"), [], kind)
+
+    def test_rise_follows_the_bit_not_the_type(self):
+        """The ROM's Rise predicate never looks at the type byte -- a written
+        0x20 on anything is honoured (DERIVATION 31), and so it is here."""
+        b = board([[SEA] * 6], [unit("Cruiser", 2, 0, state=DIVED)])
+        acts = actions.actions_for(b, b.units[0], warnings=[])
+        self.assertEqual({a.tile for a in of_kind(acts, "rise")},
+                         {a.tile for a in of_kind(acts, "wait")})
+
+    def test_diving_deletes_every_hunter_but_the_dived_tables(self):
+        """A BCopter and a Cruiser both reach the corner, which has two
+        neighbours so both get a firing tile. Surfaced, both shoot;
+        submerged, the copter's primary reads 0 in the dived table and it
+        drops out -- the whole point of the action, in the exposure."""
+        b = board([[SEA] * 7, [SEA] * 7],
+                  [unit("Sub", 0, 0, slot=1),
+                   unit("BCopter", 3, 0, player=2, slot=2, ammo=6),
+                   unit("Cruiser", 5, 1, player=2, slot=3)])
+        acts = actions.actions_for(b, b.units[0], warnings=[])
+
+        def stay(kind):
+            return next(a for a in of_kind(acts, kind) if a.tile == (0, 0))
+
+        self.assertEqual({t.attacker.slot for t in stay("wait").exposure.delivered},
+                         {2, 3})
+        self.assertEqual({t.attacker.slot for t in stay("dive").exposure.delivered},
+                         {3})
+        self.assertLess(stay("dive").exposure.worst_damage,
+                        stay("wait").exposure.worst_damage)
+
+    def test_a_submerged_units_other_actions_are_scored_submerged(self):
+        """The dive bit already on the unit reaches every exposure, not just
+        the dive action's -- a copter cannot touch a dived sub's WAIT."""
+        b = board([[SEA] * 7],
+                  [unit("Sub", 0, 0, slot=1, state=DIVED),
+                   unit("BCopter", 3, 0, player=2, slot=2, ammo=6)])
+        acts = actions.actions_for(b, b.units[0], warnings=[])
+        for a in acts:
+            if a.kind == "rise":
+                continue
+            self.assertEqual(a.exposure.attackers, 0, (a.kind, a.tile))
+        # and surfacing hands the copter its shot back
+        rise_here = next(a for a in of_kind(acts, "rise") if a.tile == (0, 0))
+        self.assertEqual(rise_here.exposure.attackers, 1)
+
+    def test_dive_costs_the_action_and_the_flat_burn_nothing_else(self):
+        """The Dive action body flips the bit and ends the turn (0x0802E30C);
+        fuel and HP are the move's. The burn at turn start is the measured
+        flat 5 for a dived sub against the table's 1 (DERIVATION 33)."""
+        b = board([[SEA] * 6], [unit("Sub", 2, 0, fuel=40)])
+        acts = actions.actions_for(b, b.units[0], warnings=[])
+        for kind, burn in (("wait", 1), ("dive", 5)):
+            a = next(a for a in of_kind(acts, kind) if a.tile == (4, 0))
+            self.assertEqual(a.move_cost, 2)
+            self.assertEqual(a.fuel_after, 38)
+            self.assertEqual(a.hp_after, 100)
+            self.assertEqual(a.turn_start.burn, burn, kind)
+            self.assertEqual(a.turn_start.fuel_after, 38 - burn, kind)
+
+    def test_rise_returns_the_burn_to_the_table(self):
+        b = board([[SEA] * 6], [unit("Sub", 2, 0, fuel=40, state=DIVED)])
+        acts = actions.actions_for(b, b.units[0], warnings=[])
+        a = next(a for a in of_kind(acts, "rise") if a.tile == (2, 0))
+        self.assertEqual(a.turn_start.burn, 1)
+        stay = next(a for a in of_kind(acts, "wait") if a.tile == (2, 0))
+        self.assertEqual(stay.turn_start.burn, 5)
+
+    def test_the_bit_is_not_written_to_the_board(self):
+        """Scoring a dive must not dive the unit: the caller's board and unit
+        are untouched, and the wait action still reads surfaced."""
+        b = board([[SEA] * 6], [unit("Sub", 2, 0)])
+        acts = actions.actions_for(b, b.units[0], warnings=[])
+        self.assertTrue(of_kind(acts, "dive"))
+        self.assertFalse(b.units[0].dived)
+        self.assertTrue(all(a.unit.state == 0 for a in acts))
 
 
 class TestNoUnitTypeBranches(unittest.TestCase):

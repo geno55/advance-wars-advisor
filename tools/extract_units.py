@@ -42,6 +42,15 @@ is still unknown -- see UNIDENTIFIED at the bottom of the emitted JSON)
                 movement table says 3) and are not used for movement.
     +0x60  u8   movement type, indexing aw1_movecost.json movement_types
 
+ON can_dive: also not in the record. The action menu's Dive predicate at
+0x0802DE4C compares the unit's 1-BASED RAM type byte against an immediate
+(0x18, the Sub) and then requires the dive bit (flags 0x20) clear; Rise at
+0x0802DE88 checks only the bit (DERIVATION 40). The immediate is READ off
+that instruction here, asserted to be a `cmp r0, #imm` following the
+`ldrb r0, [r1]`, and emitted per unit as `can_dive`, so the engine can gate
+Dive on a table field the way it gates everything else -- with the
+provenance stated: a code constant, not a stats-table column.
+
 ON canMoveAndFire: there is no such flag anywhere in the record. AW1's rule is
 that a unit with range beyond 1 cannot fire after moving, so the behaviour
 falls out of max_range and needs no per-unit branch -- which is why no flag
@@ -55,6 +64,7 @@ ROM_BASE = 0x08000000
 BASE, STRIDE, N = 0x2830C8, 0x70, 24
 DAMAGE_PRIMARY = 0x283B48        # the table must end exactly here
 SHOP_ORDER = 0x080D14            # the build menu's unit list, -1 terminated
+DIVE_GATE = 0x02DE52             # `ldrb r0,[r1]; cmp r0,#type; ... 0x20` (DERIVATION 40)
 
 UNIT_IDS = {
     0: "Infantry", 1: "Mech", 2: "MdTank", 4: "Tank", 5: "Recon", 6: "APC",
@@ -125,6 +135,17 @@ def main(rom_path, out_path):
                      "aw1_movecost.json").read_text(encoding="utf-8"))
     move_types = mc["movement_types"]
 
+    # -- the Dive gate: the menu predicate's type compare, read as bytes so a
+    # -- different build fails loudly instead of quietly naming a wrong diver
+    check(rom[DIVE_GATE:DIVE_GATE + 2] == b"x",
+          "Dive predicate should start with ldrb r0, [r1] (the RAM type byte)")
+    check(rom[DIVE_GATE + 3] == 0x28,
+          "Dive predicate should compare the type byte with an immediate")
+    check(rom[DIVE_GATE + 6:DIVE_GATE + 8] == b"  ",
+          "Dive predicate should then test flags bit 0x20 (the dive state)")
+    dive_id = rom[DIVE_GATE + 2] - 1          # RAM types are 1-based
+    check(dive_id in UNIT_IDS, f"Dive gate names unit id {dive_id}, not a real unit")
+
     units = {}
     for uid, name in UNIT_IDS.items():
         r = BASE + uid * STRIDE
@@ -160,6 +181,8 @@ def main(rom_path, out_path):
 
         u["can_stand"] = [t for t in range(20)
                           if struct.unpack_from("<b", rec, 0x4C + t)[0] >= 0]
+        # DERIVED from CODE, not from the record -- see the module docstring
+        u["can_dive"] = uid == dive_id
 
         check(u["cost"] == COSTS[name],
               f"{name} cost {u['cost']}, build menu says {COSTS[name]}")
@@ -236,6 +259,14 @@ def main(rom_path, out_path):
     # -- so nothing here depends on knowing the game from outside ---------
     def by_movetype(*kinds):
         return {n for n, v in units.items() if v["move_type"] in kinds}
+
+    # -- the diver: exactly one, and it is the unit the target-class byte
+    # -- files under "sub" -- two independent reads of the ROM agreeing
+    divers = {n for n, v in units.items() if v["can_dive"]}
+    check(divers == {n for n, v in units.items() if v["targeted_as"] == "sub"},
+          f"the Dive gate names {sorted(divers)}, the target-class byte says "
+          f"{sorted(n for n, v in units.items() if v['targeted_as'] == 'sub')}")
+    check(len(divers) == 1, f"expected one diver, got {sorted(divers)}")
 
     transports = {n for n, v in units.items() if v["capacity"]}
     check(transports == {"APC", "TCopter", "Lander", "Cruiser"},
@@ -316,6 +347,12 @@ def main(rom_path, out_path):
             "",
             "cost is stored as cost/10 in a u16 at +0x18.",
             "",
+            "can_dive is DERIVED FROM CODE: the action menu's Dive predicate at",
+            "0x0802DE4C compares the 1-based RAM type byte with an immediate",
+            "(read off the instruction, asserted) and requires flags bit 0x20",
+            "clear; Rise (0x0802DE88) checks only the bit. No table column marks",
+            "the diver (DERIVATION 40).",
+            "",
             "can_move_and_fire is DERIVED (max_range <= 1), not read from the",
             "record. No such flag exists in the table -- the behaviour falls out",
             "of range, so there is no per-unit branch to find. The rule itself",
@@ -352,6 +389,19 @@ def main(rom_path, out_path):
                      "validity check (>= 0 passable); sign agrees with the "
                      "clear movement table on real terrains",
             "+0x60": "u8 movement type, indexes aw1_movecost movement_types",
+        },
+        "dive_gate": {
+            "predicate": "0x0802DE4C",
+            "type_compare_at": hex(0x08000000 + DIVE_GATE + 2),
+            "ram_type": rom[DIVE_GATE + 2],
+            "unit": UNIT_IDS[dive_id],
+            "note": "Dive offered iff type == this, flags & 0x20 == 0, and the "
+                    "destination is neither a join nor a load (the Join and "
+                    "Load predicates are called and must refuse). Rise "
+                    "(0x0802DE88) drops the type test and requires the bit "
+                    "SET. Both actions (0x0802E30C/0x0802E348) flip the bit, "
+                    "end the unit's action and change nothing else "
+                    "(DERIVATION 40).",
         },
         "shop_order": shop,
         "shop_order_note": "the build menu lists units in this order, read "

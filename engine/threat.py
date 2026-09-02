@@ -325,6 +325,11 @@ class _Damage:
                 co_attack=_modifier(self.board, attacker, 0,
                                     self.co_ids, self.warnings),
                 co_defense=self.co_def,
+                # Dive states ride along (DERIVATION 31): a submerged
+                # defender is reachable only through the dived table, and a
+                # submerged attacker's counter is routed through it too.
+                defender_dived=self.defender.dived,
+                attacker_dived=attacker.dived,
             )
             self._cache[key] = damage.resolve(atk)
         return self._cache[key]

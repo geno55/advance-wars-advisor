@@ -98,8 +98,25 @@ WHAT IS MODELLED
     for everything else: hidden enemies block passage exactly like visible
     ones, so no move is more optimistic than the game.
 
+  * DIVE and RISE -- the menu's own gates, read off the predicate table
+    (DERIVATION 40): Dive is offered to the table's one diver (`can_dive`,
+    a code constant the extractor reads off the predicate and labels as
+    such) while its dive bit is clear; Rise to ANY unit whose bit is set,
+    type untested, exactly as the ROM has it. Both on every destination
+    that is neither a load nor a join, which is every tile the wait loop
+    reaches. Either spends the action and changes nothing but the bit.
+    The exposure is at the tile with the bit toggled -- submerged, only
+    the dived table's hunters reach it -- and `turn_start` carries the
+    flat 5 burn a dived sub pays (engine/supply.py).
+
 WHAT IS NOT MODELLED, deliberately and visibly
 
+  * A dived sub's concealment. The game is expected to hide a submerged
+    sub from the enemy unless one of their units stands beside it, and
+    that has not been measured; nothing here reads or models what the
+    enemy can see of you (README, Known gaps). A dive's exposure therefore
+    counts every hunter that could reach the tile, seen or not -- the
+    conservative side, and stated in ASSUMPTIONS as Unknown.
 
 Exposure on an ATTACK action is computed on the board AFTER the trade, worst
 case for you throughout one consistent world -- the low opening roll: the
@@ -129,7 +146,7 @@ try:                                    # imported as engine.actions by tools/
     from . import power as power_mod
     from . import production as prod_mod
     from . import unload as unload_mod
-    from .state import Unit as _Unit
+    from .state import Unit as _Unit, DIVE_FLAG
 except ImportError:                     # imported as actions, engine/ on path
     import co as co_mod
     import damage
@@ -140,7 +157,7 @@ except ImportError:                     # imported as actions, engine/ on path
     import power as power_mod
     import production as prod_mod
     import unload as unload_mod
-    from state import Unit as _Unit
+    from state import Unit as _Unit, DIVE_FLAG
 
 Coord = Tuple[int, int]
 DATA = pathlib.Path(__file__).resolve().parent.parent / "data"
@@ -166,15 +183,17 @@ def _capturable() -> frozenset:
 class Action:
     """One legal thing one unit can do this turn, with the facts attached.
 
-    `kind` is one of "attack", "build", "capture", "drop", "join", "load",
-    "supply", "wait". The optional fields are populated per kind and
-    None/zero otherwise:
+    `kind` is one of "attack", "build", "capture", "dive", "drop", "join",
+    "load", "power", "rise", "supply", "trap", "wait". The optional fields
+    are populated per kind and None/zero otherwise:
 
       attack   target (the enemy unit), strike, counter, hp_after
       build    unit=None (an army action); build_type, cost, affordable,
                target = the unit as it will stand on the tile (acted)
       power    unit=None (an army action); power = power.Activation
       capture  target=None; progress_after, captures_now, capture_turns_left
+      dive     nothing extra; exposure and turn_start describe the unit
+      rise     SUBMERGED (dive) or SURFACED (rise) on this tile
       drop     target (the passenger), drop_tile (where it lands, acted);
                exposure and turn_start describe the PASSENGER there
       trap     target (the hidden enemy), tile = what the player would pick,
@@ -185,7 +204,7 @@ class Action:
       supply   supplies: one SupplyFill per adjacent friendly this refills
       wait     nothing extra
 
-    `turn_start` (attack/capture/supply/wait) is what the owner's NEXT turn
+    `turn_start` (attack/capture/dive/rise/supply/wait) is what the owner's NEXT turn
     start does to the unit parked on this tile -- supply.TurnStart, with the
     caveats stated on _turn_start_facts. None on loads: a passenger neither
     burns nor crashes, and is serviced by nothing but a Cruiser's cargo
@@ -419,7 +438,8 @@ def _co_of(board, player, co_ids):
 
 
 _KIND_ORDER = {"attack": 0, "capture": 1, "join": 2, "drop": 3, "supply": 4,
-               "load": 5, "wait": 6, "trap": 7, "build": 8, "power": 9}
+               "load": 5, "wait": 6, "dive": 7, "rise": 8, "trap": 9,
+               "build": 10, "power": 11}
 
 
 def _neighbours(board, tile):
@@ -484,8 +504,9 @@ def actions_for(board, unit, *, co_ids: Optional[dict] = None,
                 fog_rules: Optional[dict] = None,
                 warnings: Optional[list] = None) -> List[Action]:
     """Every legal action `unit` has this turn, resolved. Deterministic order
-    (attacks, captures, loads, waits; then by tile and target), which is a
-    filing convention and not a recommendation.
+    (attacks, captures, joins, drops, supplies, loads, waits, dives/rises,
+    traps; then by tile and target), which is a filing convention and not a
+    recommendation.
 
     A unit that has acted or is riding a transport has no actions. Under fog
     only enemies the player can legally see are offered as targets, and the
@@ -572,6 +593,33 @@ def actions_for(board, unit, *, co_ids: Optional[dict] = None,
                 captures_now=gained >= remaining,
                 capture_turns_left=-(-remaining // max(1, gained)),
                 **facts(tile)))
+
+        # -- dive / rise -----------------------------------------------------
+        # the menu's gates (DERIVATION 40): Dive to the table's diver while
+        # the bit is clear, Rise to anything with the bit set, on every
+        # destination that is not a load or a join -- every tile this loop
+        # reaches. The action flips the bit and ends the turn; the facts are
+        # for the unit as it will then stand: submerged (only the dived
+        # table's hunters reach it, burning a flat 5) or surfaced again.
+        toggle = None
+        if my_stats["can_dive"] and not unit.dived:
+            toggle = ("dive", unit.state | DIVE_FLAG)
+        elif unit.dived:
+            toggle = ("rise", unit.state & ~DIVE_FLAG)
+        if toggle is not None:
+            kind, state = toggle
+            me = dataclasses.replace(unit, x=x, y=y, state=state, acted=True)
+            hypo = dataclasses.replace(
+                board, units=[me if u.slot == unit.slot else u
+                              for u in board.units], vision=None)
+            ff_t = threat.focus_fire(hypo, me, tile, co_ids=co_ids,
+                                     weather=weather, fog=fog,
+                                     fog_rules=fog_rules, warnings=warnings)
+            ts_t = _turn_start_facts(hypo, me, tile, unit.fuel - cost,
+                                     co_ids, warnings)
+            out.append(Action(kind=kind, unit=unit, tile=tile, move_cost=cost,
+                              exposure=ff_t, hp_after=unit.hp,
+                              turn_start=ts_t, **facts(tile)))
 
     # -- traps ------------------------------------------------------------------
     # under fog, the hidden enemies' tiles the game's grid offers: picking

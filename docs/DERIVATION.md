@@ -2225,3 +2225,103 @@ property set still, and it says so. `harness/mgba_state.lua` ships
 `None` for dumps that predate the field. `tests/test_economy.py` replays all
 eleven boards, refutes the four wrong readings, and re-derives the jump
 table and the dead CO terms from the ROM.
+
+
+## 40. Dive and Rise: the menu's own gates, read off the predicate table
+
+The action layer offered every menu item but two. Dive and Rise had been
+measured as far as the flag (DERIVATION 31: Wait/Dive on a surfaced Sub,
+Wait/Rise on a written `0x20`, the bit set at `0x08066E90` and cleared at
+`0x08066EAC`) and then left out of `actions_for`, unstated — a planner built
+on that layer could never choose to submerge. Closing it meant reading WHO
+the game offers the two items to, so the engine could gate them on a table
+field like everything else rather than on a name.
+
+### The table
+
+The handoff cited the unit action menu table at `0x0828BB00`; it starts at
+**`0x0828BA80`** and has twelve entries of 0x20 bytes, not ten. Each entry
+is `{predicate, 0, 0, 0, action, common, label, id}`; the label pointers
+resolve to the 2-byte-prefixed strings at `0x0828B6B4..`:
+
+```
+0x0828BA80  pred 0x0802DB99  act 0x0802E43D  "Fire"    id 0x19
+0x0828BAA0  pred 0x0802DC3D  act 0x0802E43D  "Fire"    id 0x18   (the second Fire)
+0x0828BAC0  pred 0x0802DB59  act 0x0802E1B1  "Capt"    id 0x18
+0x0828BAE0  pred 0x0802DB19  act 0x0802E1B1  "Capt*"   id 0x1C   (the second Capt)
+0x0828BB00  pred 0x0802DD5D  act 0x0802E1F5  "Load"    id 0x1D
+0x0828BB20  pred 0x0802DD85  act 0x0802E2B5  "Drop"    id 0x1E
+0x0828BB40  pred 0x0802DDC1  act 0x0802E2ED  "Drop"    id 0x1F   (second cargo slot)
+0x0828BB60  pred 0x0802DA6D  act 0x0802E239  "Join"    id 0x20
+0x0828BB80  pred 0x0802DDFD  act 0x0802E2A5  "Supply"  id 0x21
+0x0828BBA0  pred 0x0802DA31  act 0x0802E149  "Wait"    id 0x1B
+0x0828BBC0  pred 0x0802DE4D  act 0x0802E30D  "Dive"    id 0x1B
+0x0828BBE0  pred 0x0802DE89  act 0x0802E349  "Rise"    id 0xFF
+```
+
+A predicate returns **0 to offer** and 1 to suppress — Wait's (`0x0802DA30`)
+returns 1 exactly when the destination's tile→unit byte (map `+0x12`) is
+nonzero, i.e. the move is onto a transport, which is why a load offers no
+Wait. Join's (`0x0802DA6C`) returns 0 when that byte is nonzero AND the pair
+check at `0x08024664` passes; Load's (`0x0802DD5C`) returns 0 when the
+destination check at `0x08025AA4` says 1. Both are reused below.
+
+### The Dive predicate, `0x0802DE4C`
+
+```
+0802DE4E  ldr   r0, =0x03004464        ; -> the selected unit's record
+0802DE52  ldrb  r0, [r1]               ; +0: RAM type, 1-BASED
+0802DE54  cmp   r0, #0x18              ; 0x18 = 24 = Sub (id 23)
+0802DE56  bne   suppress
+0802DE58  movs  r0, #0x20
+0802DE5A  ldrb  r1, [r1, #1]           ; +1: flags
+0802DE5C  ands  r0, r1
+0802DE60  bne   suppress               ; already dived
+0802DE62  bl    0x0802DA6C             ; Join predicate ...
+0802DE6A  beq   suppress               ; ... offered? then no Dive
+0802DE6C  bl    0x0802DD5C             ; Load predicate ...
+0802DE74  beq   suppress               ; ... offered? then no Dive
+0802DE76  movs  r0, #0                 ; offer
+```
+
+So Dive is offered iff the unit's type byte is `0x18`, the dive bit is
+clear, and the destination is neither a join nor a load. **No terrain
+test**: any tile the Sub may stop on, Port and Reef included, will do.
+
+### The Rise predicate, `0x0802DE88`
+
+Same shape with two differences: the Join and Load exclusions come first,
+and then only `flags & 0x20 != 0` decides — **there is no type compare**.
+Any record with the bit up gets Rise, which is exactly why the written
+`0x20` in DERIVATION 31 produced Wait/Rise.
+
+### The actions, `0x0802E30C` and `0x0802E348`
+
+Each sets the menu-busy byte, plays the confirm, calls its bit writer
+(`0x08066E7C` sets, `0x08066E98` clears — the DERIVATION 31 write PCs are
+their `bx lr`), then `0x08026060`, the same end-of-action call every other
+item makes, and a sound. No fuel write, no funds write, nothing else. The
+CPU has its own dispatcher into the same two writers at `0x08066A98/9E`.
+
+### What shipped
+
+`tools/extract_units.py` reads the immediate off `cmp r0, #imm` (asserting
+the `ldrb r0,[r1]` before it and the `movs r0,#0x20` after) and emits
+**`can_dive`** per unit, labelled in the JSON as a code constant and not a
+table column, with the gate recorded under `dive_gate`; the extractor also
+asserts the diver is the one unit whose target-class byte reads `sub` —
+two independent reads agreeing. `actions_for` offers `"dive"` to
+`can_dive` units with the bit clear and `"rise"` to ANY unit with the bit
+set, on every wait destination (which is already the non-load, non-join
+set), with the exposure and turn-start facts computed for the unit as it
+will then stand. Getting that exposure right exposed a bug: `threat.py`
+built every enemy attack without the defender's dive state, so a dived
+sub's wait was scored as if a Bomber could reach it. `_Damage` now passes
+both dive states through.
+
+**Not measured, stated:** the enemy's view of a submerged sub. The game is
+expected to hide it unless an enemy unit is adjacent; nothing in the
+harness reads the opponent's visibility, so a dive's exposure counts every
+hunter that can reach the tile. ASSUMPTIONS carries it as Unknown. Also
+unobserved: whether the CPU's dispatcher shares the menu's gates — it does
+not matter to the advisor, which never enumerates for the CPU.

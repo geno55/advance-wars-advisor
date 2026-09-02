@@ -159,6 +159,24 @@ def print_unit(board, unit, acts, limit=6):
     if len(waits) > limit:
         print(f"    ... and {len(waits) - limit} more")
 
+    for kind, note in (("dive", "submerged next turn, burns 5 a day"),
+                       ("rise", "surfaced next turn")):
+        rows = sorted((a for a in acts if a.kind == kind),
+                      key=lambda a: (a.exposure.worst_damage, a.move_cost,
+                                     a.tile))
+        if not rows:
+            continue
+        print(f"  {kind} ({len(rows)} tiles, least exposed first; action "
+              f"spent, {note}):")
+        for a in rows[:limit]:
+            mark = " <- here" if a.tile == here else ""
+            star = f"{a.stars}*" if a.stars else "  "
+            print(f"    ({a.tile[0]:2d},{a.tile[1]:2d}) {a.terrain:10s} {star} "
+                  f"cost {a.move_cost:2d}  {exposure_phrase(a.exposure)}"
+                  f"{turn_start_phrase(a)}{mark}")
+        if len(rows) > limit:
+            print(f"    ... and {len(rows) - limit} more")
+
 
 def summary_line(board, unit, acts):
     attacks = [a for a in acts if a.kind == "attack"]
@@ -192,6 +210,13 @@ def summary_line(board, unit, acts):
     if sups:
         needy = len({f.target.slot for a in sups for f in a.supplies})
         bits.append(f"can supply {needy} unit(s)")
+    for kind in ("dive", "rise"):
+        rows = [a for a in acts if a.kind == kind]
+        if rows:
+            calm = min(a.exposure.worst_damage for a in rows)
+            bits.append(f"can {kind} on {len(rows)} tile(s)"
+                        + (", some untouched" if calm == 0
+                           else f", best still takes {calm}"))
     if waits:
         calmest = min(a.exposure.worst_damage for a in waits)
         bits.append(f"{len(waits)} tiles"

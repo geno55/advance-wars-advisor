@@ -34,10 +34,10 @@ def board(rows, units=(), weather_index=0):
 
 
 def unit(utype, x, y, player=1, slot=1, hp=100, fuel=99, ammo=9, acted=False,
-         loaded=False, cargo=0):
+         loaded=False, cargo=0, state=0):
     return Unit(slot=slot, player=player, type=utype, x=x, y=y, hp=hp,
                 ammo=ammo, capture=0, fuel=fuel, acted=acted,
-                carrying=bool(cargo), loaded=loaded, state=0, cargo=cargo)
+                carrying=bool(cargo), loaded=loaded, state=state, cargo=cargo)
 
 
 class TestTablesDriveTheGeometry(unittest.TestCase):
@@ -293,6 +293,33 @@ class TestSafety(unittest.TestCase):
         self.assertEqual(by_tile[(1, 0)].terrain, "Wood")
         self.assertEqual(by_tile[(1, 0)].stars, 2)
         self.assertEqual(by_tile[(0, 0)].stars, 1)
+
+
+class TestDivedDefender(unittest.TestCase):
+    """The defender's dive bit reaches every attack the projection builds
+    (DERIVATION 31): submerged, only the dived table's hunters are threats.
+    No unit is named to get there -- the table has zeros for the rest."""
+
+    def test_a_copter_threatens_a_surfaced_sub_and_not_a_dived_one(self):
+        for state, n in ((0, 1), (0x20, 0)):
+            b = board([[SEA] * 6],
+                      [unit("Sub", 0, 0, slot=1, state=state),
+                       unit("BCopter", 3, 0, player=2, slot=2, ammo=6)])
+            self.assertEqual(len(threat.threats_to(b, b.units[0])), n, state)
+            self.assertEqual(threat.focus_fire(b, b.units[0]).attackers, n)
+
+    def test_a_cruiser_threatens_both_for_the_same_number(self):
+        """The dived table's Cruiser row equals the surfaced matrix's: diving
+        deletes attackers, it does not soften the hunters."""
+        got = []
+        for state in (0, 0x20):
+            b = board([[SEA] * 6],
+                      [unit("Sub", 0, 0, slot=1, state=state),
+                       unit("Cruiser", 3, 0, player=2, slot=2)])
+            ff = threat.focus_fire(b, b.units[0])
+            self.assertEqual(ff.attackers, 1)
+            got.append((ff.worst_damage, ff.best_damage))
+        self.assertEqual(got[0], got[1])
 
 
 class TestUnknownCoIsLoud(unittest.TestCase):
