@@ -449,6 +449,30 @@ this layer adds is *wiring* (the right stars on each side, the right HP, the
 right CO reaching the quote), and the formula itself stays tested where it
 lives.
 
+**Milestone 7 — the first opinion. Delivered (ROADMAP step 1).**
+
+- `engine/advisor.py`: a one-turn greedy planner with sequential commit.
+  Every action of every unit, every affordable build and the CO power are
+  enumerated as facts, scored as a sum of named terms over those facts,
+  the best committed, the board advanced through `sim.apply` (worst case
+  for the actor) and the rest re-enumerated, until the turn is spent.
+- The weights live in one table, `advisor.WEIGHTS`, and every one is
+  labelled heuristic. A term is `weight x quantity <- fact`: the strike at
+  its worst in funds of the target's bars, the counter and next turn's focus
+  fire in your own, a guaranteed kill, capture points as days of income (an
+  HQ that falls as the win), a pull toward the objective along movement
+  costs, the morning's repair and its charge, a resupply, a crash, a join's
+  refund, the shop's matchup against the enemy's composition. The facts are
+  the action layer's; the line between them is the whole design
+  (`docs/ADVISOR.md`).
+- `tools/advise.py` prints the plan step by step with the terms under each,
+  and the runner-up on every board so a close call is visible.
+- 21 tests: the arithmetic (weights from the table, terms sum to the score,
+  every weight rendered as heuristic), invariance (board translation, slot
+  renumbering, a neutral-CO board planning exactly as Andy) and one-preference
+  scenarios. None of them says the plans are good; `docs/ADVISOR.md` lists
+  where the planner is naive and why no weight fixes it.
+
 ## Layout
 
 ```
@@ -460,6 +484,8 @@ engine/threat.py          what the enemy can do to you next turn
 engine/actions.py         every legal action a unit has this turn  <- the advisor
 engine/sim.py             the forward model: apply(board, action) -> board,
                           battle(), end_turn() -- what a plan's next step stands on
+engine/advisor.py         THE OPINION: a greedy one-turn planner, weights in
+                          one table, every term quoting the fact it reads
 engine/supply.py          supply, property repair, daily fuel burn -- the
                           turn-start rules, replayed from DERIVATION 33
 engine/join.py            the merge: pair rule, bar sum, refund, caps
@@ -574,6 +600,8 @@ harness/fixtures/         mGBA save states parked at target-select, so a sweep
                           is reproducible rather than re-played by hand
 tools/threat_report.py    exposure, per-unit safety, and the coverage grid
 tools/action_report.py    every action a unit has this turn, facts attached
+tools/advise.py           a turn's plan: facts quoted, weights labelled heuristic
+tests/test_advisor.py     21 tests: the arithmetic, invariance, scenarios
 tools/fog_hunt.py         pin the fog flag by diffing labelled RAM probes
 tools/fog_diff.py         our predicted visibility vs the game's own count array
 tools/path_diff.py        our reachable set vs the game's own flood fill
@@ -615,6 +643,9 @@ tools/lz77.py        map_dump.py
 
 docs/DERIVATION.md        exactly how everything was found, reproducibly
 docs/ASSUMPTIONS.md       established / assumed / refuted, with kill conditions
+docs/ADVISOR.md           the opinion layer's rules: the line, the weights,
+                          what is naive, the shared-delusion caveat
+docs/ROADMAP.md           the steps from the first opinion to the campaign
 ```
 
 ## Reading a live board
@@ -714,6 +745,21 @@ wait on. Attacks print hardest-hitting first and waits least-exposed first,
 which is a filing convention, not advice: the numbers are composed from
 measured tables, a recommendation would not be, and the tool stops at that
 line on purpose.
+
+## Getting a plan
+
+```bash
+python tools/advise.py state.json
+```
+
+The one tool that crosses the line, and it says so on every line it prints.
+A turn for the active player, greedy with sequential commit: each step is
+scored on the board the step before leaves behind, and printed with its
+terms — `weight (heuristic) x quantity <- the fact it read`. The runner-up on
+each board is printed too, so a close call is visible. `--weight name=value`
+overrides one weight for a run, `--luck max` plans in the kindest world
+instead of the worst, `--board` prints the board the plan leaves behind.
+Read `docs/ADVISOR.md` for where the planner is naive before trusting it.
 
 ## Re-extracting from the ROM
 

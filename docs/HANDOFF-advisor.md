@@ -232,18 +232,23 @@ demands them), is `docs/ROADMAP.md`. The list below is the inventory.
 
 - ~~`engine/sim.py` first~~ -- delivered (DERIVATION 42): `apply`,
   `battle`, `end_turn`, `turn_start`; 32 tests in `tests/test_sim.py`.
-- `engine/advisor.py` (opinion layer, weights in one place, every
+- ~~`engine/advisor.py` (opinion layer, weights in one place, every
   preference traceable to a quoted fact) and `tools/advise.py` (the
-  user-facing plan, facts and opinions visibly separate).
+  user-facing plan, facts and opinions visibly separate).~~ -- delivered
+  (ROADMAP step 1): greedy with sequential commit over `sim.apply`, one
+  weight table, every term a `weight x quantity <- fact` line; 21 tests
+  in `tests/test_advisor.py`; the rules in `docs/ADVISOR.md`.
 - `harness/mesen_state.lua` (headless dumper, asserted against mGBA) and
   `harness/mesen_drive.lua` (single-Action executor with read-back
   verification), then `tools/sim_diff.py` over a checked-in corpus of
   parked states: dump → `apply()` → drive one action → dump → diff,
   logging every field the game contradicted.
-- DERIVATION 39+ for anything measured on the way (income first); a new
-  `docs/ADVISOR.md` for the opinion layer's own rules — the line, the
-  weights, what the differential corpus has and has not caught, and the
-  shared-delusion caveat on Python self-play.
-- Tests: invariance and scenario tests for the planner; the `sim_diff`
-  corpus and its result log as checked-in fixtures once it runs clean.
+- DERIVATION 39+ for anything measured on the way (income first);
+  ~~a new `docs/ADVISOR.md` for the opinion layer's own rules — the line,
+  the weights, what the differential corpus has and has not caught, and
+  the shared-delusion caveat on Python self-play~~ -- written; its
+  differential-corpus paragraph is a placeholder until step 2 runs.
+- Tests: ~~invariance and scenario tests for the planner~~ (delivered);
+  the `sim_diff` corpus and its result log as checked-in fixtures once it
+  runs clean.
 - Single-sentence-finding commit subjects, straight to main, push.

@@ -45,6 +45,14 @@ Three decisions, made once so they do not get re-argued:
    translation, slot renumbering, a neutral-CO board ranking as Andy -- and
    by reading its plans on the parked fixtures.
 
+   *Delivered.* `engine/advisor.py` (the loop, `WEIGHTS`, `Term`/`Scored`/
+   `Step`/`Plan`, `render`), `tools/advise.py`, `docs/ADVISOR.md`, and 21
+   tests in `tests/test_advisor.py`: the arithmetic, the three invariances,
+   and one-preference scenarios. Read on the fogged 15x10 fixture it
+   captures the open city, tops up the dry Tank and drifts the rest toward
+   the enemy's properties, in about thirty seconds. Its naiveties are
+   listed in `docs/ADVISOR.md`; none is a weight's fault.
+
 2. **The differential test.** `harness/mesen_state.lua` (the headless
    dumper, asserted tile for tile against an mGBA dump), `harness/
    mesen_drive.lua` (one Action executed with read-back verification), and
@@ -104,7 +112,7 @@ Three decisions, made once so they do not get re-argued:
 
 | step | code | measured record | test |
 |---|---|---|---|
-| 1 | `engine/advisor.py`, `tools/advise.py`, `docs/ADVISOR.md` | -- | invariance and scenario tests |
+| 1 | `engine/advisor.py`, `tools/advise.py`, `docs/ADVISOR.md` (delivered) | -- | invariance and scenario tests (`tests/test_advisor.py`, delivered) |
 | 2 | `harness/mesen_state.lua`, `harness/mesen_drive.lua`, `tools/sim_diff.py` | the corpus and its result log as fixtures | `sim_diff` clean |
 | 3 | `engine/cpu.py` | DERIVATION: the CPU's rules, and the turns it played | prediction vs played turn |
 | 4 | the reply lookahead in `advisor.py` | -- | scenario tests |
