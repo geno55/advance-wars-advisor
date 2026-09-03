@@ -236,7 +236,8 @@ def lua_writes(writes) -> list:
             out.append({"kind": "army", "player": w["army"],
                         "funds": w.get("funds"), "co_id": w.get("co"),
                         "meter": w.get("meter"), "uses": w.get("uses"),
-                        "ready": w.get("ready"), "active": w.get("active")})
+                        "ready": w.get("ready"), "active": w.get("active"),
+                        "control": w.get("control")})
         elif "fog" in w:
             out.append({"kind": "fog", "value": int(w["fog"])})
         elif "weather" in w:
@@ -443,6 +444,14 @@ def compile_step(board, spec, tag, warnings):
         step = {"kind": "end_turn", "tag": tag, "empty": xy(empty_tile(board)),
                 "checks": [{"what": "active", "player": next_player(board)}]}
         return step, sim.end_turn(board, warnings=warnings), None
+    if k == "cpu_turn":
+        # the game plays the next side (its control byte written to 2) and
+        # hands the turn back; the model has no opinion on the board it
+        # leaves, so the step returns the board unchanged (tools/cpu_trace.py)
+        step = {"kind": "cpu_turn", "tag": tag, "empty": xy(empty_tile(board)),
+                "limit": spec.get("limit", 3000), "cpu": spec.get("cpu"),
+                "checks": []}
+        return step, board, None
     act, every = find_action(board, spec, warnings)
     if k == "build":
         tid = board.terrain[act.tile[1]][act.tile[0]]

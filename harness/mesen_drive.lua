@@ -136,6 +136,9 @@ function M.apply_writes(writes)
       if wr.uses then M.w8(a + 0x25, wr.uses) end
       if wr.ready then M.w8(a + 0x24, wr.ready) end
       if wr.active then M.w8(a + 0x1E, wr.active) end
+      -- +0x1B is the side's controller: 1 human, 2 COM (the match phase
+      -- switch at 0x08035034 sends 2 to the AI phase, DERIVATION 44)
+      if wr.control then M.w8(a + 0x1B, wr.control) end
       local ar = M.army(wr.player)
       if (wr.funds and ar.funds ~= wr.funds) or (wr.co_id and ar.co_id ~= wr.co_id)
           or (wr.meter and ar.power ~= wr.meter) or (wr.uses and ar.power_uses ~= wr.uses) then
@@ -230,6 +233,119 @@ function M.check(checks, snap)
 end
 
 -- ---------------------------------------------------------------------------
+-- the CPU's turn, traced
+-- ---------------------------------------------------------------------------
+
+-- The AI issues its decisions as 20-byte command records at 0x030050F0 and
+-- dispatches each through the switch at 0x080669A0 (+0 id 1..17, +1 slot,
+-- +2/+3 the move's tile, +4/+5 the target tile, +8 the RNG state the
+-- record carries, +0x12 the fuel to restore). An exec hook on that
+-- function's entry copies the record as it is dispatched, so a CPU turn
+-- comes back as the ordered list of what it decided (DERIVATION 44).
+M.CMD = 0x030050F0
+M.CMD_DISPATCH = 0x080669A0
+M.MATCH_PHASE = 0x0300357C
+M.trace = nil
+emu.addMemoryCallback(function()
+  if not M.trace then return end
+  local c = M.CMD
+  local rec = {
+    id = M.r8(c), slot = M.r8(c + 1), x = M.r8(c + 2), y = M.r8(c + 3),
+    tx = M.r8(c + 4), ty = M.r8(c + 5), b6 = M.r8(c + 6), b7 = M.r8(c + 7),
+    rng = M.r32(c + 8), b12 = M.r8(c + 12), b13 = M.r8(c + 13),
+    b14 = M.r8(c + 14), b15 = M.r8(c + 15), b16 = M.r8(c + 16),
+    b17 = M.r8(c + 17), fuel = M.r8(c + 0x12), b19 = M.r8(c + 19),
+    dest_x = M.r16(0x030033AC), dest_y = M.r16(0x030033AE),
+    sel_x = M.r16(0x030041DC), sel_y = M.r16(0x030041DE),
+  }
+  local u = M.unit(rec.slot)
+  if u then
+    rec.unit = u.name; rec.ux, rec.uy = u.x, u.y; rec.uhp = u.hp
+  end
+  M.trace[#M.trace + 1] = rec
+  -- the CPU is playing: every other side goes back to human NOW, so the
+  -- next-player search at the CPU's End Turn hands to a human (a CPU turn
+  -- can finish inside the End Turn tap gaps, so no poll is early enough)
+  if M.cpu_side then
+    for p = 1, 4 do
+      M.w8(M.army_addr(p) + 0x1B, (p == M.cpu_side) and 2 or M.control_orig[p])
+    end
+  end
+end, emu.callbackType.exec, M.CMD_DISPATCH, M.CMD_DISPATCH, emu.cpuType.gba, emu.memType.gbaMemory)
+
+-- End the human's turn and let the game play the next side (whose control
+-- byte the case wrote to 2), polling until the turn comes back; the trace
+-- is returned on the step result.
+M.watch_writes = false
+local function pc_of()
+  local ok, st = pcall(emu.getState)
+  if not ok then return -1 end
+  return tonumber(st["cpu.r15"]) or -1
+end
+emu.addMemoryCallback(function(addr, value)
+  if not M.watch_writes then return end
+  M.L(string.format("  W idx36AC addr %08X val %d pc %08X phase %d", addr, value, pc_of(), M.r16(M.MATCH_PHASE)))
+end, emu.callbackType.write, 0x030036AC, 0x030036AD, emu.cpuType.gba, emu.memType.gbaMemory)
+emu.addMemoryCallback(function(addr, value)
+  if not M.watch_writes then return end
+  local base = M.r32(M.ARMY_PTR)
+  local off = addr - base
+  local f = off % M.ARMY_STRIDE
+  if f == 0x1B or f == 0x14 or f == 0x15 or f == 0x1C then
+    M.L(string.format("  W army P%d +0x%02X val %d pc %08X phase %d day %d", math.floor(off / M.ARMY_STRIDE), f, value, pc_of(), M.r16(M.MATCH_PHASE), M.r32(M.TURN)))
+  end
+end, emu.callbackType.write, 0x0201AB34, 0x0201AB34 + 5 * 0x68, emu.cpuType.gba, emu.memType.gbaMemory)
+
+function M.cpu_turn(s)
+  local r = { kind = "cpu_turn", ok = false }
+  M.watch_writes = true
+  if not M.goto_tile(s.empty.x, s.empty.y) then r.why = "cursor never reached the empty tile"; return r end
+  local before = M.active_player()
+  M.trace = {}
+  M.cpu_side = s.cpu
+  -- each side's byte AS RELOADED is what comes back (M.control_orig, read
+  -- in run_case before any write): a 0 (no controller, the empty P3/P4
+  -- records) written to 1 made the AI's end-of-turn elimination check
+  -- treat them as live sides -- +0x14 := 4 and tile (0,0) used as scratch
+  -- and left as a City (0x080284C0/0x080285C2)
+  M.L(string.format("  cpu_turn: active %d idx36AC %d control P1=%d P2=%d",
+    before, M.r16(0x030036AC), M.army(1).control, M.army(2).control))
+  M.tap("a", 8, 50); M.tap("up", 8, 26); M.shot(s.tag .. "-end-menu"); M.tap("a", 8, 70)
+  M.shot(s.tag .. "-after-end")
+  for _ = 1, 4 do M.tap("a", 8, 60) end
+  M.shot(s.tag .. "-after-taps")
+  -- The next-player search at End Turn (0x08024D58) accepts the first
+  -- side whose +0x1B is nonzero and whose +0x14 is zero, and the phase-10
+  -- switch then reads that side's +0x1B: 2 is the CPU phase. Both bytes
+  -- were written to 2 before End Turn so the choice holds whichever way
+  -- the search runs; the command hook above puts every other side back
+  -- to 1 on the CPU's first command. The turn is back when the human
+  -- phase (5) is running for `before` again and the CPU issued at least
+  -- one command; the CPU's whole turn can pass before the first poll.
+  local cpu = s.cpu
+  r.cpu_player = cpu
+  local back, last = false, ""
+  for _ = 1, (s.limit or 3000) do
+    local ph = M.r16(M.MATCH_PHASE)
+    local sig = string.format("phase %d idx36AC %d control P1=%d P2=%d day %d cmds %d",
+      ph, M.r16(0x030036AC), M.army(1).control, M.army(2).control, M.r32(M.TURN), #M.trace)
+    if sig ~= last then M.L("  " .. sig); last = sig end
+    if ph == 5 and M.r16(0x030036AC) == before and #M.trace > 0 then back = true; break end
+    if ph ~= 5 then M.tap("a", 4, 6) else M.wait(10) end
+  end
+  r.commands = M.trace
+  M.trace = nil
+  M.cpu_side = nil
+  for p = 1, 4 do M.w8(M.army_addr(p) + 0x1B, M.control_orig[p]) end
+  if not back then r.why = string.format("P%d never handed the turn back (%s)", cpu, last); return r end
+  M.wait(120); M.tap("a", 8, 60); M.tap("a", 8, 60); M.wait(150)
+  M.cancel(3)
+  M.watch_writes = false
+  r.ok = true
+  return r
+end
+
+-- ---------------------------------------------------------------------------
 -- the pieces of one action
 -- ---------------------------------------------------------------------------
 
@@ -304,6 +420,8 @@ function M.do_step(s, attempt)
     local ok, why = M.apply_writes(s.writes)
     r.ok, r.why = ok, why
     return r
+  elseif k == "cpu_turn" then
+    return M.cpu_turn(s)
   elseif k == "build" then
     if not M.goto_tile(s.factory.x, s.factory.y) then r.why = "cursor never reached the factory"; return r end
     M.tap("a", 8, 60); M.wait(40); M.shot(s.tag .. "-shop")
@@ -372,6 +490,13 @@ function M.run_case(c, states)
   for attempt = 1, (c.attempts or 3) do
     result.attempts = attempt
     emu.loadSavestate(st.bytes); M.wait(30)
+    M.control_orig = {}
+    for p = 1, 4 do M.control_orig[p] = M.army(p).control end
+    M.watch_writes = (c.action.kind == "cpu_turn")
+    if M.watch_writes then
+      M.L(string.format("  at reload: P1 ctrl %d f14 %d f1C %d | P2 ctrl %d f14 %d f1C %d",
+        M.army(1).control, M.army(1).flag14, M.army(1).flag1C, M.army(2).control, M.army(2).flag14, M.army(2).flag1C))
+    end
     M.set_dims(st.w, st.h)
     local ok, why = M.apply_writes(c.writes)
     if not ok then result.why = why; M.L("  " .. why); break end
@@ -387,8 +512,11 @@ function M.run_case(c, states)
       result.rng_at_confirm = r.rng_at_confirm
       result.target_note = r.target_note
       result.drop_note = r.drop_note
+      result.commands = r.commands
+      result.cpu_player = r.cpu_player
       if r.ok then
         M.wait(60)
+        if c.action.kind == "cpu_turn" then M.wait(300); M.cancel(2) end
         M.dump(c.after, { note = c.name .. " after" })
         result.ok = true
         M.L(string.format("  ok on attempt %d", attempt))

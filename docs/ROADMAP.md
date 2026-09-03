@@ -84,6 +84,18 @@ Three decisions, made once so they do not get re-argued:
    driver replaced by End Turn. The CPU's build logic falls out of the same
    read and informs the planner's build term.
 
+   *Begun* (DERIVATION 44). The rig exists: army byte `+0x1B` = 2 hands the
+   turn to the AI, `mesen_drive.lua`'s `cpu_turn` step lets it play and
+   traces every 20-byte command record it dispatches, `tools/cpu_trace.py`
+   runs and replays a trace, and `engine/cpu.py` decodes the record into
+   engine Actions. Eight turns are traced (`tests/fixtures/cpu/`); seven
+   replay through `sim.apply` field for field, which also measured that
+   the AI's strike takes the first RNG draw. What is read: the phase
+   machines, the profile copy, the sub-phase lists that fix the unit
+   order, the per-unit random. What is not: the decision routine at
+   `0x08061A64` and the build and power logic -- `predict()` does not
+   exist yet, and `tests/test_cpu.py` pins everything that does.
+
 4. **The enemy reply.** The planner's lookahead scores against a modelled
    reply instead of worst-case focus fire: `cpu.py` when the opponent is the
    CPU, the planner itself when it is not. This is the step that turns sound

@@ -609,6 +609,12 @@ tools/threat_report.py    exposure, per-unit safety, and the coverage grid
 tools/action_report.py    every action a unit has this turn, facts attached
 tools/advise.py           a turn's plan: facts quoted, weights labelled heuristic
 tests/test_advisor.py     21 tests: the arithmetic, invariance, scenarios
+engine/cpu.py             the CPU's command record decoded and replayed
+                          (ROADMAP step 3, begun); predict() does not exist
+tools/cpu_trace.py        let the game's CPU play a turn, trace its commands,
+                          replay them through the forward model
+tests/fixtures/cpu/       eight traced CPU turns with their boards
+tests/test_cpu.py         the traces replayed: seven exact, the fog gap pinned
 tools/sim_diff.py         the differential test: dump, apply(), drive one
                           action, dump, diff every field (dump / compile /
                           run / check / report)

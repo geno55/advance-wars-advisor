@@ -2606,3 +2606,142 @@ the APC went (12,7) -> (10,7), Infantry #66 stayed at (13,2) in both the
 model and the game), so nothing may read a passenger's position off its
 record. And the join refund at Kanbei's value came out at 2520 and the
 charged HQ repair at 800, both to the funds.
+
+
+## 44. Reading the CPU, begun: the control byte, the command record, and seven traced turns
+
+ROADMAP step 3 asks for `engine/cpu.py`: the turn the CPU will take. The
+first thing that step needs is not the AI's reasoning but a way to watch
+it -- park a state, let the game's own CPU play, record what it decided in
+a form a predictor can be diffed against. This section is that rig and
+what its first seven turns measured. The predictor itself is not written.
+
+### The way in
+
+The in-match phase machine switches on the halfword at `0x0300357C`
+(eighteen phases, table at `0x08034A54`). Phase 6 is the CPU's turn: the
+arm at `0x08034AD8` calls the AI driver `0x0806820C` while `0x03004474`
+reads 0. Who gets phase 6 is decided at `0x08035034`, which reads the
+active army's byte **`+0x1B`** and switches on it (table `0x08035060`):
+**1 is a human** (phase 5), **2 is the CPU** (phase 6, unless settings
+`+0x32` and `0x080308AC` divert to phase 0x10), 3..6 phase 0x10. Who the next side IS comes from the search at
+`0x08024D58`: it steps the index at `0x030036AC` (5 wraps to 1 and starts
+the new day, `0x08016938`) until `0x08024CD0` accepts a side -- `+0x1B`
+nonzero and the halfword `+0x14` zero (the AI's End Turn writes 4 into
+`+0x14` of the sides with no units, `0x0802872A`). So a written
+`+0x1B = 2` on the next side is what hands the board to the AI, and
+`harness/mesen_drive.lua` grew a `control` write and a `cpu_turn` step:
+both sides' bytes go to 2 before End Turn, the command hook puts every
+other side back to 1 on the CPU's first command, and the step waits for
+the human phase to run for the side that ended. The event-driven restore
+matters: a CPU turn can finish inside the End Turn's own tap gaps (the
+P2 trace's five commands were over before any poll ran), and a byte left
+at 2 gives the AI the human's next turn as well. And each side's byte goes
+back to what it WAS: writing 1 into the empty P3/P4 records (their byte is
+0, no controller) made the AI's end-of-turn elimination check at
+`0x0802849x` treat them as live sides -- `+0x14 := 4`, and tile (0,0) used
+as scratch and left as a City by the restore at `0x080285C2`, which was
+the one field a replay then disagreed on.
+
+The AI driver is its own six-state machine on `0x030051B0`. State 0
+(`0x08068368`) sets the turn up: it copies a 60-byte **profile** into
+`0x020235DC` -- `0x0811A97C + 60 * [0x082872C8 + 12 * k + co_id]`, with
+`k` from the mission record at `0x08287478 + 60 * settings[+0x02]` (byte
+`+0x23`; VS records carry `0xFF` at `+0x22`), the second half summed with
+a second block -- and builds its unit ORDER. State 1 (`0x08068584`) steps
+through one of two function lists, `0x083B7CEC` with fog off and
+`0x083B7D38` with fog on (19 entries each; 0x080638A4, 0x08063964,
+0x08063A1C ... are the AI's sub-phases, each appending to the order list at
+`0x03005020` the units whose unit-stats byte `+0x15` at
+`0x08283058 + 0x70 * type` matches its class). State 2 (`0x080642C8`) takes
+the next slot off that list (terminated by `0x40`), marks it (flag bit 2),
+clears its tile in the tile->unit index, draws **one RNG value into the
+record's `+0xA` as `draw % 100`** -- the unread unit-record bytes of
+DERIVATION 8 are the AI's per-unit random -- and calls the decision proper
+at `0x08061A64`. State 3 is the step function `0x080667A4`, which executes
+the decision as a command.
+
+### The command record
+
+The decision is a 20-byte record at **`0x030050F0`**, the same shape the
+human's input builder at `0x08034988` writes for link play: `+0` the id,
+`+1` the unit slot, `+2/+3` the tile the unit moves to, `+4/+5` the tile it
+started on, `+6/+7` two arguments, `+8` a u32 the executor writes into the
+RNG (`0x08010A78`) before acting, `+0x12` the fuel. The step function's
+state 2 is the switch at **`0x080669A0`**: ids 2..11 first apply the move
+(acted bit, position from `0x030033AC`), then the jump table at
+`0x08066A04` dispatches -- 1 a move, 2 wait, 3 capture (`0x08026178`), 4
+fire (`0x08066BB4`: the target is the unit in slot `+6`), 6 load, 7 drop
+(`0x08066D64` once per cargo slot: `+6`/`+7` are 0 keep, 5 special, else a
+direction index), 9 join (`0x0802649C`, DERIVATION 34), 10 dive and 11
+rise (`0x08066E7C/98`, DERIVATION 40), 12 build (`0x08066B48`), 13 a move
+that writes the record's `+9..+11`. An exec hook on the switch's entry
+copies the record: that is the trace.
+
+### Eight turns
+
+`tools/cpu_trace.py run` reloads a state, writes the control bytes, dumps,
+ends the human's turn, traces, dumps again; `tests/fixtures/cpu/` holds
+the eight. On the VS fixture with P1 as the CPU (Andy, clear):
+
+```
+ 1. capture  Infantry #2 (6,3) -> (5,1)        the neutral city
+ 2. wait     Recon #6    (1,8) -> (3,2)
+ 3. fire     Tank #7     (4,2) -> (7,4)  at #65 the Infantry beside it
+ 4. wait     Infantry #1 (1,6) -> (2,8)
+ 5. fire     Mech #3     (7,6) -> (8,5)  at #65 -- and it dies
+ 6. wait     Mech #4     (1,7) -> (3,7)
+ 7. wait     APC #5      (6,2) -> (2,4)
+ 8. wait     Artillery #8 (0,6) -> (3,4)
+```
+
+The order is the sub-phase list, not the slot order: the capturer first,
+then the Recon and Tank, then the foot soldiers, the transport, the
+indirect. Under **fog** the eight records were identical, RNG values
+included -- this AI does not look at fog. Under **Max** the Mech went for
+the Tank at (9,7) instead of finishing the Infantry, so the CO reaches the
+target choice. With a **full meter** (Andy, threshold written, latch set)
+the power was not fired. With a **written P1 Base** and 19,000 funds
+nothing was bought -- the build phase walks the game's property list at
+`0x03004500` (`0x080685D0`), which a terrain-byte write never joins, so a
+build trace needs a map with a real factory. On the A15 fixture with P2 as
+the CPU: a capture, three waits, a **load** (id 6: the Mech onto the APC),
+the APC's move and a **drop** (`+6 = 1`, the Mech set down north), the
+Artillery's wait. And P2 as the CPU on the VS fixture after P1's human
+turn: five commands for six movable units -- the Mech captures the city,
+the Recon and Mech advance, the Tank moves beside P1's Mech and fires, the
+Artillery advances, and the **APC carrying the Infantry issued nothing**
+(no record at all, not a wait), which the order-list sub-phases will have
+to explain.
+
+### Replayed through the forward model
+
+`engine/cpu.py` decodes the record and finds the engine Action it names;
+`cpu.replay` applies the turn through `sim.apply` with each record's own
+RNG state, after `sim.end_turn` has handed the board to the CPU. Seven of
+the eight traces replay to the game's after-dump **field for field**: every
+move's fuel, the capture's progress, the load, the drop, the kill, both
+meters, the boundary. Two findings on the way:
+
+- **The AI's strike is the first draw.** On the Max trace the Mech's
+  bazooka dealt 55; draw 1 of the record's RNG gives 55, the human path's
+  draw 3 (DERIVATION 32, 43) gives 57. The other two AI battles agree under
+  either, so this rests on one trace: `cpu.AI_STRIKE_DRAW = 1`, labelled.
+- **The fog trace does not replay**, and not because of the CPU: `actions_for`
+  offers no shot at an enemy the mover can only see once it has moved, so
+  the two fires find no Action. The AI plays as if fog were off; the human
+  action layer stops one step short. ASSUMPTIONS carries it.
+
+And one artefact worth a line: the written Base made the terrain grid and
+the game's property list disagree, so deriving the rate from P1's income
+over its grid count gave 4750; `economy.funds_rate` now derives only when
+every property-holding army agrees and otherwise takes the dumped cell.
+
+### What is not done
+
+The predictor. Reading `0x08061A64` and the sub-phases behind the order
+list is the work of the next sessions; the rig, the record format, eight
+traced turns and an exact replay are what they start from. Open and
+listed: the drop directions 2..4 (assumed east/south/west), why the full
+meter went unfired, the profile table's meaning, and whether the fog
+lists ever differ in a way the traces can see.

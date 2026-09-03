@@ -84,13 +84,18 @@ class Income:
 
 
 def properties(board, player: int) -> int:
-    """Count the paying tiles `player` owns."""
+    """Count the paying tiles `player` owns -- among the game's own property
+    list when the board carries one (Board.listed_properties): the income
+    walker reads that list, and a property written onto the terrain grid
+    by the harness is never in it (DERIVATION 44)."""
+    listed = getattr(board, "listed_properties", None)
     n = 0
     for y in range(board.height):
         trow, orow = board.terrain[y], board.owner[y]
         for x in range(board.width):
             if orow[x] == player and trow[x] in FUNDING_TERRAIN:
-                n += 1
+                if listed is None or (x, y) in listed:
+                    n += 1
     return n
 
 
@@ -117,13 +122,20 @@ def funds_rate(board) -> tuple:
     every natural board but a live write to it does not reach the payer, so
     the field the game itself fills is the better witness.
     """
+    derived = set()
     for army in board.armies:
         n = properties(board, army.player)
         if n and army.income and army.income % n == 0:
-            return army.income // n, "derived"
+            derived.add(army.income // n)
     dumped = getattr(board, "funds_per_property", None)
+    if len(derived) == 1:
+        return derived.pop(), "derived"
+    # the armies disagree (a property written onto the terrain grid that the
+    # game's own list never saw, DERIVATION 44) or none holds property
     if dumped:
         return int(dumped), "dump"
+    if derived:
+        return max(derived), "derived-disputed"
     return DEFAULT_RATE, "default"
 
 

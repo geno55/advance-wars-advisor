@@ -424,6 +424,23 @@ A16, both born the day action enumeration was written.
   slot, dived combat, snow and rain movement, Sturm's alternate record, a
   power followed by an attack. Kill by: a row in
   `tests/fixtures/sim_diff/corpus.json` each.
+- **Under fog the action layer offers no attack on an enemy the mover
+  can only see after moving.** The CPU's fog trace (DERIVATION 44) had a
+  Tank move beside a dark Infantry and fire; `actions_for` filters targets
+  by visibility on the board BEFORE the move, so that Action does not
+  exist and the trace does not replay. The game recomputes vision at the
+  destination. Kill by: a destination-vision pass in `actions_for` (the
+  fog rules already exist in `engine/fog.py`), then the fog trace replays.
+- **The CPU's Fire resolves its strike on the first RNG draw.** Measured
+  on one trace (`vs15-p1-cpu-max`, 55 dealt = draw 1, draw 3 would be 57);
+  the two other AI battles agree under either draw. `engine/cpu.py`
+  `AI_STRIKE_DRAW`. Kill by: more AI battles where the draws disagree.
+- **The CPU did not fire a full meter and did not build on a written
+  Base** (DERIVATION 44). The first is unread (a profile byte, a latch the
+  AI reads, or a rule); the second is explained -- the build phase walks
+  the property list, which a terrain write never joins -- but the AI's
+  build logic itself is untraced until a fixture with a real factory
+  exists. Kill by: a parked state on a map with a Base, both sides human.
 - **The funds-rate cell is a mirror, not the payer's source.** Writing 200
   into `0x03004338` and ending the turn paid 9500 (DERIVATION 43,
   `end-turn-repair-broke`), though DERIVATION 39 read the paying body as a

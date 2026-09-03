@@ -174,7 +174,7 @@ class Battle:
 
 
 def _luck_value(atk, luck, rng_state: Optional[int],
-                counter_possible: bool = True) -> int:
+                counter_possible: bool = True, draw: Optional[int] = None) -> int:
     if rng_state is not None:
         # range = -bad .. 9+good-bad (rng.luck_reduce), so the CO's bounds
         # give the two reducer parameters back: good = max - min - 9. (An
@@ -183,7 +183,8 @@ def _luck_value(atk, luck, rng_state: Optional[int],
         return rng_mod.strike_luck(rng_state,
                                    good=atk.luck_max - atk.luck_min - 9,
                                    bad=-atk.luck_min,
-                                   counter_possible=counter_possible)
+                                   counter_possible=counter_possible,
+                                   draw=draw)
     if luck == "min":
         return atk.luck_min
     if luck == "max":
@@ -223,7 +224,8 @@ def _attack_between(board, attacker, defender, co_ids, warnings):
 
 def battle(board, attacker, defender, *, luck="min",
            rng_state: Optional[int] = None, co_ids: Optional[dict] = None,
-           warnings: Optional[list] = None) -> Battle:
+           warnings: Optional[list] = None,
+           luck_draw: Optional[int] = None) -> Battle:
     """Resolve `attacker` (standing where its record says) shooting
     `defender`, to a point.
 
@@ -248,7 +250,8 @@ def battle(board, attacker, defender, *, luck="min",
             and damage.fights_at_contact(defender.type)):
         wc = damage.select_weapon(defender.type, attacker.type, defender.ammo,
                                   defender_dived=attacker.dived)
-    lk = _luck_value(atk, luck, rng_state, counter_possible=wc is not None)
+    lk = _luck_value(atk, luck, rng_state, counter_possible=wc is not None,
+                     draw=luck_draw)
     strike = damage.damage_for_luck(atk, lk)
     d_hp = max(0, defender.hp - strike)
     a_ammo = attacker.ammo - 1 if w.slot == "primary" and attacker.ammo else attacker.ammo
@@ -311,7 +314,8 @@ def _charge(board, player: int, gain: int, co_ids):
 def apply(board, action, *, luck="min", rng_state: Optional[int] = None,
           meteor_strategy: Optional[int] = None,
           co_ids: Optional[dict] = None,
-          warnings: Optional[list] = None):
+          warnings: Optional[list] = None,
+          luck_draw: Optional[int] = None):
     """The board after `action` -- an actions.Action of any kind.
 
     Units are found by slot on THIS board, so an Action enumerated on an
@@ -353,18 +357,19 @@ def apply(board, action, *, luck="min", rng_state: Optional[int] = None,
         return _apply_join(board, unit, action, co_ids)
     if k == "attack":
         return _apply_attack(board, unit, action, luck, rng_state, co_ids,
-                             warnings)
+                             warnings, luck_draw)
     raise ValueError(f"unknown action kind {k!r}")
 
 
-def _apply_attack(board, unit, action, luck, rng_state, co_ids, warnings):
+def _apply_attack(board, unit, action, luck, rng_state, co_ids, warnings,
+                  luck_draw=None):
     enemy = unit_in(board, action.target.slot)
     if enemy is None:
         raise ValueError(f"target #{action.target.slot} is not on this board")
     me = _moved(unit, action.tile, action.move_cost)
     staged = _replace(board, {unit.slot: me})
     b = battle(staged, me, enemy, luck=luck, rng_state=rng_state,
-               co_ids=co_ids, warnings=warnings)
+               co_ids=co_ids, warnings=warnings, luck_draw=luck_draw)
     after = staged
     after = _charge(after, me.player, b.attacker_gain, co_ids)
     after = _charge(after, enemy.player, b.defender_gain, co_ids)

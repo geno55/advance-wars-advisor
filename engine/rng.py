@@ -66,7 +66,7 @@ def luck_reduce(draw: int, good: int = 0, bad: int = 0) -> int:
 
 
 def strike_luck(state: int, good: int = 0, bad: int = 0, *,
-                counter_possible: bool = True) -> int:
+                counter_possible: bool = True, draw: int = None) -> int:
     """The roll the NEXT driven attack's strike will get, from the state at
     target-confirm. A battle whose defender can answer burns four draws and
     the strike's is the third; one whose defender cannot burns two and the
@@ -74,7 +74,9 @@ def strike_luck(state: int, good: int = 0, bad: int = 0, *,
     the exact damage. `good`/`bad` are the CO record's +0x2A/+0x2B: the
     range is -bad .. 9+good-bad, so from a (min, max) pair
     good = max - min - 9 and bad = -min."""
+    if draw is None:
+        draw = STRIKE_DRAW if counter_possible else STRIKE_DRAW_NO_COUNTER
     s = state
-    for _ in range(STRIKE_DRAW if counter_possible else STRIKE_DRAW_NO_COUNTER):
+    for _ in range(draw):
         s = next_state(s)
     return luck_reduce(s, good, bad)

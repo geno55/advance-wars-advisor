@@ -129,7 +129,8 @@ function M.army(player)
     player = player, funds = M.r32(a), income = M.r32(a + 8),
     power = M.r32(a + 0x20), co_id = M.r8(a + 0x1D),
     power_active = M.r8(a + 0x1E) ~= 0, power_ready = M.r8(a + 0x24) ~= 0,
-    power_uses = M.r8(a + 0x25),
+    power_uses = M.r8(a + 0x25), control = M.r8(a + 0x1B),
+    flag14 = M.r16(a + 0x14), flag1C = M.r8(a + 0x1C),
   }
 end
 
@@ -172,9 +173,9 @@ function M.state_json(opts)
     funds[p] = a.funds
     rows[#rows + 1] = string.format(
       '    {"player": %d, "funds": %d, "income": %d, "power": %d, "co_id": %d, '
-      .. '"power_active": %s, "power_ready": %s, "power_uses": %d}',
+      .. '"power_active": %s, "power_ready": %s, "power_uses": %d, "control": %d, "flag14": %d, "flag1C": %d}',
       p, a.funds, a.income, a.power, a.co_id, b(a.power_active),
-      b(a.power_ready), a.power_uses)
+      b(a.power_ready), a.power_uses, a.control, a.flag14, a.flag1C)
   end
   w_(table.concat(rows, ",\n"))
   w_("  ],")
