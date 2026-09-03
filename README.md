@@ -434,8 +434,14 @@ the exposure and turn-start facts for the unit as it will then stand:
 submerged, only the dived table's hunters reach it and it burns a flat 5.
 Wiring that up caught a bug in threat projection, which had been building
 every enemy attack without the defender's dive state. Nothing the
-docstrings once declined is left un-offered; the one caveat that remains,
-the enemy's view of a submerged sub, is stated where it lives.
+docstrings once declined is left un-offered. The last caveat, the enemy's
+view of a submerged sub, is measured too (DERIVATION 41): shown to the side
+that owns it, owns the tile under it, or has a unit parked beside it, and
+otherwise not drawn, not targetable, walked through by their move grid and
+an ambush on confirm. `fog.concealed` carries the rule; a concealed enemy
+sub is neither target nor projected attacker, your own dived sub's exposure
+keeps only the hunters that would be shown it when their menu opens, and
+the tiles the game offers you only through a concealed sub are traps.
 
 45 regression tests, including the branch ban. The resolution tests assert
 equality with `engine/damage.py` called directly on the same inputs — what
@@ -533,7 +539,7 @@ data/aw1_supply.json      service classes, burn table, supplier tables, the
 
 tests/test_damage.py      83 regression tests, incl. the dived-sub table
 tests/test_pathing.py     22 regression tests, incl. "no unit-type branches"
-tests/test_threat.py      25 regression tests, incl. the same branch ban
+tests/test_threat.py      26 regression tests, incl. the same branch ban
 tests/test_fog.py         32 tests, incl. five real-board oracles and branch ban
 tests/test_corpus.py      23 tests: replay every recorded measurement against
                           the engine, strikes and counters kept apart
@@ -543,6 +549,9 @@ tests/test_co_power.py    28 tests: the power system against its measurements
                           luck consumption that makes rolls predictable)
 tests/test_actions.py     45 regression tests: the enumeration wiring, the
                           dive/rise gates and the branch ban
+tests/test_conceal.py     18 tests: the dived sub's concealment replayed from
+                          nine driven cases -- reveal branches, targeting,
+                          the sub's own exposure, the grid and the trap
 tests/test_supply.py      26 tests: the measured supply/repair/burn rows
                           replayed, and the discarded alternatives refuted
 tests/test_join.py        10 tests: the five joins replayed, the internal-sum

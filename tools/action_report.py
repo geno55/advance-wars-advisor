@@ -118,10 +118,12 @@ def print_unit(board, unit, acts, limit=6):
               f"{exposure_phrase(a.exposure)} (you go with it)")
 
     for a in (a for a in acts if a.kind == "trap"):
-        print(f"  TRAP if you pick ({a.tile[0]},{a.tile[1]}): a hidden "
-              f"{a.target.type} is there -- you stop at "
-              f"({a.drop_tile[0]},{a.drop_tile[1]}) with fuel {a.fuel_after}, "
-              f"action spent; {exposure_phrase(a.exposure)}"
+        what = (f"a submerged {a.target.type} at ({a.target.x},{a.target.y}) "
+                f"is on the way" if a.target.dived
+                else f"a hidden {a.target.type} is there")
+        print(f"  TRAP if you pick ({a.tile[0]},{a.tile[1]}): {what} -- you "
+              f"stop at ({a.drop_tile[0]},{a.drop_tile[1]}) with fuel "
+              f"{a.fuel_after}, action spent; {exposure_phrase(a.exposure)}"
               f"{turn_start_phrase(a)}")
 
     for a in (a for a in acts if a.kind == "drop"):
@@ -199,7 +201,10 @@ def summary_line(board, unit, acts):
         bits.append(f"{len(loads)} transport(s) in reach")
     traps = [a for a in acts if a.kind == "trap"]
     if traps:
-        bits.append(f"{len(traps)} trap tile(s) under fog")
+        subs = sum(1 for a in traps if a.target.dived)
+        why = ("through a submerged sub" if subs == len(traps)
+               else "under fog" if not subs else "under fog / through a submerged sub")
+        bits.append(f"{len(traps)} trap tile(s) {why}")
     drops = [a for a in acts if a.kind == "drop"]
     if drops:
         bits.append(f"can drop onto {len({a.drop_tile for a in drops})} tile(s)")

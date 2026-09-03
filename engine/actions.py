@@ -97,6 +97,13 @@ WHAT IS MODELLED
     destination. reachable()/destinations() are already the game's fill
     for everything else: hidden enemies block passage exactly like visible
     ones, so no move is more optimistic than the game.
+    The same kind covers the clear-weather ambush on a SUBMERGED enemy sub
+    the player is not shown (DERIVATION 41, pathing.conceal_traps): there
+    the game's grid enters and expands THROUGH the sub, so every tile it
+    offers only by way of the sub -- the sub's own tile and everything
+    beyond it -- is a trap that stops the mover where its route meets the
+    sub. Under fog a submerged sub on an unlit tile is handled by the fog
+    rule; which of the two grids the game uses when both apply is unread.
 
   * DIVE and RISE -- the menu's own gates, read off the predicate table
     (DERIVATION 40): Dive is offered to the table's one diver (`can_dive`,
@@ -111,12 +118,15 @@ WHAT IS MODELLED
 
 WHAT IS NOT MODELLED, deliberately and visibly
 
-  * A dived sub's concealment. The game is expected to hide a submerged
-    sub from the enemy unless one of their units stands beside it, and
-    that has not been measured; nothing here reads or models what the
-    enemy can see of you (README, Known gaps). A dive's exposure therefore
-    counts every hunter that could reach the tile, seen or not -- the
-    conservative side, and stated in ASSUMPTIONS as Unknown.
+  * Nothing, at present. The last one -- a dived sub's concealment -- is
+    measured (DERIVATION 41) and composed in: an enemy sub the player is
+    not shown is neither a target nor a projected attacker (threat.hostiles,
+    with a warning), your own dived sub's exposure keeps only the hunters
+    that would be SHOWN it when their menu opens (threat._reveal_filter:
+    parked adjacent, on their property, or revealed by another of their
+    units parking alongside first), and the tiles the game offers you only
+    through a concealed sub are traps. The reveal filter's approximations
+    are stated where it lives.
 
 Exposure on an ATTACK action is computed on the board AFTER the trade, worst
 case for you throughout one consistent world -- the low opening roll: the
@@ -623,7 +633,26 @@ def actions_for(board, unit, *, co_ids: Optional[dict] = None,
 
     # -- traps ------------------------------------------------------------------
     # under fog, the hidden enemies' tiles the game's grid offers: picking
-    # one ends the move one tile short, acted, no menu (DERIVATION 38)
+    # one ends the move one tile short, acted, no menu (DERIVATION 38); in
+    # the clear, the tiles offered only through a submerged sub the player
+    # is not shown -- the sub's tile and everything beyond it (DERIVATION 41)
+    def trap_action(picked, stop, paid, enemy):
+        me = dataclasses.replace(unit, x=stop[0], y=stop[1], acted=True,
+                                 fuel=max(0, unit.fuel - paid))
+        hypo = dataclasses.replace(
+            board, units=[me if u.slot == unit.slot else u
+                          for u in board.units], vision=None)
+        ff = threat.focus_fire(hypo, me, stop, co_ids=co_ids,
+                               weather=weather, fog=fog,
+                               fog_rules=fog_rules, warnings=warnings)
+        ts = _turn_start_facts(hypo, me, stop, me.fuel, co_ids, warnings)
+        return Action(kind="trap", unit=unit, tile=picked, move_cost=paid,
+                      terrain=board.terrain_name(*stop),
+                      stars=board.defence_for(stop[0], stop[1], my_move),
+                      fuel_after=me.fuel, exposure=ff, target=enemy,
+                      drop_tile=stop, hp_after=unit.hp, turn_start=ts)
+
+    hidden = set()
     if fog_on:
         seen = {u.slot for u in threat.fog_mod.visible_units(board, unit.player,
                                                              fog_rules)}
@@ -632,21 +661,13 @@ def actions_for(board, unit, *, co_ids: Optional[dict] = None,
                   and u.slot not in seen}
         for h, (stop, paid) in pathing.trap_tiles(board, unit, hidden,
                                                    weather).items():
-            enemy = board.unit_at(*h)
-            me = dataclasses.replace(unit, x=stop[0], y=stop[1], acted=True,
-                                     fuel=max(0, unit.fuel - paid))
-            hypo = dataclasses.replace(
-                board, units=[me if u.slot == unit.slot else u
-                              for u in board.units], vision=None)
-            ff = threat.focus_fire(hypo, me, stop, co_ids=co_ids,
-                                   weather=weather, fog=fog,
-                                   fog_rules=fog_rules, warnings=warnings)
-            ts = _turn_start_facts(hypo, me, stop, me.fuel, co_ids, warnings)
-            out.append(Action(kind="trap", unit=unit, tile=h, move_cost=paid,
-                              terrain=board.terrain_name(*stop),
-                              stars=board.defence_for(stop[0], stop[1], my_move),
-                              fuel_after=me.fuel, exposure=ff, target=enemy,
-                              drop_tile=stop, hp_after=unit.hp, turn_start=ts))
+            out.append(trap_action(h, stop, paid, board.unit_at(*h)))
+    concealed = {u.slot for u in threat.fog_mod.concealed_units(board, unit.player)
+                 if u.slot not in hidden}
+    if concealed:
+        for picked, (stop, paid, sub_tile) in pathing.conceal_traps(
+                board, unit, concealed, weather).items():
+            out.append(trap_action(picked, stop, paid, board.unit_at(*sub_tile)))
 
     # -- drops ------------------------------------------------------------------
     # one action per (passenger, landing tile), on every destination the

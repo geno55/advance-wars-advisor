@@ -334,9 +334,51 @@ def can_see(board, player: int, unit, rule_set: Optional[dict] = None) -> bool:
 
 
 def visible_units(board, player: int, rule_set: Optional[dict] = None) -> List:
-    """Every unit `player` may legally act on knowledge of."""
+    """Every unit `player` may legally act on knowledge of, by the FOG rules.
+
+    A submerged sub has its own concealment on top of fog and in the clear
+    -- `concealed()` below. It is kept apart because the two hide a unit
+    differently on the game's move grid (DERIVATION 38 vs 41), and callers
+    that build traps need to know which rule they are under.
+    """
     rule_set = rule_set or RULES
     return [u for u in board.units if can_see(board, player, u, rule_set)]
+
+
+def concealed(board, unit, viewer: int) -> bool:
+    """Whether `viewer` is shown `unit` at all, when it is a submerged sub.
+
+    The game's own check, 0x08023BFC (DERIVATION 41), measured on nine
+    driven cases: a unit with the dive bit up is shown to the viewing side
+    iff it is theirs, or it stands on a property they own, or one of the
+    four adjacent tiles holds a unit of theirs -- units as they STAND, from
+    the tile index, which is why a hunter that moves adjacent gets no Fire
+    that action and one parked adjacent the turn before does. Hidden means:
+    not drawn, its tile behaves as empty (A opens the map menu), the enemy's
+    move grid enters AND expands through it, and a confirmed path onto or
+    through it stops the mover on the tile before it, acted, no menu.
+
+    Fog is a separate question: this is true in the clear. "Theirs" is the
+    ROM's active-side flag (army +0x1C bit 1), reduced here to `player ==
+    viewer` -- exact for two-sided matches, the same alliance reduction
+    co.meteor_* states. A surfaced unit is never concealed.
+    """
+    if not unit.dived or unit.loaded or unit.player == viewer:
+        return False
+    if board.owner[unit.y][unit.x] == viewer:
+        return False
+    for nx, ny in ((unit.x - 1, unit.y), (unit.x + 1, unit.y),
+                   (unit.x, unit.y - 1), (unit.x, unit.y + 1)):
+        if 0 <= nx < board.width and 0 <= ny < board.height:
+            other = board.unit_at(nx, ny)
+            if other is not None and other.player == viewer:
+                return False
+    return True
+
+
+def concealed_units(board, viewer: int) -> List:
+    """Every submerged sub `viewer` is not shown, as the board stands."""
+    return [u for u in board.units if concealed(board, u, viewer)]
 
 
 def blind_spots(board, player: int, tile: Coord,

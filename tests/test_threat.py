@@ -308,18 +308,33 @@ class TestDivedDefender(unittest.TestCase):
             self.assertEqual(len(threat.threats_to(b, b.units[0])), n, state)
             self.assertEqual(threat.focus_fire(b, b.units[0]).attackers, n)
 
-    def test_a_cruiser_threatens_both_for_the_same_number(self):
+    def test_a_cruiser_parked_alongside_threatens_both_for_the_same_number(self):
         """The dived table's Cruiser row equals the surfaced matrix's: diving
-        deletes attackers, it does not soften the hunters."""
+        deletes attackers, it does not soften the hunters. Adjacent, the
+        sub is shown to it (DERIVATION 41 W1) and the shot is the same."""
         got = []
         for state in (0, 0x20):
             b = board([[SEA] * 6],
                       [unit("Sub", 0, 0, slot=1, state=state),
-                       unit("Cruiser", 3, 0, player=2, slot=2)])
+                       unit("Cruiser", 1, 0, player=2, slot=2)])
             ff = threat.focus_fire(b, b.units[0])
             self.assertEqual(ff.attackers, 1)
             got.append((ff.worst_damage, ff.best_damage))
         self.assertEqual(got[0], got[1])
+
+    def test_a_lone_cruiser_two_tiles_off_is_not_shown_the_dived_sub(self):
+        """It can close to adjacent but gets no Fire that action (DERIVATION
+        41 H2): dropped from the damage, listed under `unseen`."""
+        b = board([[SEA] * 6],
+                  [unit("Sub", 0, 0, slot=1, state=0x20),
+                   unit("Cruiser", 3, 0, player=2, slot=2)])
+        ff = threat.focus_fire(b, b.units[0])
+        self.assertEqual(ff.attackers, 0)
+        self.assertEqual([t.attacker.slot for t in ff.unseen], [2])
+        surfaced = board([[SEA] * 6],
+                         [unit("Sub", 0, 0, slot=1),
+                          unit("Cruiser", 3, 0, player=2, slot=2)])
+        self.assertEqual(threat.focus_fire(surfaced, surfaced.units[0]).attackers, 1)
 
 
 class TestUnknownCoIsLoud(unittest.TestCase):

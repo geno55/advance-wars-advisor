@@ -235,7 +235,19 @@ fixtures, and in this file's git history.
   the bit and end the unit's action, writing nothing else. `actions_for`
   offers `"dive"`/`"rise"` on every wait destination with the exposure
   and turn-start facts for the toggled unit; `threat.py` passes both dive
-  states into every projected attack.
+  states into every projected attack. **What the enemy is shown of it**
+  (DERIVATION 41): the check at `0x08023BFC` shows a submerged sub to the
+  viewing side (army `+0x1C` bit 1, the active side) iff it is theirs, or
+  it stands on their property, or one of their units stands beside it --
+  units as they stand, so a hunter that moves adjacent gets no Fire that
+  action while one parked there the turn before, or any unit parked
+  alongside first, or the side's property under it, gives Fire at the
+  dived table's numbers (95 and 66 measured). Hidden, it is not drawn, its
+  tile behaves as empty, the enemy's move grid enters AND expands through
+  it, and a confirmed path onto or beyond it stops the mover where the
+  route meets the sub, acted, no menu. `fog.concealed`, `threat.hostiles`,
+  `threat._reveal_filter`, `pathing.conceal_traps`,
+  `tests/fixtures/sub_conceal_probes.json`.
 - **Meteor Strike, whole** (DERIVATION 30). The meteor centres on an enemy
   UNIT picked by one of three scans, chosen by a single RNG draw mod 3:
   funds value / raw internal HP / funds value with indirects doubled — each
@@ -401,13 +413,12 @@ A16, both born the day action enumeration was written.
   army's CO record and record 1 for the two income terms the payer adds.
   Both terms are zero for every CO, so the gate is unobservable through
   income; which option writes it is unread and does not matter.
-- **A dived sub's concealment.** The game is expected to hide a submerged
-  sub from the enemy unless one of their units stands adjacent; no probe
-  has looked, and nothing in the harness reads the opponent's view of the
-  board (README, Known gaps). The action layer's dive exposure therefore
-  counts every hunter that can reach the tile, which is the conservative
-  side. Kill by: a dived P1 sub, a P2 Cruiser at distance 3, and P2's
-  own Intel/Fire menus on its turn — offered or not.
+- **Fog over a submerged sub.** In the clear the enemy's grid expands
+  through a concealed sub (DERIVATION 41); under fog a hidden tile is
+  entered but never expanded through (DERIVATION 38). Which rule the grid
+  applies to a submerged sub on an unlit tile is unread; the action layer
+  uses the fog rule there. Kill by: the H1 layout with fog on and the sub
+  outside the Cruiser's vision, reading the grid at (6,7).
 - **The drop selector's default tile.** Every drive with the north tile
   free landed north, and the validity mask is ordered W,E,N,S — so the
   default is not the mask's first bit and is not modelled; the advisor

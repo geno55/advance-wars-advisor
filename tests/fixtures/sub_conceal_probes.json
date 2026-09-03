@@ -1,0 +1,98 @@
+{
+  "_comment": [
+    "The dived sub's concealment, measured (DERIVATION 41). Fixture: savestate",
+    "slot 2 (P2's turn), fog written OFF (0x0300431D = 0). Row y=7 written",
+    "to Sea from x=6 to x=10 and (7,6) too; P2's Tank 71 at (9,7) typed",
+    "Cruiser (RAM 22); on P1's turn the Mech 3 at (7,6) typed Sub (RAM 24),",
+    "real-moved to (7,7) (or (8,7)) and dived through its own menu (Wait /",
+    "Dive; Fire / Wait / Dive when adjacent to the Cruiser). Grids are the",
+    "game's move-select grid at [0x03003600+y*4][x] read with the Cruiser",
+    "selected: cost spent, 255 (-1) unreachable. Scripts: mesen_subhide.lua,",
+    "mesen_subhide2.lua, mesen_subhide3.lua; screenshots harness/out/sh*-*.png.",
+    "The game's check is 0x08023BFC (1 = shown, 0 = hidden): not dived -> 1;",
+    "else 1 if the owner's army has +0x1C bit 1 (the ACTIVE player -- it read",
+    "03 on the active army and 00 on the other, on both P1's and P2's turns),",
+    "or the terrain byte's owner (>>5) has it, or any of the four adjacent",
+    "tiles holds a unit (tile->unit index map+0x51A) whose owner has it."
+  ],
+  "rom_sha1": "15053499d5b3f49128a941d7f2d84876f5424d0c",
+  "check_function": "0x08023BFC",
+  "active_flag": "army +0x1C bit 1",
+  "layout": {
+    "sea_written": [[6, 7], [7, 7], [8, 7], [9, 7], [10, 7], [7, 6]],
+    "cruiser": {"slot": 71, "player": 2, "at": [9, 7], "move": 6},
+    "apc": {"slot": 69, "player": 2, "at": [12, 7], "move": 6},
+    "sub": {"slot": 3, "player": 1, "start": [7, 6]}
+  },
+  "drives": [
+    {
+      "case": "H0-surfaced-control",
+      "sub": {"at": [7, 7], "dived": false},
+      "grid_y7": [-1, -1, -1, -1, -1, -1, -1, -1, 1, 0, 1, -1, -1, -1, -1],
+      "drawn": true,
+      "reading": "a surfaced enemy blocks: (7,7) and (6,7) unreachable"
+    },
+    {
+      "case": "H1-dived-nothing-adjacent",
+      "sub": {"at": [7, 7], "dived": true},
+      "grid_y6": [-1, -1, -1, -1, -1, -1, -1, 3, -1, -1, -1, -1, -1, -1, -1],
+      "grid_y7": [-1, -1, -1, -1, -1, -1, 3, 2, 1, 0, 1, -1, -1, -1, -1],
+      "drawn": false,
+      "a_on_tile": "opens the map menu (Unit/Intel/Save/Options/End)",
+      "reading": "hidden: not drawn, the tile reads as empty, the fill enters it at cost 2 AND expands through it -- (6,7) and (7,6) at 3. Unlike the fog ambush, which never expands through a hidden tile."
+    },
+    {
+      "case": "H2-move-adjacent-same-action",
+      "sub": {"at": [7, 7], "dived": true},
+      "cruiser_move": {"picked": [8, 7], "menu": ["Wait"]},
+      "after_A_A": {"sub_hp": 100, "cruiser": {"at": [8, 7], "acted": true, "fuel": 62}},
+      "reading": "a hunter that ends its move adjacent gets no Fire that action; at menu time the tile index still holds its origin, two tiles away"
+    },
+    {
+      "case": "H3-confirm-onto-the-sub",
+      "sub": {"at": [7, 7], "dived": true},
+      "cruiser_move": {"picked": [7, 7], "ended": [8, 7], "fuel_after": 62, "acted": true, "menu": false},
+      "reading": "the ambush: stops one tile short, fuel for the tiles walked, action spent, no menu"
+    },
+    {
+      "case": "V4-confirm-beyond-the-sub",
+      "sub": {"at": [7, 7], "dived": true},
+      "cruiser_move": {"picked": [6, 7], "arrow": "drawn through (7,7)", "ended": [8, 7], "fuel_after": 62, "acted": true, "menu": false},
+      "reading": "a path through the hidden tile stops where it would enter it"
+    },
+    {
+      "case": "V2-adjacent-at-turn-start",
+      "sub": {"at": [7, 7], "dived": true, "fuel_before": 65, "fuel_after_p1_turn_start": 60},
+      "cruiser": {"at": [8, 7], "parked_the_turn_before": true},
+      "standing_menu": ["Fire", "Wait"],
+      "damage": 95,
+      "reading": "adjacent when the action starts: shown, Fire offered, the dived table's 90 + luck 5. The 5 burn on the dived sub measured again."
+    },
+    {
+      "case": "W1-dives-adjacent",
+      "sub": {"at": [8, 7], "dived": true, "menu_when_diving": ["Fire", "Wait", "Dive"]},
+      "grid_y7": [-1, -1, -1, -1, -1, -1, -1, -1, -1, 0, 1, -1, -1, -1, -1],
+      "standing_menu_fire_first": true,
+      "damage": 95,
+      "reading": "the adjacency branch: the sub's tile blocks (shown) and Fire is offered from a standing start"
+    },
+    {
+      "case": "W2-on-a-P2-port",
+      "sub": {"at": [7, 7], "dived": true},
+      "terrain_written": {"tile": [7, 7], "byte": "0x4B", "meaning": "Port | P2 << 5, written before P1 ended"},
+      "grid_y7": [-1, -1, -1, -1, -1, -1, -1, -1, 1, 0, 1, -1, -1, -1, -1],
+      "cruiser_move": {"picked": [8, 7], "fire_first": true},
+      "damage": 66,
+      "reading": "the property branch: shown on the viewer's own property; a hunter that MOVES adjacent fires the same action because the reveal does not depend on it. 95 * (1 - 0.3 port) = 66."
+    },
+    {
+      "case": "W3-revealed-by-a-second-unit",
+      "sub": {"at": [7, 7], "dived": true},
+      "revealer": {"slot": 69, "type": "APC", "moved_to": [7, 8], "waited": true},
+      "grid_y7": [-1, -1, -1, -1, -1, -1, -1, -1, 1, 0, 1, -1, -1, -1, -1],
+      "cruiser_move": {"picked": [8, 7], "fire_first": true},
+      "damage": 95,
+      "reading": "any unit of the viewer's parked adjacent reveals the sub for everyone that turn; the Cruiser then moves in and fires"
+    }
+  ]
+}

@@ -43,6 +43,7 @@ WHAT IS NOT MODELLED, deliberately and visibly
 from __future__ import annotations
 
 import functools
+import dataclasses
 import heapq
 import json
 import pathlib
@@ -192,6 +193,56 @@ def trap_tiles(board, unit, hidden_slots, weather: Optional[str] = None) -> Dict
                     best = n
         if best is not None:
             out[h] = (best, reach[best])
+    return out
+
+
+def conceal_traps(board, unit, concealed_slots,
+                  weather: Optional[str] = None) -> Dict:
+    """Tiles the game's move grid offers this unit only by way of a SUBMERGED
+    sub it is not shown, mapped to (stop_tile, cost_paid, sub_tile) -- the
+    clear-weather ambush, DERIVATION 41.
+
+    Measured on the game's own grid: a concealed sub's tile reads as open
+    water -- entered at its cost and EXPANDED through, unlike the fog rule
+    of trap_tiles() -- and confirming onto it or onto anything beyond it
+    stops the mover on the tile before the sub, charges fuel for the tiles
+    walked, and spends the action with no menu. So the game offers every
+    tile of the fill with the sub removed; the ones our own fill (which
+    treats the sub as the blocker it really is) does not reach at that cost
+    are traps, and the stop is where the cheapest route first meets a sub.
+
+    Stated caveats: the game walks the arrow the player drew, and the
+    player cannot see the sub, so a tile reachable at EQUAL cost by a route
+    that avoids the sub is listed as an ordinary destination here although
+    the game's own arrow may run through the sub; and a tile our fill
+    reaches only at a HIGHER cost is a trap here (the auto-route takes the
+    cheaper way, through the sub) although a hand-drawn detour would arrive.
+    `concealed_slots` is the caller's statement (fog.concealed_units).
+    """
+    subs = {(u.x, u.y) for u in board.units
+            if u.slot in concealed_slots and not u.loaded}
+    if not subs or unit.loaded:
+        return {}
+    open_board = dataclasses.replace(
+        board, units=[u for u in board.units if u.slot not in concealed_slots])
+    full = reachable(open_board, unit, weather)
+    real = reachable(board, unit, weather)
+    occupied = _occupancy(open_board)
+    out = {}
+    for tile, cost in full.items():
+        if tile in real and real[tile] <= cost:
+            continue                               # honest route, same price
+        blocker = occupied.get(tile)
+        if blocker is not None and blocker.slot != unit.slot and not (
+                blocker.player == unit.player
+                and transport_has_room(open_board, blocker, unit.type)):
+            continue                               # not a place the game offers
+        route = path(open_board, unit, tile, weather)
+        for i, t in enumerate(route):
+            if t in subs:
+                stop = route[i - 1]
+                out[tile] = (stop, full[stop], t)
+                break
     return out
 
 

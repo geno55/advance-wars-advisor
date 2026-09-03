@@ -2325,3 +2325,90 @@ harness reads the opponent's visibility, so a dive's exposure counts every
 hunter that can reach the tile. ASSUMPTIONS carries it as Unknown. Also
 unobserved: whether the CPU's dispatcher shares the menu's gates — it does
 not matter to the advisor, which never enumerates for the CPU.
+
+
+## 41. The dived sub's concealment: shown to whoever is beside it, owns the tile, or owns it
+
+DERIVATION 40 left one thing stated rather than measured: what the enemy is
+shown of a submerged sub. The expectation was "hidden unless adjacent"; the
+game turned out to have three reveal branches and a move grid that behaves
+unlike fog. Three headless runs, nine driven cases, all on the savestate-2
+fixture with fog written off: row y=7 written to Sea from x=6 to x=10 plus
+(7,6), P2's Tank 71 typed Cruiser at (9,7), and on P1's turn the Mech 3
+typed Sub, real-moved from (7,6) and dived through its own menu (`Wait /
+Dive`; `Fire / Wait / Dive` when it dives beside the Cruiser -- the second
+run's W-case picked Wait by mistake and the third redid it). Scripts
+`harness/mesen_subhide.lua`, `_subhide2.lua`, `_subhide3.lua`; fixture
+`tests/fixtures/sub_conceal_probes.json`; screenshots `harness/out/sh*`.
+
+### The check, read first
+
+A scan for readers of flags bit `0x20` beside a flags-byte load turned up
+21 sites. One small function, **`0x08023BFC(unit, x, y)`**, reads only the
+map and unit pointers and returns:
+
+```
+1                                   if the unit is not dived
+1                                   if army[owner]  +0x1C & 2
+1                                   if army[terrain byte >> 5] +0x1C & 2     (the tile's owner)
+1                                   if any of the 4 neighbours (tile->unit index map+0x51A)
+                                       holds a unit whose army +0x1C & 2
+0                                   otherwise
+```
+
+Its wrapper `0x08023D2C(slot)` is called from the sprite loop at
+`0x0801FE2A`, which skips drawing the unit when it returns 0. A twin at
+`0x08023DD0` does the same with team compares (`army +0x26`) for the AI
+(`0x08060B40`). **Army `+0x1C`** read `03` on the active army and `00` on
+the other, on both P1's and P2's turns -- the active side's flag. So the
+rule is: a submerged sub is shown to the viewing side iff it is theirs, or
+it stands on their property, or one of their units stands beside it.
+
+### Measured
+
+| case | setup | P2's grid at (7,7) | shown? | Fire? |
+|---|---|---|---|---|
+| H0 | surfaced control | 255 | drawn | — |
+| H1 | dived, nothing adjacent | **2**, and (6,7)/(7,6) at 3 | not drawn; A on the tile opens the map menu | — |
+| H2 | Cruiser moves to (8,7), adjacent | — | — | menu `Wait` only; 0 dmg |
+| H3 | Cruiser confirms onto (7,7) | — | — | stops at (8,7), fuel −1, acted, no menu |
+| V4 | Cruiser confirms onto (6,7), beyond | arrow drawn through (7,7) | — | stops at (8,7), same |
+| V2 | Cruiser parked at (8,7) the turn before | — | — | `Fire / Wait`; **95** (90+5) |
+| W1 | sub dives at (8,7), beside the Cruiser | (8,7) = 255 | shown | `Fire` first; **95** |
+| W2 | (7,7) written as a **P2 Port** before P1 ends | 255 | shown | Cruiser moves in, fires: **66** = 95 × 0.7 |
+| W3 | P2's **APC** parks at (7,8) first | 255 | shown | Cruiser moves in, fires: **95** |
+
+Three things the expectation did not have. First, the **move grid enters
+and expands through** a concealed sub -- (6,7) and (7,6) at 3 -- where the
+fog rule (DERIVATION 38) enters a hidden tile and never leaves it. The trap
+is the same on confirm: the walker stops where the route meets the sub. It
+follows that tiles beyond the sub are traps too (V4). Second, a hunter
+that **becomes adjacent by moving gets no Fire that action** (H2): the
+check reads the tile index, which still holds the mover's origin when its
+menu is built. Parked adjacent the turn before, it fires (V2). Third, any
+unit of the side, not only a hunter, reveals the sub by parking beside it
+(W3), and the property branch reveals it to everyone (W2) -- in both a
+hunter that then moves in fires the same turn. The dived table's numbers
+held throughout (90 + luck 5, × 0.7 on the port's 3 stars), and the dived
+sub's flat 5 burn showed again (65 → 60 across P1's turn start).
+
+### What shipped
+
+`fog.concealed(board, unit, viewer)` is the check, with the alliance
+reduced to `player == viewer` as everywhere. `threat.hostiles` drops
+concealed enemy subs in the clear as under fog -- not a target, not a
+projected attacker -- and `threats_to` warns. For the sub's OWN exposure
+`threat._reveal_filter` keeps a hunter only if it is parked adjacent, the
+sub sits on its side's property, or another hostile unit can end its move
+beside the sub while leaving the hunter a firing tile; the hunters dropped
+ride on `FocusFire.unseen`, and each kept `Threat` says which branch let it
+fire (`revealed_by`). `pathing.conceal_traps` rebuilds the game's grid with
+the sub removed and turns every tile our own fill does not reach at that
+cost into a trap stopping where the cheapest route meets the sub;
+`actions_for` offers them as kind `"trap"` in the clear. Stated
+approximations: the revealer is any hostile that can END beside the sub,
+one revealer/hunter tile pair is checked rather than a full assignment,
+equal-cost detours around the sub are listed as ordinary destinations
+although the game's own arrow may run through it, and under fog a
+submerged sub on an unlit tile is handled by the fog rule -- which of the
+two grids the game uses when both apply is unread.

@@ -2,7 +2,8 @@
 
 For the session that picks this up. The measurement programme is complete:
 every unit action (wait, attack, capture, load, join, drop, supply, dive,
-rise, trap),
+rise, trap), the dived sub's concealment (what the enemy is shown of it,
+and the ambush through it),
 both army actions (build, power), the turn-start economy (burn, crash,
 repair, resupply, auto-supply) and the fog ambush are enumerated from
 tables read off the ROM and rules measured on the running game

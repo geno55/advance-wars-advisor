@@ -168,7 +168,11 @@ def hostiles(board, player: int, ignore_acted: bool = True,
     if fog:
         visible = {u.slot for u in fog_mod.visible_units(board, player, rule_set)}
         out = [u for u in out if u.slot in visible]
-    return out
+    # A submerged sub the player is not shown is dropped for the same
+    # reason, fog or no fog (DERIVATION 41): the game will not offer it as
+    # a target, and projecting its torpedoes would be advice built on a unit
+    # the player cannot know is there. threats_to() warns when it happens.
+    return [u for u in out if not fog_mod.concealed(board, u, player)]
 
 
 def fog_active(board, fog: Optional[bool]) -> Optional[bool]:
@@ -289,6 +293,12 @@ class Threat:
     firing_tiles: tuple          # every tile it could deliver this from
     target_tile: Coord
     outcome: object              # damage.Outcome
+    # For a SUBMERGED defender: which measured branch of the game's reveal
+    # check lets this attacker be shown the target when its menu opens --
+    # "adjacent" (a unit of theirs already beside it), "property" (it sits
+    # on their property) or "revealer" (another of their units can park
+    # beside it first, DERIVATION 41 W3). None for a surfaced defender.
+    revealed_by: Optional[str] = None
 
     @property
     def min_damage(self) -> int:
@@ -339,23 +349,30 @@ def threats_to(board, defender, tile: Optional[Coord] = None, *,
                co_ids: Optional[dict] = None, weather: Optional[str] = None,
                ignore_acted: bool = True, fog: Optional[bool] = None,
                fog_rules: Optional[dict] = None,
-               warnings: Optional[list] = None) -> List[Threat]:
+               warnings: Optional[list] = None,
+               unseen: Optional[list] = None) -> List[Threat]:
     """Every enemy attack that could land on `defender` if it stood at `tile`.
 
     Defaults to where it actually stands. Enemy movement is recomputed against
     the hypothetical board, so blocking effects are real -- and so is the
     change in what you can SEE from there, since visibility is evaluated on the
     same hypothetical board.
+
+    A SUBMERGED defender is further filtered by the game's reveal rule
+    (`_reveal_filter`, DERIVATION 41); hunters that could reach it but would
+    not be shown it are appended to `unseen` when a list is passed.
     """
     tile = tile or (defender.x, defender.y)
     warnings = warnings if warnings is not None else []
     hypo, moved = _relocate(board, defender, tile)
     dmg = _Damage(hypo, moved, tile, co_ids, warnings)
     _note_fog(hypo, defender.player, fog, fog_rules, warnings)
+    _note_concealed(hypo, defender.player, warnings)
 
     out = []
-    for enemy in hostiles(hypo, defender.player, ignore_acted,
-                          fog=bool(fog_active(hypo, fog)), rule_set=fog_rules):
+    enemies = hostiles(hypo, defender.player, ignore_acted,
+                       fog=bool(fog_active(hypo, fog)), rule_set=fog_rules)
+    for enemy in enemies:
         sources = covered_tiles(hypo, enemy, weather).get(tile)
         if not sources:
             continue
@@ -364,8 +381,75 @@ def threats_to(board, defender, tile: Optional[Coord] = None, *,
             continue
         out.append(Threat(attacker=enemy, firing_tiles=tuple(sorted(sources)),
                           target_tile=tile, outcome=outcome))
+    if moved.dived:
+        out = _reveal_filter(hypo, moved, tile, out, enemies, weather, unseen)
     out.sort(key=lambda t: (-t.max_damage, t.attacker.slot))
     return out
+
+
+def _note_concealed(board, player: int, warnings: list) -> None:
+    n = len(fog_mod.concealed_units(board, player))
+    if n:
+        note = (f"{n} enemy sub(s) are submerged where you are not shown them "
+                f"-- not drawn, not targetable, and their torpedoes are absent "
+                f"from every number here (DERIVATION 41)")
+        if note not in warnings:
+            warnings.append(note)
+
+
+def _reveal_filter(board, sub, tile: Coord, threats: List[Threat], enemies,
+                   weather, unseen: Optional[list]) -> List[Threat]:
+    """Which hunters get to fire at a SUBMERGED defender -- the game's reveal
+    check (fog.concealed, DERIVATION 41) applied at each hunter's menu time.
+
+    Measured: a hunter parked adjacent when its action starts fires (V2,
+    W1); one that only becomes adjacent by moving does not (H2), because the
+    check reads units where they stand; the sub on the hunter's side's
+    property is shown to all of them (W2); and any unit of theirs that parks
+    beside the sub first reveals it for a hunter that then moves in (W3).
+    So a threat survives if the sub is already revealed on this board, or
+    some OTHER enemy unit can end its move on a tile adjacent to the sub
+    while leaving the hunter a firing tile of its own. Hunters this drops
+    are appended to `unseen` when a list is given.
+
+    Approximations, stated: the revealer is any hostile unit that can END on
+    an adjacent tile (pathing.destinations), spending its own action to do
+    it; only the two-tile distinctness between one revealer and the hunter
+    is checked, not a full assignment across several hunters; alliances are
+    `player != sub.player`, as everywhere.
+    """
+    x, y = tile
+    adj = {(x - 1, y), (x + 1, y), (x, y - 1), (x, y + 1)}
+    adj = {t for t in adj if 0 <= t[0] < board.width and 0 <= t[1] < board.height}
+    owner_here = board.owner[y][x]
+    parked = {(e.x, e.y) for e in enemies} & adj
+    reach_adj = {}
+    for e in enemies:
+        got = set(pathing.destinations(board, e, weather)) & adj
+        if got:
+            reach_adj[e.slot] = got
+    kept = []
+    for th in threats:
+        h = th.attacker
+        why = None
+        if parked:
+            why = "adjacent"
+        elif owner_here == h.player:
+            why = "property"
+        else:
+            mine = set(th.firing_tiles)
+            for slot, tiles in reach_adj.items():
+                if slot == h.slot:
+                    continue
+                if len(tiles | mine) >= 2:
+                    why = "revealer"
+                    break
+        if why is None:
+            if unseen is not None:
+                unseen.append(th)
+            continue
+        kept.append(dataclasses.replace(th, revealed_by=why))
+    return kept
 
 
 # --------------------------------------------------------------------------
@@ -388,6 +472,11 @@ class FocusFire:
     # reach this one. NOT a prediction -- a count of the places the prediction
     # cannot see into, so a quiet report and a blind one look different.
     blind_spots: int = 0
+    # For a SUBMERGED defender: hunters that could reach a firing tile but
+    # would not be shown the sub when their menu opens (DERIVATION 41) --
+    # dropped from the damage, listed so the reader can see what the dive
+    # is buying and what would undo it (an enemy unit parking alongside).
+    unseen: tuple = ()
 
     @property
     def attackers(self) -> int:
@@ -448,9 +537,10 @@ def focus_fire(board, defender, tile: Optional[Coord] = None, *,
     """
     tile = tile or (defender.x, defender.y)
     warnings = warnings if warnings is not None else []
+    unseen: list = []
     threats = threats_to(board, defender, tile, co_ids=co_ids, weather=weather,
                          ignore_acted=ignore_acted, fog=fog,
-                         fog_rules=fog_rules, warnings=warnings)
+                         fog_rules=fog_rules, warnings=warnings, unseen=unseen)
     delivered, crowded = _match_distinct_tiles(threats)
 
     hypo, moved = _relocate(board, defender, tile)
@@ -463,7 +553,7 @@ def focus_fire(board, defender, tile: Optional[Coord] = None, *,
                          worst_damage=0, best_damage=0,
                          worst_remaining=moved.hp, best_remaining=moved.hp,
                          lethal=False, certain_death=False, exact=True,
-                         blind_spots=blind)
+                         blind_spots=blind, unseen=tuple(unseen))
 
     exact = len(delivered) <= EXHAUSTIVE_ORDERINGS
     if exact:
@@ -483,7 +573,7 @@ def focus_fire(board, defender, tile: Optional[Coord] = None, *,
         worst_remaining=max(0, moved.hp - worst),
         best_remaining=max(0, moved.hp - best),
         lethal=worst >= moved.hp, certain_death=best >= moved.hp,
-        exact=exact, blind_spots=blind,
+        exact=exact, blind_spots=blind, unseen=tuple(unseen),
     )
 
 
