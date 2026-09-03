@@ -80,18 +80,17 @@ re-derive; import.
    and the power, in an ORDER — order matters (a supply before a move, a
    power before attacks, a join that frees a slot before a build). The
    facts are per-action on the current board; a plan needs the board
-   re-evaluated after each committed action. That re-evaluation is a
-   FORWARD MODEL, and four fifths of it is already written as one-off
-   hypotheticals inside `actions.py` (`_after_trade`, `_loaded_board`,
-   `_merged_board`, `_dropped_board`, `_turn_start_facts`, all
-   `dataclasses.replace` on units). Factor them out into `engine/sim.py`
-   behind one entry point, `apply(board, action) -> board`, BEFORE
-   writing any planner. It is the load-bearing piece of this phase: with
-   it, planning, search, weight tuning and self-play all run in Python at
-   whatever speed they need; without it the only way to advance a board
-   is the emulator, which is the mistake an earlier draft of this handoff
-   made. Keep it honest: a plan's second step quotes facts on the board
-   its first step leaves behind.
+   re-evaluated after each committed action. That re-evaluation is the
+   FORWARD MODEL, and it exists now: `engine/sim.py` -- `apply(board,
+   action) -> board` for every kind (`luck` picks the strike's roll;
+   "min" is the action layer's worst-case world), `battle()`, and
+   `end_turn()` / `turn_start()` for the boundary (DERIVATION 42). The
+   action layer's one-off hypotheticals are gone; it scores exposure on
+   boards `sim.apply` produces. With it, planning, search, weight tuning
+   and self-play all run in Python at whatever speed they need. Keep it
+   honest: a plan's second step quotes facts on the board its first step
+   leaves behind, and `sim.py`'s six stated assumptions (ASSUMPTIONS,
+   "What engine/sim.py states") are what the differential test is for.
 3. **What the emulator is for now.** Three clocks, and only one of them
    can afford the game:
    - *Advice time* — a dump in, a ranked plan out. Milliseconds. The
@@ -227,9 +226,8 @@ re-derive; import.
 
 ## Deliverables, repo-style
 
-- `engine/sim.py` first, before any planner: `apply(board, action) ->
-  board`, the forward model factored out of `actions.py`'s one-off
-  hypotheticals, plus the turn-start economy.
+- ~~`engine/sim.py` first~~ -- delivered (DERIVATION 42): `apply`,
+  `battle`, `end_turn`, `turn_start`; 32 tests in `tests/test_sim.py`.
 - `engine/advisor.py` (opinion layer, weights in one place, every
   preference traceable to a quoted fact) and `tools/advise.py` (the
   user-facing plan, facts and opinions visibly separate).

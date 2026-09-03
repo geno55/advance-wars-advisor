@@ -1,0 +1,99 @@
+{
+  "_comment": [
+    "Does a Wait in place keep capture progress? (DERIVATION 42, for",
+    "engine/sim.py.) Fixture: savestate slot 1 -- P1's Infantry (slot 2)",
+    "one tile south of a neutral city at (4,1), the A15 fixture. Script",
+    "harness/mesen_capwait.lua; screenshots harness/out/cw-*.png. The",
+    "capture field is bits 11-15 of the unit record's +4 halfword.",
+    "The turn-change poll read the active byte as 0 throughout, so",
+    "end_turn() reported false, but the day counter advanced past each",
+    "pair of End Turns and the unit's acted bit cleared -- the turns ran."
+  ],
+  "rom_sha1": "15053499d5b3f49128a941d7f2d84876f5424d0c",
+  "unit": {
+    "slot": 2,
+    "type": "Infantry",
+    "hp": 100
+  },
+  "city": [
+    4,
+    1
+  ],
+  "drives": [
+    {
+      "case": "start",
+      "at": [
+        4,
+        2
+      ],
+      "capture": 0,
+      "acted": false,
+      "city_owner": 0,
+      "day": 3
+    },
+    {
+      "case": "after-cap1",
+      "at": [
+        4,
+        1
+      ],
+      "capture": 10,
+      "acted": true,
+      "city_owner": 0,
+      "day": 3,
+      "note": "move north, Capt: +10 for a 10-bar Infantry"
+    },
+    {
+      "case": "p1-day2",
+      "at": [
+        4,
+        1
+      ],
+      "capture": 10,
+      "acted": false,
+      "city_owner": 0,
+      "day": 5
+    },
+    {
+      "case": "after-wait",
+      "at": [
+        4,
+        1
+      ],
+      "capture": 10,
+      "acted": true,
+      "city_owner": 0,
+      "day": 5,
+      "menu": [
+        "Capt",
+        "Wait"
+      ],
+      "picked": "Wait",
+      "note": "a Wait in place keeps the progress"
+    },
+    {
+      "case": "p1-day3",
+      "at": [
+        4,
+        1
+      ],
+      "capture": 10,
+      "acted": false,
+      "city_owner": 0,
+      "day": 7
+    },
+    {
+      "case": "after-cap-day3",
+      "at": [
+        4,
+        1
+      ],
+      "capture": 0,
+      "acted": true,
+      "city_owner": 1,
+      "day": 7,
+      "picked": "Capt",
+      "note": "continues from 10: 10 + 10 = 20, the city falls, the field reads 0"
+    }
+  ]
+}

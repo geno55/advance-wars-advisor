@@ -24,8 +24,10 @@ comes from:
                                               on the ENDING tile, not where the
                                               unit started
   * what the enemy does about it next turn  -- threat.focus_fire() at the
-                                              ending tile, on a board where the
-                                              attack has already happened
+                                              ending tile, on the board
+                                              sim.apply() says the action
+                                              leaves behind (the forward
+                                              model, engine/sim.py)
 
 There is not a single branch on unit type in this file, and tests/test_actions.py
 enforces it the same way pathing and threat do. Who may capture comes from the
@@ -155,6 +157,7 @@ try:                                    # imported as engine.actions by tools/
     from . import damage, join as join_mod, pathing, supply as supply_mod, threat
     from . import power as power_mod
     from . import production as prod_mod
+    from . import sim as sim_mod
     from . import unload as unload_mod
     from .state import Unit as _Unit, DIVE_FLAG
 except ImportError:                     # imported as actions, engine/ on path
@@ -166,6 +169,7 @@ except ImportError:                     # imported as actions, engine/ on path
     import threat
     import power as power_mod
     import production as prod_mod
+    import sim as sim_mod
     import unload as unload_mod
     from state import Unit as _Unit, DIVE_FLAG
 
@@ -311,102 +315,33 @@ def _build_attack(board, attacker, defender, co_ids, warnings) -> Optional[objec
               defender_dived=defender.dived, attacker_dived=attacker.dived)
     if a_co is None:
         return damage.Attack(attacker=attacker.type, defender=defender.type, **kw)
-    return damage.Attack.between(attacker.type, defender.type, a_co, d_co, **kw)
+    # the power stat block is live while +0x1E is up, the opponent's turn
+    # included (DERIVATION 27) -- both sides' flags reach the quote
+    return damage.Attack.between(attacker.type, defender.type, a_co, d_co,
+                                 attacker_power=_power_active(board, attacker.player),
+                                 defender_power=_power_active(board, defender.player),
+                                 **kw)
+
+
+def _power_active(board, player) -> bool:
+    try:
+        return bool(board.army(player).power_active)
+    except (StopIteration, AttributeError):
+        return False
 
 
 # --------------------------------------------------------------------------
-# the post-trade board
+# the board an action leaves behind comes from engine/sim.py: the Action is
+# built first with no exposure, sim.apply() advances the board, and the
+# exposure is scored on that. One forward model, shared with any planner.
 # --------------------------------------------------------------------------
 
-def _after_trade(board, unit, enemy, strike, counter):
-    """The board once the attack has happened, worst case for `unit` in one
-    consistent world -- the low opening roll.
-
-    The target is removed only on a guaranteed kill; otherwise it stands at
-    its STRONGEST surviving HP, which is the same roll that produces the
-    biggest counter, so pairing max_remaining_hp with the counter's
-    min_remaining_hp is one scenario and not two pessimisms multiplied.
-
-    Returns (board, your unit on it), or (None, None) when the worst case is
-    your unit dead -- there is no next turn to project for it.
-    """
-    my_hp = counter.min_remaining_hp if counter else unit.hp
-    if my_hp <= 0:
-        return None, None
-    me = dataclasses.replace(unit, hp=my_hp)
-    units = []
-    for u in board.units:
-        if u.slot == enemy.slot:
-            if strike.guaranteed_kill:
-                continue
-            units.append(dataclasses.replace(u, hp=strike.max_remaining_hp))
-        elif u.slot == unit.slot:
-            units.append(me)
-        else:
-            units.append(u)
-    # The visibility array is a photograph of the pre-trade board; a board
-    # with a unit removed or weakened keeps it, because sight lines do not
-    # depend on HP -- but focus_fire will drop it anyway once it relocates.
-    return dataclasses.replace(board, units=units), me
-
-
-def _loaded_board(board, unit, transport):
-    """The board with `unit` inside `transport`, for scoring the ride."""
-    units = []
-    for u in board.units:
-        if u.slot == unit.slot:
-            units.append(dataclasses.replace(u, x=transport.x, y=transport.y,
-                                             loaded=True))
-        elif u.slot == transport.slot:
-            units.append(dataclasses.replace(u, cargo=unit.slot, carrying=True))
-        else:
-            units.append(u)
-    hypo = dataclasses.replace(board, units=units, vision=None)
-    rider = next(u for u in hypo.units if u.slot == transport.slot)
-    return hypo, rider
-
-
-def _merged_board(board, unit, partner, m):
-    """The board after a join: the partner gone, `unit` on its tile at the
-    merged HP/fuel/ammo, carrying the partner's capture progress."""
-    units = []
-    me = None
-    for u in board.units:
-        if u.slot == partner.slot:
-            continue
-        if u.slot == unit.slot:
-            me = dataclasses.replace(u, x=partner.x, y=partner.y,
-                                     hp=m.hp_after, fuel=m.fuel_after,
-                                     ammo=m.ammo_after,
-                                     capture=m.capture_after)
-            units.append(me)
-        else:
-            units.append(u)
-    return dataclasses.replace(board, units=units, vision=None), me
-
-
-def _dropped_board(board, transport, passenger, tile, land):
-    """The board after a drop: transport on `tile` (slot freed, acted), the
-    passenger standing on `land`, acted; everything else unchanged."""
-    units = []
-    walker = None
-    for u in board.units:
-        if u.slot == transport.slot:
-            kw = dict(x=tile[0], y=tile[1], acted=True)
-            if u.cargo == passenger.slot:
-                kw["cargo"] = 0
-            elif getattr(u, "cargo2", 0) == passenger.slot:
-                kw["cargo2"] = 0
-            left = kw.get("cargo", u.cargo) or kw.get("cargo2",
-                                                      getattr(u, "cargo2", 0))
-            units.append(dataclasses.replace(u, carrying=bool(left), **kw))
-        elif u.slot == passenger.slot:
-            walker = dataclasses.replace(u, x=land[0], y=land[1], loaded=False,
-                                         acted=True)
-            units.append(walker)
-        else:
-            units.append(u)
-    return dataclasses.replace(board, units=units, vision=None), walker
+def _after(board, act, *, co_ids=None, warnings=None):
+    """(board after `act` in the worst case for its actor, the actor on it or
+    None if that worst case is its death)."""
+    hypo = sim_mod.apply(board, act, luck="min", co_ids=co_ids,
+                         warnings=warnings)
+    return hypo, sim_mod.unit_in(hypo, act.unit.slot) if act.unit else None
 
 
 # --------------------------------------------------------------------------
@@ -548,13 +483,15 @@ def actions_for(board, unit, *, co_ids: Optional[dict] = None,
 
         # -- load: the only destination another unit may share ---------------
         if blocker is not None and blocker.slot != unit.slot:
-            hypo, rider = _loaded_board(board, unit, blocker)
+            act = Action(kind="load", unit=unit, tile=tile, move_cost=cost,
+                         exposure=None, target=blocker, hp_after=unit.hp,
+                         **facts(tile))
+            hypo, _ = _after(board, act, co_ids=co_ids, warnings=warnings)
+            rider = sim_mod.unit_in(hypo, blocker.slot)
             ff = threat.focus_fire(hypo, rider, tile, co_ids=co_ids,
                                    weather=weather, fog=fog,
                                    fog_rules=fog_rules, warnings=warnings)
-            out.append(Action(kind="load", unit=unit, tile=tile, move_cost=cost,
-                              exposure=ff, target=blocker, hp_after=unit.hp,
-                              **facts(tile)))
+            out.append(dataclasses.replace(act, exposure=ff))
             continue
 
         # -- wait ------------------------------------------------------------
@@ -613,23 +550,19 @@ def actions_for(board, unit, *, co_ids: Optional[dict] = None,
         # table's hunters reach it, burning a flat 5) or surfaced again.
         toggle = None
         if my_stats["can_dive"] and not unit.dived:
-            toggle = ("dive", unit.state | DIVE_FLAG)
+            toggle = "dive"
         elif unit.dived:
-            toggle = ("rise", unit.state & ~DIVE_FLAG)
+            toggle = "rise"
         if toggle is not None:
-            kind, state = toggle
-            me = dataclasses.replace(unit, x=x, y=y, state=state, acted=True)
-            hypo = dataclasses.replace(
-                board, units=[me if u.slot == unit.slot else u
-                              for u in board.units], vision=None)
+            act = Action(kind=toggle, unit=unit, tile=tile, move_cost=cost,
+                         exposure=None, hp_after=unit.hp, **facts(tile))
+            hypo, me = _after(board, act, co_ids=co_ids, warnings=warnings)
             ff_t = threat.focus_fire(hypo, me, tile, co_ids=co_ids,
                                      weather=weather, fog=fog,
                                      fog_rules=fog_rules, warnings=warnings)
             ts_t = _turn_start_facts(hypo, me, tile, unit.fuel - cost,
                                      co_ids, warnings)
-            out.append(Action(kind=kind, unit=unit, tile=tile, move_cost=cost,
-                              exposure=ff_t, hp_after=unit.hp,
-                              turn_start=ts_t, **facts(tile)))
+            out.append(dataclasses.replace(act, exposure=ff_t, turn_start=ts_t))
 
     # -- traps ------------------------------------------------------------------
     # under fog, the hidden enemies' tiles the game's grid offers: picking
@@ -637,20 +570,17 @@ def actions_for(board, unit, *, co_ids: Optional[dict] = None,
     # the clear, the tiles offered only through a submerged sub the player
     # is not shown -- the sub's tile and everything beyond it (DERIVATION 41)
     def trap_action(picked, stop, paid, enemy):
-        me = dataclasses.replace(unit, x=stop[0], y=stop[1], acted=True,
-                                 fuel=max(0, unit.fuel - paid))
-        hypo = dataclasses.replace(
-            board, units=[me if u.slot == unit.slot else u
-                          for u in board.units], vision=None)
+        act = Action(kind="trap", unit=unit, tile=picked, move_cost=paid,
+                     terrain=board.terrain_name(*stop),
+                     stars=board.defence_for(stop[0], stop[1], my_move),
+                     fuel_after=max(0, unit.fuel - paid), exposure=None,
+                     target=enemy, drop_tile=stop, hp_after=unit.hp)
+        hypo, me = _after(board, act, co_ids=co_ids, warnings=warnings)
         ff = threat.focus_fire(hypo, me, stop, co_ids=co_ids,
                                weather=weather, fog=fog,
                                fog_rules=fog_rules, warnings=warnings)
         ts = _turn_start_facts(hypo, me, stop, me.fuel, co_ids, warnings)
-        return Action(kind="trap", unit=unit, tile=picked, move_cost=paid,
-                      terrain=board.terrain_name(*stop),
-                      stars=board.defence_for(stop[0], stop[1], my_move),
-                      fuel_after=me.fuel, exposure=ff, target=enemy,
-                      drop_tile=stop, hp_after=unit.hp, turn_start=ts)
+        return dataclasses.replace(act, exposure=ff, turn_start=ts)
 
     hidden = set()
     if fog_on:
@@ -686,16 +616,17 @@ def actions_for(board, unit, *, co_ids: Optional[dict] = None,
             if p is None:
                 continue
             for land in unload_mod.drop_tiles(board, unit, tile, p.type):
-                hypo, walker = _dropped_board(board, unit, p, tile, land)
+                act = Action(kind="drop", unit=unit, tile=tile,
+                             move_cost=cost, exposure=None, target=p,
+                             drop_tile=land, hp_after=p.hp, **facts(tile))
+                hypo, _ = _after(board, act, co_ids=co_ids, warnings=warnings)
+                walker = sim_mod.unit_in(hypo, p.slot)
                 ff = threat.focus_fire(hypo, walker, land, co_ids=co_ids,
                                        weather=weather, fog=fog,
                                        fog_rules=fog_rules, warnings=warnings)
                 ts = _turn_start_facts(hypo, walker, land, walker.fuel,
                                        co_ids, warnings)
-                out.append(Action(kind="drop", unit=unit, tile=tile,
-                                  move_cost=cost, exposure=ff, target=p,
-                                  drop_tile=land, hp_after=p.hp,
-                                  turn_start=ts, **facts(tile)))
+                out.append(dataclasses.replace(act, exposure=ff, turn_start=ts))
 
     # -- joins ------------------------------------------------------------------
     # destinations() refuses tiles a friendly stands on unless it is a
@@ -720,18 +651,19 @@ def actions_for(board, unit, *, co_ids: Optional[dict] = None,
                                target_ammo=partner.ammo,
                                target_capture=partner.capture,
                                co_id=co, power=power)
-            hypo, me = _merged_board(board, unit, partner, m)
+            act = Action(kind="join", unit=unit, tile=tile,
+                         move_cost=cost, exposure=None, target=partner,
+                         hp_after=m.hp_after, merge=m,
+                         terrain=board.terrain_name(*tile),
+                         stars=board.defence_for(tile[0], tile[1], my_move),
+                         fuel_after=m.fuel_after)
+            hypo, me = _after(board, act, co_ids=co_ids, warnings=warnings)
             ff = threat.focus_fire(hypo, me, tile, co_ids=co_ids,
                                    weather=weather, fog=fog,
                                    fog_rules=fog_rules, warnings=warnings)
             ts = _turn_start_facts(hypo, me, tile, m.fuel_after, co_ids,
                                    warnings)
-            out.append(Action(kind="join", unit=unit, tile=tile,
-                              move_cost=cost, exposure=ff, target=partner,
-                              hp_after=m.hp_after, merge=m, turn_start=ts,
-                              terrain=board.terrain_name(*tile),
-                              stars=board.defence_for(tile[0], tile[1], my_move),
-                              fuel_after=m.fuel_after))
+            out.append(dataclasses.replace(act, exposure=ff, turn_start=ts))
 
     # -- attacks ---------------------------------------------------------------
     for enemy in enemies:
@@ -750,14 +682,25 @@ def actions_for(board, unit, *, co_ids: Optional[dict] = None,
             my_stars = board.defence_for(tile[0], tile[1], my_move)
             counter = damage.counterattack(
                 atk, attacker_stars=my_stars, defender_ammo=enemy.ammo,
-                attacker_co=a_co, defender_co=d_co)
-            hypo, me = _after_trade(board, unit, enemy, strike, counter)
+                attacker_co=a_co, defender_co=d_co,
+                attacker_power=_power_active(board, unit.player),
+                defender_power=_power_active(board, enemy.player))
+            my_hp = counter.min_remaining_hp if counter else unit.hp
+            act = Action(
+                kind="attack", unit=unit, tile=tile, move_cost=fire_from[tile],
+                terrain=board.terrain_name(*tile), stars=my_stars,
+                fuel_after=unit.fuel - fire_from[tile],
+                exposure=None, target=enemy, strike=strike, counter=counter,
+                hp_after=my_hp)
+            # the worst case for you in one consistent world -- the low
+            # opening roll: sim.apply(luck="min") leaves the target at its
+            # strongest and you at your weakest, or gone
+            hypo, me = _after(board, act, co_ids=co_ids, warnings=warnings)
             ff = None
-            if hypo is not None:
+            if me is not None:
                 ff = threat.focus_fire(hypo, me, tile, co_ids=co_ids,
                                        weather=weather, fog=fog,
                                        fog_rules=fog_rules, warnings=warnings)
-            my_hp = counter.min_remaining_hp if counter else unit.hp
             # turn-start facts for the survivor at its worst-case HP -- a
             # unit that may already be dead gets no next morning to quote
             ts_atk = None
@@ -765,12 +708,7 @@ def actions_for(board, unit, *, co_ids: Optional[dict] = None,
                 ts_atk = _turn_start_facts(
                     board, dataclasses.replace(unit, hp=my_hp), tile,
                     unit.fuel - fire_from[tile], co_ids, warnings)
-            out.append(Action(
-                kind="attack", unit=unit, tile=tile, move_cost=fire_from[tile],
-                terrain=board.terrain_name(*tile), stars=my_stars,
-                fuel_after=unit.fuel - fire_from[tile],
-                exposure=ff, target=enemy, strike=strike, counter=counter,
-                hp_after=my_hp, turn_start=ts_atk))
+            out.append(dataclasses.replace(act, exposure=ff, turn_start=ts_atk))
 
     out.sort(key=lambda a: (_KIND_ORDER[a.kind], a.tile,
                             a.target.slot if a.target else -1))
@@ -825,20 +763,20 @@ def build_actions(board, player: int, *, co_ids: Optional[dict] = None,
                     hp=100, ammo=st["max_ammo"], capture=0,
                     fuel=st["max_fuel"], acted=True, carrying=False,
                     loaded=False, state=1, cargo=0)
-                hypo = dataclasses.replace(board, units=board.units + [fresh],
-                                           vision=None)
+                act = Action(
+                    kind="build", unit=None, tile=(x, y), move_cost=0,
+                    terrain=board.terrain_name(x, y),
+                    stars=board.defence_for(x, y, st["move_type"]),
+                    fuel_after=fresh.fuel, exposure=None, target=fresh,
+                    hp_after=100, build_type=off.unit_type,
+                    cost=off.price, affordable=off.affordable)
+                hypo = sim_mod.apply(board, act)
                 ff = threat.focus_fire(hypo, fresh, (x, y), co_ids=co_ids,
                                        weather=weather, fog=fog,
                                        fog_rules=fog_rules, warnings=warnings)
                 ts = _turn_start_facts(hypo, fresh, (x, y), fresh.fuel,
                                        co_ids, warnings)
-                out.append(Action(
-                    kind="build", unit=None, tile=(x, y), move_cost=0,
-                    terrain=board.terrain_name(x, y),
-                    stars=board.defence_for(x, y, st["move_type"]),
-                    fuel_after=fresh.fuel, exposure=ff, target=fresh,
-                    hp_after=100, turn_start=ts, build_type=off.unit_type,
-                    cost=off.price, affordable=off.affordable))
+                out.append(dataclasses.replace(act, exposure=ff, turn_start=ts))
     return out
 
 

@@ -413,6 +413,16 @@ A16, both born the day action enumeration was written.
   army's CO record and record 1 for the two income terms the payer adds.
   Both terms are zero for every CO, so the gate is unobservable through
   income; which option writes it is unread and does not matter.
+- **What `engine/sim.py` states rather than measures.** The forward model
+  composes measured modules (DERIVATION 42) but fills six gaps by
+  assumption, each named in its docstring: Olaf's snow reverts to Clear at
+  expiry (DERIVATION 27 measured the boundary, not the weather it returns
+  to); Sturm's meteor takes strategy 0 when neither a strategy nor an RNG
+  state is given, with a warning; mass damage (Drake, Sturm) charges no
+  meter; a passenger aboard a Cruiser is not resupplied by the ride; a
+  captured HQ merely changes hands; income obeys the 999,999 clamp the shop
+  and the join refund were measured against. Kill by: the differential
+  test -- one parked state per line, dump, `apply()`, drive, dump, diff.
 - **Fog over a submerged sub.** In the clear the enemy's grid expands
   through a concealed sub (DERIVATION 41); under fog a hidden tile is
   entered but never expanded through (DERIVATION 38). Which rule the grid
@@ -447,6 +457,6 @@ The measured content is in the Established bullets; the full accounts are in
 | A12 | `0x03004318` gates the CO fetch; clear means Andy on both sides | `DERIVATION.md` 24 |
 | A13 | the CO attack modifier truncates | fixture `max_wood_co` |
 | A14 | `+11/+12` is the universal pair; the defence modifier lands on the base; both sides truncate | fixtures `kanbei_att_wood`/`kanbei_def_wood`/`sami_def_wood` |
-| A15 | capture: foot-only, rate = bar count (+CO shift), moving resets, staying accumulates to a fall at 20 — arithmetic read off the ROM, rules measured live | `tests/fixtures/capture_probes.json`, `harness/mesen_capture.lua` |
+| A15 | capture: foot-only, rate = bar count (+CO shift), moving resets, staying accumulates to a fall at 20 — arithmetic read off the ROM, rules measured live; a Wait in place KEEPS the progress and the next Capt continues from it (DERIVATION 42) | `tests/fixtures/capture_probes.json`, `capwait_probes.json`, `harness/mesen_capture.lua`, `mesen_capwait.lua` |
 | A16 | the counter's terrain bracket reads the damaged target's display HP with `ceil`, the strike's rule — 27 live battles, alternatives refuted 0/12 each | `tests/fixtures/counter_bracket_probes.json`, `harness/mesen_counter_bracket.lua` |
 | A17 | ammo gates the primary (`& 0x780` at `0x08022E04`/`0x0802306C`); the fallback is the same branch as "weaker weapon"; only the primary decrements ammo (`0x080232B2`) | `code_analysis.weapon_selection`, `tests/test_damage.py` |

@@ -17,7 +17,8 @@ import unittest
 ROOT = pathlib.Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT / "engine"))
 
-import actions                                                # noqa: E402
+import actions
+import sim                                                # noqa: E402
 import unload                                                 # noqa: E402
 from state import Army, Board, Unit                           # noqa: E402
 
@@ -168,8 +169,11 @@ class TestDropAction(unittest.TestCase):
                   [unit("APC", 1, 0, slot=1, cargo=2),
                    unit("Infantry", 1, 0, slot=2, loaded=True)],
                   armies=ARMIES)
-        hypo, walker = actions._dropped_board(b, b.units[0], b.units[1],
-                                              (1, 0), (2, 0))
+        drop = next(d for d in actions.actions_for(b, b.units[0], warnings=[])
+                    if d.kind == "drop" and d.tile == (1, 0)
+                    and d.drop_tile == (2, 0))
+        hypo = sim.apply(b, drop)                 # the board the action scores on
+        walker = next(u for u in hypo.units if u.slot == 2)
         self.assertTrue(walker.acted and not walker.loaded)
         self.assertEqual((walker.x, walker.y), (2, 0))
         rider = next(u for u in hypo.units if u.slot == 1)

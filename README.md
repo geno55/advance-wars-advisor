@@ -458,6 +458,8 @@ engine/pathing.py         one Dijkstra: reachable, destinations, path
 engine/co.py              CO modifiers, and what it refuses to model
 engine/threat.py          what the enemy can do to you next turn
 engine/actions.py         every legal action a unit has this turn  <- the advisor
+engine/sim.py             the forward model: apply(board, action) -> board,
+                          battle(), end_turn() -- what a plan's next step stands on
 engine/supply.py          supply, property repair, daily fuel burn -- the
                           turn-start rules, replayed from DERIVATION 33
 engine/join.py            the merge: pair rule, bar sum, refund, caps
@@ -549,6 +551,8 @@ tests/test_co_power.py    28 tests: the power system against its measurements
                           luck consumption that makes rolls predictable)
 tests/test_actions.py     45 regression tests: the enumeration wiring, the
                           dive/rise gates and the branch ban
+tests/test_sim.py         32 tests: the forward model's wiring against the
+                          modules it composes, the capture-on-Wait probe
 tests/test_conceal.py     18 tests: the dived sub's concealment replayed from
                           nine driven cases -- reveal branches, targeting,
                           the sub's own exposure, the grid and the trap

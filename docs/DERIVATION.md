@@ -2412,3 +2412,53 @@ equal-cost detours around the sub are listed as ordinary destinations
 although the game's own arrow may run through it, and under fog a
 submerged sub on an unlit tile is handled by the fog rule -- which of the
 two grids the game uses when both apply is unread.
+
+
+## 42. The forward model, and the one rule it could not read: a Wait keeps the capture
+
+`engine/sim.py` is the handoff's first deliverable: `apply(board, action)
+-> board` for every action kind, `battle()` resolving a strike to a point
+once the roll is chosen, and `end_turn()` / `turn_start()` for the boundary
+-- expiry of the power block and Olaf's snow, income, then the burn,
+property and auto-supply walkers in slot order with the treasury threaded
+from one repair to the next. Everything it does is a composition of
+measured modules (DERIVATION 17, 27, 31-41), and the action layer's four
+hand-built hypothetical boards (`_after_trade`, `_loaded_board`,
+`_merged_board`, `_dropped_board`) are gone: `actions_for` now builds each
+Action first, advances the board through `sim.apply(luck="min")` -- the same
+low-roll world it always scored exposure in -- and scores on that. One
+side effect surfaced by making the two agree: the attack quote had never
+carried the active power block into `Attack.between`, though DERIVATION 27
+measured the block live through the opponent's turn; both layers pass the
+flags now.
+
+One record edit had no measurement behind it. Moving off a property resets
+the capture field (A15), but what does a **Wait in place** do to it -- the
+game's move applier runs either way. `harness/mesen_capwait.lua` on the
+A15 fixture:
+
+```
+after-cap1      (4,1)  capture 10  acted  city neutral      Capt from the south
+p1-day2         (4,1)  capture 10                           two End Turns later
+after-wait      (4,1)  capture 10  acted                    Capt / Wait -> Wait
+p1-day3         (4,1)  capture 10
+after-cap-day3  (4,1)  capture  0  acted  city P1           Capt: 10 + 10 = 20
+```
+
+The Wait kept the 10, and the next Capt continued from it. So the reset
+is tied to changing tile, not to skipping a capture turn, and `sim._moved`
+clears the field only when the tile changes; an attack from the tile is
+taken to be the same case and is stated as such. (The probe's turn-change
+poll read the active byte as 0 throughout on this fixture, so its helper
+reported `false` each time -- the day counter and the acted bit show the
+turns ran; the poll address is not this fixture's, a harness note and not
+a game finding.)
+
+Stated in `sim.py` rather than measured, each a line in ASSUMPTIONS: the
+weather Olaf's snow reverts to (Clear), Sturm's strategy when none is given
+(0, with a warning), no meter charge from mass damage, no resupply of a
+passenger by its Cruiser, the HQ changing hands without ending the match,
+and income obeying the shop's 999,999 clamp. The differential test the
+handoff designed -- dump, `apply()`, drive one action, dump, diff -- is what
+certifies the composition; `tests/test_sim.py` pins the wiring against the
+modules until it runs.
