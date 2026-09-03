@@ -106,18 +106,24 @@ def property_tiles(board, player: int) -> list:
 def funds_rate(board) -> tuple:
     """(rate, source) for this board.
 
-    Prefers the dumped setting cell; falls back to deriving it from any army
-    that owns property, since income/properties is exactly the rate; falls back
-    again to DEFAULT_RATE. The source string travels with the number so a
-    caller can refuse to plan on a guess.
+    Prefers deriving it from any army that owns property, since the game's
+    own income field over the property count is exactly what was paid; falls
+    back to the dumped setting cell, then to DEFAULT_RATE. The source string
+    travels with the number so a caller can refuse to plan on a guess.
+
+    The cell used to come first. The differential corpus (DERIVATION 43,
+    end-turn-repair-broke) wrote 200 into 0x03004338, dumped it back as 200,
+    and watched the game pay 9500 anyway: the cell mirrors the setting on
+    every natural board but a live write to it does not reach the payer, so
+    the field the game itself fills is the better witness.
     """
-    dumped = getattr(board, "funds_per_property", None)
-    if dumped:
-        return int(dumped), "dump"
     for army in board.armies:
         n = properties(board, army.player)
         if n and army.income and army.income % n == 0:
             return army.income // n, "derived"
+    dumped = getattr(board, "funds_per_property", None)
+    if dumped:
+        return int(dumped), "dump"
     return DEFAULT_RATE, "default"
 
 

@@ -2462,3 +2462,147 @@ and income obeying the shop's 999,999 clamp. The differential test the
 handoff designed -- dump, `apply()`, drive one action, dump, diff -- is what
 certifies the composition; `tests/test_sim.py` pins the wiring against the
 modules until it runs.
+
+
+## 43. The differential test: sixty-three drives, nine contradictions, and what each one was
+
+ROADMAP step 2. Everything `engine/sim.py` composes had been measured on
+its own; the composition had not. The handoff designed the check -- one
+parked state, ONE action: dump, `apply()` in Python, drive the same action
+on the game, dump again, diff every field -- and this section is that check
+run, the rig it took, and the nine places the game disagreed.
+
+### The rig
+
+Three pieces, all in the repo:
+
+- `harness/mesen_state.lua` -- `mgba_state.lua` ported to Mesen's API, the
+  same addresses, the same JSON schema `engine/state.py` loads, plus the
+  RNG and the cursor. A library on a global table, not a script. Asserted
+  against the mGBA dump of the same map: the two parked states
+  (`tests/fixtures/sim_diff/states/`) match `fog_vision_15x10.json` tile
+  for tile, property list included -- both savestates turn out to be the
+  same 15x10 VS map.
+- `harness/mesen_drive.lua` -- one Action executed with read-back after
+  every step and reload-and-retry on a miss: `goto_tile` closed-loop on the
+  cursor bytes, the move as counted direction taps along `pathing.path()`,
+  the menu item by its index in the offered list, the Fire target cursor,
+  the drop selector, the shop, the Power item, End Turn with the fog card
+  ridden out. The checks are per kind (position and acted bit, the target
+  hit or the RNG drawn, the capture field or the tile's owner, the loaded
+  bit, the partner gone, the dive bit, the new slot, the active player).
+- `tools/sim_diff.py` -- compiles `tests/fixtures/sim_diff/corpus.json`
+  into driver steps from the engine's own facts (the route from
+  `pathing.path`, the menu index from `actions_for`'s offers in the table
+  order of DERIVATION 40, the shop index from `production.shop`), writes
+  one Lua script, launches Mesen, and diffs `apply()` on the before-dump
+  against the after-dump: every unit field, every army field, the turn
+  block, weather, fog, both grids.
+
+Two things the handoff wanted measured first. **Wall clock**: the two-state
+dump takes 2 seconds end to end; the 63-case run took 907 seconds with
+every case landing on its first attempt -- about 14 seconds a drive
+including the reload, a multi-step setup counting extra. Headless Mesen is
+well over real time, so the corpus is a background run, not an afternoon.
+**The Fire target cursor**: the cursor bytes read the target's tile after
+the Fire pick in all twelve attacks, so the driver steers closed-loop there
+too; the blind fallback never fired. The drop selector's north default held
+(`drop-in-place-north` with no taps), and one tap in the landing direction
+from that default reached east, south and west.
+
+### The corpus
+
+Sixty-three drives over two parked states (the P2-to-move VS fixture and
+the A15 capture fixture): six waits, twelve attacks (a counter, a kill, an
+attacker dying to the counter, an indirect shot, a secondary-only attacker,
+a bazooka spending a round, Max, Sonja, Nell, Kanbei defending, a written
+Max power block, a four-star mountain target), three captures (a full
+Mech, Sami, a 45-HP Mech), two supplies, two loads, four drops, three
+joins (a refund, Kanbei's refund, the caps with inherited capture), Dive
+and Rise, the fog ambush, seven builds (three shops, Kanbei's price, exact
+funds, slot reuse), seven powers (Andy, Max, Eagle, Drake, Olaf, Sturm, a
+second use), eight End Turns (income, burn and crash, repair free and
+charged, a written rate, auto-supply, Olaf's expiry, the funds cap) and the
+capture-keeping rows of DERIVATION 42 replayed. Boards were shaped with
+transparent writes only -- type, hp, ammo, fuel, capture, the dive bit,
+terrain, army fields, settings -- and driven setup steps where a unit had
+to stand somewhere; no position was ever written.
+
+### Nine contradictions, and one from the smoke run
+
+The first full run: 54 agree, 9 differ. Each was a finding.
+
+1. **End Turn clears the ending player's acted bits, and a passenger keeps
+   its own.** Three rows (`end-turn-p2-to-p1`, `-burn-and-crash`,
+   `-income-cap`) had P2's acted Infantry #65 predicted acted after P2's
+   End Turn and read clear; two rows (`-auto-supply`,
+   `-power-expiry-snow`) had the loaded Infantry #66 predicted clear at
+   P2's next turn start and read acted -- flag byte `0x0B` throughout,
+   across four boundaries. The model cleared at the new player's turn
+   start and cleared everyone; now `end_turn` clears the ending side's
+   non-passengers and `turn_start` leaves passengers alone. Whether the
+   clear happens at End Turn or at the next side's start is not separable
+   from turn-boundary dumps and does not matter to a planner.
+2. **A finished capture raises army +0x08 at once.** `a15-capture-completes`:
+   the city fell and P1's income field read 19000 before any turn start.
+   `_apply_capture` refreshes the field for both sides of the transfer, at
+   the rate derived from the board before the tile changed hands.
+3. **The strike's draw depends on whether a counter is POSSIBLE.**
+   `attack-artillery-in-place` predicted 90 damage and read 91: the
+   resolution made two RNG draws (counted from the confirm-time state to
+   the after-dump's) and the strike took the second. Every countered
+   battle made four with the strike third, `attack-tank-kills-mech`
+   included -- the Mech died to the strike and never fired, and the roll
+   was still draw three. So DERIVATION 32's four-draws-strike-third holds
+   when the defender's weapon can answer at contact, and an unanswerable
+   shot is two-draws-strike-second. `rng.strike_luck` takes
+   `counter_possible`; `sim.battle` decides it from the same weapon
+   selection the counter uses.
+4. **Sonja's reducer.** `attack-sonja-negative-luck` predicted 56 and read
+   61. Not the game: `sim._luck_value` turned the CO's (min, max) back into
+   `luck_reduce`'s (good, bad) as `good = max - 9`, which is right for
+   every CO but the one whose bad luck shifts both ends -- Sonja's range
+   is `draw % 25 - 15`, so `good = max - min - 9 = 15`. Draw three gave
+   -9 and 61. The engine's own luck tables were right; the composition
+   was wrong, which is exactly the class of bug this test exists for.
+5. **A written rate cell is not what the payer reads.**
+   `end-turn-repair-broke` wrote 200 into `0x03004338`, dumped it back as
+   200 before and after, and the game paid 9500. DERIVATION 39 read the
+   paying body as a load from that cell and confirmed the cell's VALUE on
+   eleven boards; this row shows the cell mirrors the setting but a live
+   write to it does not reach the payer -- a copy elsewhere, or a read the
+   disassembly attributed to the wrong pool constant. Open, and it blocks
+   nothing: `economy.funds_rate` now derives the rate from an army's own
+   income field first and falls back to the cell, which is what any real
+   dump gives. Kill by a write-watch on the payer's load.
+6. **Empty army records are not players.** The three-case smoke run before
+   the corpus: `sim.end_turn` sent P2's End Turn to a P3 that never plays,
+   because `players_in_order` counted every army record and the dumps
+   carry four. Presence is a unit on the board or a tile on the map.
+
+After the fixes, `tools/sim_diff.py rescore` replays the recorded dumps
+without the emulator: **63 of 63 agree**, and `tests/test_sim_diff.py`
+asserts that on every run.
+
+### What the corpus confirmed of the six stated assumptions
+
+- Olaf's snow reverts to **Clear** at his next turn start
+  (`end-turn-power-expiry-snow`: weather 1 -> 0 with the block cleared).
+- Income obeys the **999,999 clamp** (`end-turn-income-cap`: 995,000 +
+  9,500 read 999,999).
+- Mass damage charges **no meter** (`power-drake-mass-damage`: every P1
+  unit -10 internal, the 5-HP Infantry floored at 1, P1's meter still 0).
+- Sturm's strategy is the RNG read at the Power confirm: one draw,
+  `draw % 3`, the blast landing on slots 1, 4, 6, 8 at 80 internal each.
+  The strategy-0 default for a board with no RNG state remains a default.
+- Not exercised and still stated: a passenger aboard a Cruiser and its
+  resupply; capturing the HQ ending the match. Also not exercised: the
+  second cargo slot, dived combat, snow and rain movement, Sturm's
+  alternate record, a power followed by an attack in the same turn.
+
+Two smaller facts the agreeing rows carry. A transport's move leaves the
+passenger record's coordinates where they were (`wait-apc-with-passenger`:
+the APC went (12,7) -> (10,7), Infantry #66 stayed at (13,2) in both the
+model and the game), so nothing may read a passenger's position off its
+record. And the join refund at Kanbei's value came out at 2520 and the
+charged HQ repair at 800, both to the funds.

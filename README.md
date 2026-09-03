@@ -552,6 +552,13 @@ harness/mesen_power_menu.lua  eight map-menu presses: meter vs latch vs
 harness/mesen_ambush.lua / _ambush2.lua  a hidden Mech on a P2 road under
                           written fog: three confirms and the game's own move
                           grid, fog on and off. DERIVATION.md 38
+harness/mesen_state.lua   the headless board reader: mgba_state.lua's schema
+                          on Mesen's API, a library the differential runner
+                          concatenates. DERIVATION.md 43
+harness/mesen_drive.lua   the single-action driver: select, counted taps,
+                          the menu by predicted index, the target cursor,
+                          the drop selector, shop, power, End Turn -- every
+                          step read back, reload-and-retry on a miss
 harness/observations.csv  75 recorded battles (14 by hand, 61 swept)
 
 data/aw1_damage.json      damage matrices + provenance + resolved questions
@@ -602,6 +609,13 @@ tools/threat_report.py    exposure, per-unit safety, and the coverage grid
 tools/action_report.py    every action a unit has this turn, facts attached
 tools/advise.py           a turn's plan: facts quoted, weights labelled heuristic
 tests/test_advisor.py     21 tests: the arithmetic, invariance, scenarios
+tools/sim_diff.py         the differential test: dump, apply(), drive one
+                          action, dump, diff every field (dump / compile /
+                          run / check / report)
+tests/fixtures/sim_diff/  the corpus, the parked-state dumps, every drive's
+                          before/after dump and the result log
+tests/test_sim_diff.py    the corpus replayed offline: recorded verdicts
+                          against today's sim.py, the dumper against mGBA
 tools/fog_hunt.py         pin the fog flag by diffing labelled RAM probes
 tools/fog_diff.py         our predicted visibility vs the game's own count array
 tools/path_diff.py        our reachable set vs the game's own flood fill

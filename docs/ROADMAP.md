@@ -62,6 +62,18 @@ Three decisions, made once so they do not get re-argued:
    states"). Everything after this stands on it; self-play on an uncertified
    model converges on its bugs.
 
+   *Delivered* (DERIVATION 43). The dumper matches the mGBA dump tile for
+   tile; the driver landed all 63 drives on their first attempt in about
+   fifteen minutes; the corpus covers every action kind, both army actions
+   and the turn-start economy. The first run contradicted the model nine
+   times and each was a finding: End Turn clears the ending side's acted
+   bits with passengers excepted, a finished capture raises the income
+   field at once, an unanswerable shot takes the RNG's second draw rather
+   than its third, Sonja's reducer parameters, a written rate cell the
+   payer ignores, and empty army records counted as players. Fixed, the
+   corpus replays at 63 of 63 (`tests/test_sim_diff.py`); four of the six
+   stated assumptions became measurements and two remain stated.
+
 3. **Read the CPU.** The AI loop at `0x08060B06` and its action dispatcher
    at `0x08066A98` are located, and DERIVATION 41 found the AI's own twin of
    the visibility check at `0x08023DD0`, so the entry points are known. The
@@ -113,7 +125,7 @@ Three decisions, made once so they do not get re-argued:
 | step | code | measured record | test |
 |---|---|---|---|
 | 1 | `engine/advisor.py`, `tools/advise.py`, `docs/ADVISOR.md` (delivered) | -- | invariance and scenario tests (`tests/test_advisor.py`, delivered) |
-| 2 | `harness/mesen_state.lua`, `harness/mesen_drive.lua`, `tools/sim_diff.py` | the corpus and its result log as fixtures | `sim_diff` clean |
+| 2 | `harness/mesen_state.lua`, `harness/mesen_drive.lua`, `tools/sim_diff.py` (delivered) | `tests/fixtures/sim_diff/`: the corpus, both parked states, 126 before/after dumps, the result log (delivered) | `sim_diff` clean: 63/63 (`tests/test_sim_diff.py`, delivered) |
 | 3 | `engine/cpu.py` | DERIVATION: the CPU's rules, and the turns it played | prediction vs played turn |
 | 4 | the reply lookahead in `advisor.py` | -- | scenario tests |
 | 5 | `tools/selfplay.py` | weight sets and their relative results | -- |

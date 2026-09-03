@@ -143,13 +143,21 @@ instant. The emulator is never in this path.
 
 ## The differential corpus
 
-`sim.apply` has six stated assumptions (ASSUMPTIONS, "What engine/sim.py
-states") and no differential test yet -- ROADMAP step 2. Until it runs, a
-plan's second step stands on a board the game has not been shown to agree
-with. What the corpus has caught: nothing yet, because it has not run. This
-paragraph is to be rewritten when it has, with the fields the game
-contradicted and which action kinds the planner actually picks (weight the
-corpus toward those).
+`sim.apply` has been put in front of the game: 63 parked-state drives,
+every action kind, both army actions and the turn-start economy
+(`tests/fixtures/sim_diff/`, DERIVATION 43, `tools/sim_diff.py`). The
+first run contradicted the model on nine rows, and every one was a bug in
+the composition rather than in a measured module: the acted bits the game
+clears at End Turn (and the passenger's it keeps), the income field a
+capture raises at once, the RNG draw an unanswerable shot takes, Sonja's
+reducer parameters, a written rate cell the payer ignores, and empty army
+records counted as players. Fixed, the corpus replays at 63 of 63 in
+`tests/test_sim_diff.py`, so a plan's second step now stands on a board
+the game has agreed with for every kind of first step. Two of the six
+stated assumptions are still stated (a Cruiser's passenger resupply, the
+HQ capture ending the match), and the corpus is weighted toward what the
+greedy planner picks -- waits, attacks, captures, builds, End Turn -- with
+one or two rows for the rest.
 
 ## The shared-delusion caveat
 

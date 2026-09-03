@@ -29,7 +29,7 @@ import sim                                                    # noqa: E402
 import supply                                                 # noqa: E402
 from state import Army, Board, Unit                           # noqa: E402
 
-PLAIN, MOUNTAIN, WOOD, ROAD, CITY, SEA, BASE, AIRPORT, SHOAL = 1, 3, 4, 5, 6, 7, 14, 10, 13
+PLAIN, MOUNTAIN, WOOD, ROAD, CITY, SEA, BASE, AIRPORT, SHOAL, HQ = 1, 3, 4, 5, 6, 7, 14, 10, 13, 8
 CAPWAIT = json.loads((pathlib.Path(__file__).parent / "fixtures" /
                       "capwait_probes.json").read_text(encoding="utf-8"))
 ANDY, OLAF, EAGLE, DRAKE, STURM = 1, 3, 8, 9, 10
@@ -63,6 +63,56 @@ def act(b, slot, kind, **match):
              if a.kind == kind and all(getattr(a, k) == v for k, v in match.items())]
     assert len(found) == 1, (kind, match, len(found))
     return found[0]
+
+
+class TestTheRoll(unittest.TestCase):
+    """What the differential corpus measured about the RNG at target-confirm
+    (DERIVATION 43): four draws with the strike third when the defender can
+    answer, two with the strike second when it cannot; and Sonja's -15 bad
+    luck needs good = max - min - 9, not max - 9."""
+
+    def _pair(self, attacker, defender, dist=1, co=ANDY):
+        b = board([[ROAD] * 4], [unit(attacker, 0, 0),
+                                 unit(defender, dist, 0, player=2, slot=65)],
+                  armies=[army(1, co_id=co), army(2)], active=1)
+        return b, sim.unit_in(b, 1), sim.unit_in(b, 65)
+
+    def test_a_countered_battle_takes_the_third_draw(self):
+        import rng
+        b, me, it = self._pair("Tank", "Mech")
+        seed = 135608052
+        got = sim.battle(b, me, it, rng_state=seed)
+        self.assertEqual(got.luck, rng.strike_luck(seed, counter_possible=True))
+        self.assertEqual(got.luck, 1)
+
+    def test_an_unanswerable_shot_takes_the_second_draw(self):
+        import rng
+        b, me, it = self._pair("Artillery", "Mech", dist=3)
+        seed = 187099946
+        got = sim.battle(b, me, it, rng_state=seed)
+        self.assertEqual(got.luck, rng.strike_luck(seed, counter_possible=False))
+        self.assertEqual(got.luck, 6)
+        self.assertEqual(rng.strike_luck(seed, counter_possible=True), 5)
+
+    def test_sonjas_roll_spans_minus_fifteen_to_nine(self):
+        b, me, it = self._pair("Tank", "Mech", co=7)
+        seed = 135608052
+        got = sim.battle(b, me, it, rng_state=seed)
+        self.assertEqual(got.luck, -9)              # draw 3 % 25 - 15, the game's 61 damage
+        self.assertEqual(got.strike, 61)
+
+
+class TestCaptureIncome(unittest.TestCase):
+    def test_a_finished_capture_raises_the_income_field_at_once(self):
+        """DERIVATION 43, a15-capture-completes: 9500 -> 19000 the moment
+        the second property fell, before any turn start."""
+        b = board([[HQ, CITY]], [unit("Infantry", 1, 0, capture=10)],
+                  owner=[[1, 0]], armies=[Army(1, 1000, 9500, co_id=ANDY),
+                                          Army(2, 0, 0, co_id=ANDY)])
+        a = act(b, 1, "capture", tile=(1, 0))
+        after = sim.apply(b, a)
+        self.assertEqual(after.owner[0][1], 1)
+        self.assertEqual(after.army(1).income, 19000)
 
 
 class TestMovesAndFlags(unittest.TestCase):
@@ -335,11 +385,32 @@ class TestEndTurn(unittest.TestCase):
                   armies=[army(1), army(2)], active=1, day=3)
         p2 = sim.end_turn(b)
         self.assertEqual((p2.active_player, p2.day), (2, 3))
-        self.assertTrue(sim.unit_in(p2, 1).acted)               # P1's stay acted
-        self.assertFalse(sim.unit_in(p2, 2).acted)              # P2's cleared
+        self.assertFalse(sim.unit_in(p2, 1).acted)              # P1's clear at its End Turn
+        self.assertFalse(sim.unit_in(p2, 2).acted)              # P2's at its turn start
         p1 = sim.end_turn(p2)
         self.assertEqual((p1.active_player, p1.day), (1, 4))
         self.assertFalse(sim.unit_in(p1, 1).acted)
+
+    def test_a_passenger_keeps_its_acted_bit_across_the_boundary(self):
+        """DERIVATION 43: a loaded Infantry stayed acted through four End
+        Turns while every other unit of its side was cleared."""
+        b = board([[PLAIN] * 2], [unit("APC", 0, 0, cargo=2, acted=True),
+                                  unit("Infantry", 0, 0, slot=2, loaded=True, acted=True),
+                                  unit("Tank", 1, 0, player=2, slot=65)],
+                  armies=[army(1), army(2)], active=1, day=3)
+        p2 = sim.end_turn(b)
+        self.assertFalse(sim.unit_in(p2, 1).acted)
+        self.assertTrue(sim.unit_in(p2, 2).acted)
+        p1 = sim.end_turn(p2)
+        self.assertTrue(sim.unit_in(p1, 2).acted)
+
+    def test_empty_army_records_are_not_players(self):
+        """The dumps carry four army records; only P1 and P2 have units or
+        tiles, so P2's End Turn goes to P1, not P3 (DERIVATION 43)."""
+        b = board([[PLAIN] * 2], [unit("Tank", 0, 0), unit("Tank", 1, 0, player=2, slot=65)],
+                  armies=[army(1), army(2), army(3), army(4)], active=2, day=2)
+        self.assertEqual(sim.players_in_order(b), [1, 2])
+        self.assertEqual((sim.end_turn(b).active_player, sim.end_turn(b).day), (1, 3))
 
     def test_income_is_paid_before_repairs_and_funds_thread_in_slot_order(self):
         """Two damaged Tanks on own Cities, 700 in the bank, a 1000 rate and

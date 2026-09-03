@@ -153,36 +153,19 @@ re-derive; import.
   the cell's value can differ, and `funds_rate()` derives it from the board
   when the dump lacks the cell, so mode never has to be known. What campaign
   writes there is the one open item, and it blocks nothing.
-- **Wall clock for one driven action, headless.** Unmeasured, and it is
-  the number that sizes the differential corpus — a 3-minute test or a
-  3-hour one. Measure it first from a parked state (select, move, confirm,
-  menu pick, read back) before committing to a corpus size. Nothing else
-  in the plan depends on it.
-- **A headless state dumper.** `mgba_state.lua` is an mGBA console script;
-  the headless Mesen runs have no equivalent writer of the loader schema
-  (only the two fixture dumpers, `mesen_sonja_fix.lua` /
-  `mesen_vision_rules.lua`, which skip cargo, armies' power fields, the
-  repair-free byte). Port the full dumper to Mesen's API (`emu.read*`,
-  the same addresses) as `harness/mesen_state.lua`, and assert it against
-  an mGBA dump of the same fixture tile for tile. Without it the
-  differential test has no before/after.
-- **A driver that executes ONE Action.** The pieces exist across the probe
-  scripts: select at a tile (`goto_tile` + A, map mode only), move by
-  COUNTED direction taps along `pathing.path()` (the cursor bytes do not
-  track in move-select, DERIVATION 29), confirm, pick the menu item by its
-  position in the offered list (table order above), Fire's target cursor
-  (`mesen_luck.lua`), the drop selector (default north; direction taps
-  move among valid tiles), End Turn (`end_turn()` in the supply scripts,
-  with the fog card and B-cancels from DERIVATION 38). Build it once as a
-  library with verification after every step (read the record back; the
-  position write PCs are `0x08026076/7C`) and a retry-with-B on failure.
-  This is the expensive part of the phase, and the reason nothing chains
-  it: one Action per parked state, then back to Python.
-- **Whether the drawn route matters.** `trap_tiles` assumes the cheapest
-  approach; the game walks the arrow the player drew. A driver that taps
-  the path tile by tile draws exactly `pathing.path()`, so in the
-  differential test this is not a divergence — state it where the driver
-  lives. `sim.py` must make the same assumption explicitly.
+- **Wall clock for one driven action, headless — CLOSED, DERIVATION 43.**
+  About 14 seconds a drive including the reload; the two-state dump takes
+  2 seconds; the 63-case corpus ran in 907 seconds as a background job.
+- **A headless state dumper — CLOSED.** `harness/mesen_state.lua`, the
+  loader schema on Mesen's API, asserted against the mGBA dump tile for
+  tile (`tests/test_sim_diff.py`).
+- **A driver that executes ONE Action — CLOSED.** `harness/mesen_drive.lua`,
+  read-back after every step, reload-and-retry on a miss; the Fire target
+  cursor bytes DO track in target-select, so it steers closed-loop there.
+  `tools/sim_diff.py` computes every step from the engine's facts.
+- **Whether the drawn route matters — stated where the driver lives.** The
+  driver taps `pathing.path()` tile by tile, so the arrow the game walks is
+  the engine's route by construction (`mesen_drive.lua`, header).
 - **Unit record `+9..+11`.** Still unread (`+11` reads 0 foot / 4 vehicle
   in old captures; spawn writes 1 then 0 at `0x0802423C/46`). Not needed
   for advice; listed so nobody rediscovers it.
@@ -238,17 +221,19 @@ demands them), is `docs/ROADMAP.md`. The list below is the inventory.
   (ROADMAP step 1): greedy with sequential commit over `sim.apply`, one
   weight table, every term a `weight x quantity <- fact` line; 21 tests
   in `tests/test_advisor.py`; the rules in `docs/ADVISOR.md`.
-- `harness/mesen_state.lua` (headless dumper, asserted against mGBA) and
+- ~~`harness/mesen_state.lua` (headless dumper, asserted against mGBA) and
   `harness/mesen_drive.lua` (single-Action executor with read-back
   verification), then `tools/sim_diff.py` over a checked-in corpus of
   parked states: dump → `apply()` → drive one action → dump → diff,
-  logging every field the game contradicted.
+  logging every field the game contradicted.~~ -- delivered (ROADMAP
+  step 2, DERIVATION 43): 63 drives, nine contradictions found and fixed,
+  63/63 on replay.
 - DERIVATION 39+ for anything measured on the way (income first);
   ~~a new `docs/ADVISOR.md` for the opinion layer's own rules — the line,
   the weights, what the differential corpus has and has not caught, and
   the shared-delusion caveat on Python self-play~~ -- written; its
   differential-corpus paragraph is a placeholder until step 2 runs.
 - Tests: ~~invariance and scenario tests for the planner~~ (delivered);
-  the `sim_diff` corpus and its result log as checked-in fixtures once it
-  runs clean.
+  ~~the `sim_diff` corpus and its result log as checked-in fixtures once it
+  runs clean~~ (delivered: `tests/fixtures/sim_diff/`, `tests/test_sim_diff.py`).
 - Single-sentence-finding commit subjects, straight to main, push.

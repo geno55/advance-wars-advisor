@@ -34,9 +34,19 @@ option sets it is unknown; every capture so far reads 0.
 MASK = 0xFFFFFFFF
 ADDR = 0x03001D30
 
-# Draws per battle resolution, and which of them lands on the strike.
+# Draws per battle resolution, and which of them lands on the strike. Four
+# draws with the strike third when the defender's weapon can answer at
+# contact (DERIVATION 32); when it cannot -- an indirect shot, or a target
+# with nothing to fire back -- the resolution makes only TWO draws and the
+# strike is the SECOND (the differential corpus, DERIVATION 43:
+# attack-artillery-in-place drew 2 and landed on draw 2; every countered
+# battle drew 4 and landed on draw 3, a target that died to the strike
+# included, so what matters is whether a counter is POSSIBLE, not whether
+# one happened).
 BATTLE_DRAWS = 4
 STRIKE_DRAW = 3
+BATTLE_DRAWS_NO_COUNTER = 2
+STRIKE_DRAW_NO_COUNTER = 2
 
 
 def next_state(state: int) -> int:
@@ -55,11 +65,16 @@ def luck_reduce(draw: int, good: int = 0, bad: int = 0) -> int:
     return draw % (10 + good) - bad
 
 
-def strike_luck(state: int, good: int = 0, bad: int = 0) -> int:
+def strike_luck(state: int, good: int = 0, bad: int = 0, *,
+                counter_possible: bool = True) -> int:
     """The roll the NEXT driven attack's strike will get, from the state at
-    target-confirm. The battle burns four draws; the strike's is the third.
-    Feed the result to damage.damage_for_luck() for the exact damage."""
+    target-confirm. A battle whose defender can answer burns four draws and
+    the strike's is the third; one whose defender cannot burns two and the
+    strike's is the second. Feed the result to damage.damage_for_luck() for
+    the exact damage. `good`/`bad` are the CO record's +0x2A/+0x2B: the
+    range is -bad .. 9+good-bad, so from a (min, max) pair
+    good = max - min - 9 and bad = -min."""
     s = state
-    for _ in range(STRIKE_DRAW):
+    for _ in range(STRIKE_DRAW if counter_possible else STRIKE_DRAW_NO_COUNTER):
         s = next_state(s)
     return luck_reduce(s, good, bad)

@@ -36,11 +36,12 @@ WHAT IS EXACT (given the modules)
   * power: meter 0, uses+1, the block up; Andy's heals, Eagle's refreshes,
     Drake's damage, Olaf's snow, Sturm's meteor for the strategy given
     (or the RNG state's), all from engine/power.py.
-  * end_turn: the next army in player order becomes active (the day turns
+  * end_turn: the ending player's acted bits clear (its passengers keep
+    theirs); the next army in player order becomes active (the day turns
     over when the order wraps); its power block and Olaf's snow expire;
     income; then its units in slot order through supply.turn_start with the
     treasury threaded from one repair to the next, crashed units removed;
-    its acted bits cleared; the vision photograph dropped.
+    the vision photograph dropped.
 
 WHAT IS STATED RATHER THAN MEASURED -- each a line in ASSUMPTIONS
 
@@ -172,12 +173,17 @@ class Battle:
     defender_gain: int
 
 
-def _luck_value(atk, luck, rng_state: Optional[int]) -> int:
+def _luck_value(atk, luck, rng_state: Optional[int],
+                counter_possible: bool = True) -> int:
     if rng_state is not None:
-        # range = -bad .. 9+good (rng.luck_reduce), so the CO's bounds give
-        # the two reducer parameters back
-        return rng_mod.strike_luck(rng_state, good=atk.luck_max - 9,
-                                   bad=-atk.luck_min)
+        # range = -bad .. 9+good-bad (rng.luck_reduce), so the CO's bounds
+        # give the two reducer parameters back: good = max - min - 9. (An
+        # earlier max - 9 was right for every CO but Sonja, whose -15 shifts
+        # both ends -- the differential corpus caught it, DERIVATION 43.)
+        return rng_mod.strike_luck(rng_state,
+                                   good=atk.luck_max - atk.luck_min - 9,
+                                   bad=-atk.luck_min,
+                                   counter_possible=counter_possible)
     if luck == "min":
         return atk.luck_min
     if luck == "max":
@@ -234,19 +240,23 @@ def battle(board, attacker, defender, *, luck="min",
                              defender_dived=defender.dived)
     if w is None:
         raise ValueError(f"{attacker.type} cannot attack {defender.type} here")
-    lk = _luck_value(atk, luck, rng_state)
+    # whether the defender COULD answer decides how many draws the
+    # resolution makes and which one the strike takes (rng.strike_luck)
+    contact = abs(attacker.x - defender.x) + abs(attacker.y - defender.y) == 1
+    wc = None
+    if (contact and damage.fights_at_contact(attacker.type)
+            and damage.fights_at_contact(defender.type)):
+        wc = damage.select_weapon(defender.type, attacker.type, defender.ammo,
+                                  defender_dived=attacker.dived)
+    lk = _luck_value(atk, luck, rng_state, counter_possible=wc is not None)
     strike = damage.damage_for_luck(atk, lk)
     d_hp = max(0, defender.hp - strike)
     a_ammo = attacker.ammo - 1 if w.slot == "primary" and attacker.ammo else attacker.ammo
     d_ammo = defender.ammo
 
     counter, a_hp = 0, attacker.hp
-    contact = abs(attacker.x - defender.x) + abs(attacker.y - defender.y) == 1
-    if (d_hp > 0 and contact and damage.fights_at_contact(attacker.type)
-            and damage.fights_at_contact(defender.type)):
-        wc = damage.select_weapon(defender.type, attacker.type, defender.ammo,
-                                  defender_dived=attacker.dived)
-        if wc is not None:
+    if d_hp > 0 and wc is not None:
+        if True:
             if a_co is not None:
                 back = damage.Attack.between(
                     defender.type, attacker.type, d_co, a_co,
@@ -382,14 +392,31 @@ def _capture_gain(board, unit, co_ids) -> int:
     return bars + (bars >> (8 - co_mod.capture_shift(cid)))
 
 
+def _refresh_income(board, players, rate):
+    """Army +0x08 follows the property set the moment it changes -- a
+    captured city raised the capturer's field on the spot (DERIVATION 43,
+    a15-capture-completes), not at the next turn start. `rate` is read off
+    the board BEFORE the tile changed hands: deriving it afterwards would
+    divide a stale total by the new count."""
+    for p in players:
+        army = _army(board, p)
+        if army is not None:
+            board = _set_army(board, dataclasses.replace(
+                army, income=economy.income(board, p, rate=rate).amount))
+    return board
+
+
 def _apply_capture(board, unit, action, co_ids, warnings):
     x, y = action.tile
     me = _moved(unit, action.tile, action.move_cost)
     progress = me.capture + _capture_gain(board, unit, co_ids)
     if progress >= CAPTURE_GOAL:
+        rate, _ = economy.funds_rate(board)
         owner = [list(r) for r in board.owner]
+        was = owner[y][x]
         owner[y][x] = unit.player
         board = dataclasses.replace(board, owner=owner)
+        board = _refresh_income(board, {unit.player, was} - {0}, rate)
         progress = 0
     return _replace(board, {unit.slot: dataclasses.replace(me, capture=progress)})
 
@@ -523,8 +550,15 @@ def _apply_power(board, action, meteor_strategy, rng_state, co_ids, warnings):
 # --------------------------------------------------------------------------
 
 def players_in_order(board) -> List[int]:
-    """Who is in this match, in turn order (player number order)."""
-    present = {a.player for a in board.armies} | {u.player for u in board.units}
+    """Who is in this match, in turn order (player number order): every
+    player with a unit on the board or a property on the map. A dump carries
+    four army records whatever the match, so an army record alone is not
+    presence -- on the two-player VS fixtures P3 and P4 have records, no
+    units and no tiles, and counting them sent end_turn to a P3 that never
+    plays (caught by the differential test, tests/fixtures/sim_diff)."""
+    present = {u.player for u in board.units}
+    for row in board.owner:
+        present.update(row)
     return sorted(p for p in present if p)
 
 
@@ -539,7 +573,13 @@ def end_turn(board, *, warnings: Optional[list] = None):
     later = [p for p in order if p > cur]
     nxt = later[0] if later else order[0]
     day = board.day + (0 if later else 1)
-    after = dataclasses.replace(board, active_player=nxt, day=day, vision=None)
+    # the ENDING player's acted bits clear at End Turn, its passengers'
+    # excepted -- a loaded Infantry kept its bit across four boundaries
+    # (DERIVATION 43, end-turn-p2-to-p1 / end-turn-auto-supply)
+    after = _replace(board, {u.slot: dataclasses.replace(u, acted=False)
+                             for u in board.units
+                             if u.player == cur and u.acted and not u.loaded})
+    after = dataclasses.replace(after, active_player=nxt, day=day, vision=None)
     return turn_start(after, nxt, warnings=warnings)
 
 
@@ -563,7 +603,11 @@ def turn_start(board, player: int, *, warnings: Optional[list] = None):
         army = _army(after, player)
     # -- income, before anything is repaired
     if army is not None:
-        after = _add_funds(after, player, economy.income(after, player).amount)
+        inc = economy.income(after, player).amount
+        after = _add_funds(after, player, inc)
+        # the walker leaves its total at army +0x08 (Army.income) as it goes
+        after = _set_army(after, dataclasses.replace(_army(after, player),
+                                                     income=inc))
         army = _army(after, player)
     funds = army.funds if army is not None else None
     power = bool(army.power_active) if army is not None else False
@@ -598,7 +642,8 @@ def turn_start(board, player: int, *, warnings: Optional[list] = None):
             funds -= ts.repair_spent
         swaps[u.slot] = dataclasses.replace(u, hp=ts.hp_after,
                                             fuel=ts.fuel_after,
-                                            ammo=ts.ammo_after, acted=False)
+                                            ammo=ts.ammo_after,
+                                            acted=u.acted and u.loaded)
     after = _replace(after, swaps)
     if dead:
         after = _remove(after, dead)

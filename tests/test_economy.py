@@ -86,10 +86,15 @@ class AgainstTheGame(unittest.TestCase):
 
 class TheRate(unittest.TestCase):
 
-    def test_dumped_rate_wins_and_says_so(self):
-        b = board([[HQ]], [[1]], [Army(1, 0, 9500)], funds_per_property=9500)
-        rate, source = economy.funds_rate(b)
-        self.assertEqual((rate, source), (9500, "dump"))
+    def test_the_income_field_wins_over_the_dumped_cell(self):
+        """DERIVATION 43: a cell written to 200 was paid at 9500, so the
+        game's own running total is the witness and the cell the fallback."""
+        b = board([[HQ]], [[1]], [Army(1, 0, 9500)], funds_per_property=200)
+        self.assertEqual(economy.funds_rate(b), (9500, "derived"))
+
+    def test_the_dumped_cell_is_used_when_nobody_owns_property(self):
+        b = board([[HQ]], [[0]], [Army(1, 0, 0)], funds_per_property=9500)
+        self.assertEqual(economy.funds_rate(b), (9500, "dump"))
 
     def test_derived_from_income_when_the_dump_predates_the_field(self):
         """A campaign dump with no rate cell still gets the right number."""

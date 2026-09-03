@@ -413,16 +413,24 @@ A16, both born the day action enumeration was written.
   army's CO record and record 1 for the two income terms the payer adds.
   Both terms are zero for every CO, so the gate is unobservable through
   income; which option writes it is unread and does not matter.
-- **What `engine/sim.py` states rather than measures.** The forward model
-  composes measured modules (DERIVATION 42) but fills six gaps by
-  assumption, each named in its docstring: Olaf's snow reverts to Clear at
-  expiry (DERIVATION 27 measured the boundary, not the weather it returns
-  to); Sturm's meteor takes strategy 0 when neither a strategy nor an RNG
-  state is given, with a warning; mass damage (Drake, Sturm) charges no
-  meter; a passenger aboard a Cruiser is not resupplied by the ride; a
-  captured HQ merely changes hands; income obeys the 999,999 clamp the shop
-  and the join refund were measured against. Kill by: the differential
-  test -- one parked state per line, dump, `apply()`, drive, dump, diff.
+- **What `engine/sim.py` still states rather than measures.** The
+  differential corpus (DERIVATION 43, 63 drives, all agreeing) measured
+  four of the six gaps DERIVATION 42 named -- snow reverts to Clear,
+  income obeys the 999,999 clamp, mass damage charges no meter, Sturm's
+  strategy is one RNG draw mod 3 -- and left two: a passenger aboard a
+  Cruiser is not resupplied by the ride, and a captured HQ merely changes
+  hands. Sturm's strategy 0 on a board with no RNG state is a labelled
+  default, not a claim. Also unexercised by the corpus: the second cargo
+  slot, dived combat, snow and rain movement, Sturm's alternate record, a
+  power followed by an attack. Kill by: a row in
+  `tests/fixtures/sim_diff/corpus.json` each.
+- **The funds-rate cell is a mirror, not the payer's source.** Writing 200
+  into `0x03004338` and ending the turn paid 9500 (DERIVATION 43,
+  `end-turn-repair-broke`), though DERIVATION 39 read the paying body as a
+  load from that cell and the cell's value matches the income on every
+  natural board. `economy.funds_rate` derives from an army's income field
+  first for this reason. Kill by: a write-watch on the payer's load at
+  `0x08025186`, which names the address it really reads.
 - **Fog over a submerged sub.** In the clear the enemy's grid expands
   through a concealed sub (DERIVATION 41); under fog a hidden tile is
   entered but never expanded through (DERIVATION 38). Which rule the grid
