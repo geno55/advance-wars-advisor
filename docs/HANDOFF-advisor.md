@@ -226,6 +226,10 @@ re-derive; import.
 
 ## Deliverables, repo-style
 
+The ordered plan, with the decisions behind it (self-play as the core,
+the CPU read rather than guessed, campaign facts deferred until a mission
+demands them), is `docs/ROADMAP.md`. The list below is the inventory.
+
 - ~~`engine/sim.py` first~~ -- delivered (DERIVATION 42): `apply`,
   `battle`, `end_turn`, `turn_start`; 32 tests in `tests/test_sim.py`.
 - `engine/advisor.py` (opinion layer, weights in one place, every
