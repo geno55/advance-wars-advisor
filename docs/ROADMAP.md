@@ -10,10 +10,18 @@ every mission" is a claim only the campaign can verify.
 
 Three decisions, made once so they do not get re-argued:
 
-- **Self-play is the core.** A certified forward model plus planner-vs-
-  planner tuning makes a strong general player without a line of the CPU's
-  code, and on these small maps a rollout search over `sim.apply` is
-  affordable in Python.
+- **The CPU port is the sparring partner; self-play is the fallback.**
+  This decision was first written the other way round -- "self-play is the
+  core" -- before step 3 succeeded. Once the game's AI plays a turn in
+  Python in under a second (`engine/cpu_ai`), tuning against it is as
+  cheap as planner-vs-planner and is the actual objective: the campaign is
+  won by exploiting this particular AI's habits (it waits whole turns, it
+  does not retreat damaged units, it captures one city at a time), which
+  a competent self-play opponent would never show. Self-play keeps two
+  jobs: the opponent wherever the port cannot play yet, and a sanity check
+  that a weight set tuned against the port is not merely tuned to the
+  port's passivity or to a bug in it. On these small maps a rollout search
+  over `sim.apply` stays affordable in Python either way.
 - **The CPU is read, not guessed.** Campaign missions are designed to be won
   from behind against this particular AI. A planner robust against a
   competent opponent may correctly conclude a mission is lost on material
@@ -128,11 +136,31 @@ Three decisions, made once so they do not get re-argued:
    naiveties -- one alternative per close call, two plies, a static
    evaluation, the model's own errors -- are in `docs/ADVISOR.md`.
 
-5. **Self-play.** Planner against planner in Python for weight tuning, then
-   rollout search over `sim.apply` if greedy plus reply is not enough.
-   Relative rankings only; the shared-delusion caveat (a bug in `apply()`
-   is a belief both players share and will exploit) is written where the
-   planner lives. Steps 4 and 5 are one iteration loop.
+5. **Tuning against the port.** Planner against `engine/cpu_ai` in Python,
+   on the parked VS states first and then on mission states, scoring days
+   to the win, material lost and properties held rather than the bare
+   win -- the port's speed makes thousands of games affordable, and the
+   richer score separates two weight sets even when both win. Self-play
+   (planner against planner) is the opponent wherever the port raises
+   `NotImplementedError` and the check that a tuned set still plays
+   soundly against something that fights back. Rollout search over
+   `sim.apply` comes after, if greedy plus reply is not enough.
+
+   Two rules make this loop honest. Every game the port aborts is a trace
+   request: park that state, let the real CPU play it (the step 3 rig),
+   port the branch -- so the port's coverage is driven toward what the
+   campaign actually reaches (air and sea sub-phases, the retreat and join
+   pre-steps) instead of guessed. And the shared-delusion caveat now
+   covers two models: a bug in `apply()` is a belief both players hold,
+   and a bug in the port is a habit the tuner will learn to exploit that
+   the real CPU does not have; the cure for both is the same, differential
+   traces on the game, never win-rate evaluation on the emulator (HANDOFF).
+
+   Before any mission-level tuning, the campaign profile table
+   (`0x080683B0`) is read: each mission's CO profile sets the AI's
+   thresholds, so a set tuned against the VS profiles could miss a
+   mission's personality. That read is one table, not a project. Steps 4
+   and 5 are one iteration loop.
 
 6. **Acceptance.** A whole-turn driver built on the single-action one, and
    one headless run per mission from a parked savestate, once per release.
@@ -152,8 +180,9 @@ Three decisions, made once so they do not get re-argued:
 
 ## Order dependencies
 
-- Step 2 before step 5: self-play needs a certified model.
-- Step 3 before step 4: the reply model is what makes hard missions winnable.
+- Step 2 before step 5: tuning needs a certified model.
+- Step 3 before step 4 and 5: the reply model is what makes hard missions
+  winnable, and the port is the sparring partner tuning is done against.
 - Step 6 can start as soon as step 1 plays a turn; it only becomes the gate
   once steps 4 and 5 have something to prove.
 
@@ -165,6 +194,6 @@ Three decisions, made once so they do not get re-argued:
 | 2 | `harness/mesen_state.lua`, `harness/mesen_drive.lua`, `tools/sim_diff.py` (delivered) | `tests/fixtures/sim_diff/`: the corpus, both parked states, 126 before/after dumps, the result log (delivered) | `sim_diff` clean: 63/63 (`tests/test_sim_diff.py`, delivered) |
 | 3 | `engine/cpu.py` | DERIVATION: the CPU's rules, and the turns it played | prediction vs played turn -- seven traces, record for record and draw for draw (DERIVATION 45) |
 | 4 | the reply lookahead in `advisor.py` (delivered: `reply=`, `evaluate`, `Reply`, `Candidate`; `tools/advise.py --reply`) | -- | scenario tests: the reply overturns a worst-case call; the CPU port plays the step 3 fixture's reply; the planner stands in where it cannot (`tests/test_advisor.py`, delivered) |
-| 5 | `tools/selfplay.py` | weight sets and their relative results | -- |
+| 5 | `tools/sparring.py` (planner vs the port, self-play as fallback) | weight sets and their results per parked state; the traces the aborts requested | -- |
 | 6 | the whole-turn driver, `tools/campaign_run.py` | a result per mission per release | the win |
 | 7 | `data/missions/*.json` | one dump per mission read | -- |

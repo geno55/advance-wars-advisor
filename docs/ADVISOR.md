@@ -257,14 +257,16 @@ one or two rows for the rest.
 
 ## The shared-delusion caveat
 
-Tuning these weights by advisor-vs-advisor self-play in Python is the plan
-(ROADMAP step 5). Its failure mode: a bug in `sim.apply` is a belief both
-players hold, and self-play converges on exploiting it, cheerfully and
-invisibly. A weight set that wins self-play on a wrong model is tuned to the
-wrong game. That is why the emulator budget goes to certifying `apply()`
-one action at a time and never to win-rate evaluation, and why the corpus is
-to be weighted toward the action kinds the planner picks: those are the
-ones a shared delusion would live in.
+Tuning these weights in Python -- against the CPU port first, planner
+against planner where the port cannot play and as a check (ROADMAP step 5)
+-- has one failure mode in two forms. A bug in `sim.apply` is a belief both
+players hold, and tuning converges on exploiting it, cheerfully and
+invisibly. A bug in the port is a habit the tuner will learn to exploit that
+the real CPU does not have. A weight set that wins on a wrong model is
+tuned to the wrong game. That is why the emulator budget goes to certifying
+`apply()` one action at a time and to tracing the CPU's branches, never to
+win-rate evaluation, and why the corpus is to be weighted toward the action
+kinds the planner picks: those are the ones a shared delusion would live in.
 
 ## Reading a plan
 
