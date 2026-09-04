@@ -3308,3 +3308,62 @@ nothing about the fallback: the units with nothing to do stayed put with
 or without a transport to board, since boarding is only reached behind
 the Port flag.
 
+## 50. The CPU fires its power, and what the CO records had been hiding
+
+The sparring harness's third trace request: with the fallback ported the
+P2 game ran to day 13, where the port stopped at `0x0801C120` -- Andy's
+meter full, a 30-hp Infantry to heal, and no trace had ever seen the AI
+fire. Three traces on `vs15_p2` with P1 as the CPU and its meter written
+to the threshold (`tests/fixtures/cpu/power-*`): Andy with Infantry #1
+at 50 hp, Max, and Eagle. The port reproduces all three record for record
+and draw for draw (28, 27 and 38 draws) and leaves the game's board.
+
+**The firing** (`0x0801C120`, from the power sub-phase `0x0806490C` when
+`0x0801C07C` says the meter is at its threshold and the CO's predicate
+agrees, DERIVATION 45): uses + 1 (`0x0801C0E4`, army `+0x25`, capped at
+255), the ready flag (`+0x24`) cleared, then `0x0803BC2C` -- the
+activation the human's menu fires, whose effects `sim.apply` already
+models from DERIVATION 27 and 37. It is not a dispatcher command (the
+command list is the same eight records with or without it), and it draws
+nothing: the draw logs line up with the port applying the engine's own
+power action and moving on. The after-dumps read meter 0, uses 1, the
+block active; Andy's Infantry 50 -> 70.
+
+**Eagle fires at the end and the turn goes round again.** Eagle's
+predicate (`0x080632AC`) allows the second power pass only, sub-phase 16,
+after every unit has moved. The driver's state log shows what follows:
+the power fires, and the next sub-phase is 1, not 17 -- the whole list
+runs again, and the units Lightning Drive refreshed (the Recon, Tank, APC
+and Artillery; not the foot soldiers) each take a second command in the
+same order, twelve records for eight units. The port resets its sub-phase
+cursor to 1 after a power fired at any pass past the first.
+
+**What the Max trace exposed below the port.** The APC drove seven
+tiles, `(6,2) -> (1,4)`; the port predicted it (its move budget reads the
+CO block's per-type move byte, DERIVATION 45) and then found no engine
+Action to execute, because `pathing.allowance` knew only the stats move.
+The CO records' pool entries carry more than attack and defence: `+7` is
+a signed move adjustment and `+9` a signed range adjustment, and neither
+had been extracted -- Sami's transports +1 move and Drake's navy +1 move
+at all times, Max's direct units +1 and Sami's foot +1 under power;
+Grit's indirects +1 range (+3 under power) and Max's -1, on the maximum
+range and only where the base maximum exceeds 1, which is how the AI's
+threat grid applies it. `tools/extract_co.py` now records both,
+`co.move_bonus` and `co.range_bonus` read them, `pathing.allowance` takes
+the board and adds the move (fuel still caps it), and `actions.actions_for`
+and `threat.covered_tiles` add the range. The 63-drive corpus still
+replays: none of its drives crossed either bonus, which is why the model
+had been silently short a tile for Sami's and Drake's units and a ring for
+Grit's and Max's artillery since DERIVATION 43. The move bonus is measured
+once, by the CPU's own move; the range bonus is read off the ROM and
+stated (ASSUMPTIONS).
+
+**Not read.** Olaf's predicate (`0x08063324`, under a settings weather)
+still raises; the co-8 second pass is traced for Eagle only, and the
+meter-threshold arithmetic is DERIVATION 27's.
+
+**Rig notes.** `{"army": 1, "co": N, "meter": "threshold", "ready": 1}`
+puts the meter at the CO's own threshold for its use count; Andy's
+predicate needs a unit at 90 hp or less, so his trace also writes
+`{"unit": 1, "hp": 50}`.
+

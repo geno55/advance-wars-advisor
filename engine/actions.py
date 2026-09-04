@@ -468,6 +468,10 @@ def actions_for(board, unit, *, co_ids: Optional[dict] = None,
     dests = pathing.destinations(board, unit, weather)
     fire_from = threat.firing_positions(board, unit, weather)
     lo, hi = my_stats["min_range"], my_stats["max_range"]
+    cid = _co_of(board, unit.player, co_ids)
+    if cid is not None and hi > 1:          # the CO's range adjustment on an
+        hi += co_mod.range_bonus(cid, unit.type,      # indirect's maximum
+                                 _power_active(board, unit.player))
     enemies = threat.hostiles(board, unit.player, ignore_acted=True,
                               fog=fog_on, rule_set=fog_rules)
 

@@ -205,6 +205,7 @@ class Turn:
     ctx: Context
     commands: List[Command] = field(default_factory=list)
     builds: List[dict] = field(default_factory=list)            # state 4's purchases
+    powers: List[dict] = field(default_factory=list)            # the CO power, if fired
     draws: List[dict] = field(default_factory=list)
     warnings: List[str] = field(default_factory=list)
     targeted: Dict[int, int] = field(default_factory=dict)      # 0x03005160
@@ -1205,9 +1206,21 @@ class Turn:
             raise NotImplementedError(f"AI power predicate {fn}")
         if not fire:
             return
-        raise NotImplementedError(
-            "the CPU would fire its power here (0x0801C120): no trace has seen "
-            "one, so the RNG draws and the command it leaves are unread")
+        # 0x0801C120: uses + 1 (0x0801C0E4), the ready flag (+0x24) cleared,
+        # then the activation itself (0x0803BC2C) -- the routine the human's
+        # menu fires, whose effects sim.apply already models (DERIVATION 27,
+        # 37). It is not a dispatcher command and draws nothing on the
+        # power-andy trace (DERIVATION 50); the turn goes on under the power.
+        act = actions.power_action(self.board, self.player, warnings=self.warnings)
+        if act is None:
+            raise ValueError("the AI's threshold check passed but the action "
+                             "layer offers no power -- the two disagree")
+        self.board = sim.apply(self.board, act, rng_state=self.rng,
+                               warnings=self.warnings)
+        self.powers.append({"player": self.player, "subphase": self.subphase,
+                            "rng": self.rng})
+        self.log.append(f"  power fired at sub-phase {self.subphase}: "
+                        f"{act.power.co_name}'s")
 
     # -- the turn ------------------------------------------------------------
     def units_of_class(self, cls: int) -> list:
@@ -1469,11 +1482,21 @@ class Turn:
         self.classify()
         self.build_prop_grid()
         phases = tables()["subphases"]["fog" if self.ctx.fog else "clear"]
-        for i, name in enumerate(phases):
+        i = 0
+        while i < len(phases):
+            name = phases[i]
             self.subphase = i + 1
             self.log.append(f"-- sub-phase {i} {name}")
+            i += 1
             if name == "power":
+                fired = len(self.powers)
                 self.power_pass()
+                if len(self.powers) > fired and self.subphase > 1:
+                    # the power-eagle trace (DERIVATION 50): a power fired at
+                    # the end-of-turn pass sends the driver back to sub-phase
+                    # 1, and the units the power refreshed play again
+                    self.log.append("-- the power fired: back to sub-phase 1")
+                    i = 1
                 continue
             if name == "clear_targeted":
                 self.targeted.clear()
@@ -1923,8 +1946,14 @@ class Turn:
 # 0x080607C4); the retreat-after-move check a conditioned unit's move
 # rolls into (0x0806636C, profile[type][1] percent of the time); the
 # fallback's Lander pickup (0x080660A6) and the foot unit's TCopter ride
-# (0x08064D76), both behind a side flag no traced map sets; firing a power
-# (0x0801C120); campaign profiles (0x080683B0).
+# (0x08064D76), both behind a side flag no traced map sets; Olaf's
+# weather-gated power predicate (0x08063324); campaign profiles
+# (0x080683B0).
+#
+# The power (DERIVATION 50, the three power-* traces): fired through the
+# forward model's activation when the threshold and the predicate allow --
+# no command, no draw -- and, fired at the end pass (Eagle), the sub-phase
+# list runs again for the units it refreshed.
 #
 # Building (driver state 4, 0x08066EC8, run once at the turn's end) is
 # ported above and reproduces the eleven build traces (DERIVATION 47):

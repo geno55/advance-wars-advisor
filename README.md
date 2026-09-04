@@ -506,6 +506,18 @@ times in a row. Two traces, reproduced draw for draw; the Lander pickup
 behind the Port flag and the TCopter ride behind the Airport flag remain
 read only as far as the listing goes.
 
+**The power fires (DERIVATION 50).** The third abort was the CPU's own
+power. Three traces -- Andy with a damaged unit, Max, Eagle -- show the
+firing is not a command and draws nothing: the port applies the forward
+model's activation and plays on under it. Eagle's fires at the end-of-turn
+pass and sends the driver back to sub-phase 1, so the units Lightning
+Drive refreshed move a second time. The Max trace also caught the model
+short: the CO records carry per-unit move and range adjustments (Sami's
+transports and Drake's navy +1 move always, Max's direct units and Sami's
+foot +1 under power; Grit's indirects +1 range, +3 under power, Max's -1)
+that had never been extracted. They are now read and applied in pathing,
+the action layer and the threat layer.
+
 **The enemy reply (ROADMAP step 4).** The planner's plan is now a
 proposal. It and a few variants -- at its closest calls, the same unit's
 next-best action committed and the rest of the turn re-planned -- are each
@@ -684,9 +696,9 @@ data/aw1_ai.json          every table the AI reads, 89 profiles included
                           (tools/extract_ai.py)
 tools/cpu_trace.py        let the game's CPU play a turn, trace its commands
                           and RNG draws, replay them, predict them
-tests/fixtures/cpu/       29 traced CPU turns with their boards and draws:
+tests/fixtures/cpu/       32 traced CPU turns with their boards and draws:
                           seven turns, twelve builds, eight pre-steps, two
-                          fallbacks
+                          fallbacks, three powers
 tests/test_cpu.py         the traces replayed and predicted, record for
                           record and draw for draw
 tools/sim_diff.py         the differential test: dump, apply(), drive one

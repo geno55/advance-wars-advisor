@@ -24,7 +24,9 @@ so, relative to a record base of 0x284A30:
             bonus all apply to it (DERIVATION 46).
     +0x80   the whole thing again: the second stat sub-block
 
-Pool entries are 12 bytes with attack at +5 and defence at +6.
+Pool entries are 12 bytes with attack at +5, defence at +6, a signed move
+adjustment at +7, a signed vision adjustment at +8 and a signed range
+adjustment at +9.
 
 The two sub-blocks are selected by army +0x1E, and are almost certainly
 (normal, CO power active): the pair for Max reads (150,100) and (170,100), and
@@ -160,6 +162,12 @@ def main(rom_path, out_path):
             weather.append((p - MOVECOST_0) // MOVECOST_STRIDE)
         mods = {}
         vision = {}
+        move = {}
+        rng = {}
+
+        def s8(a):
+            return rom[a] - (256 if rom[a] >= 128 else 0)
+
         for i in range(25):                 # +0x1C .. +0x7F, see docstring
             p = u32(addr + 0x1C + i * 4) - ROM_BASE
             check(POOL <= p < POOL + POOL_LEN,
@@ -170,11 +178,26 @@ def main(rom_path, out_path):
                 # pool +8: signed per-unit VISION adjustment, added to the
                 # stats vision by the fog marker at 0x0801ED06/0x0801EDAE.
                 # Nonzero only on Sonja's entries (DERIVATION 28).
-                v = rom[p + 8] - (256 if rom[p + 8] >= 128 else 0)
+                v = s8(p + 8)
                 if v:
                     vision[UNITS[uid]] = v
+                # pool +7: signed MOVE adjustment, added to the stats move
+                # by the move-budget reader 0x0801D968 (the AI's port read it
+                # first, DERIVATION 45; the power-max trace made a 7-tile
+                # APC move of it, DERIVATION 50). Sami's transports, Drake's
+                # navy, Max's direct units under power, Sami's foot under
+                # power. Pool +9: signed RANGE adjustment on the maximum
+                # range of an indirect unit -- Grit +1 (+3 under power),
+                # Max -1.
+                m = s8(p + 7)
+                if m:
+                    move[UNITS[uid]] = m
+                r = s8(p + 9)
+                if r:
+                    rng[UNITS[uid]] = r
         return {"addr": hex(addr), "weather_tables": weather,
                 "modifiers": mods, "vision_bonus": vision,
+                "move_bonus": move, "range_bonus": rng,
                 "header": list(rom[addr:addr + 16])}
 
     def u16(a):

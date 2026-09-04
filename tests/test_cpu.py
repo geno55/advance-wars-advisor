@@ -10,6 +10,7 @@ and then the step's deliverable: engine/cpu.predict, the AI ported from
 the ROM, reproduces every traced turn record for record and draw for
 draw, and leaves the board the game left.
 """
+import dataclasses
 import json
 import pathlib
 import sys
@@ -41,6 +42,10 @@ PRESTEP = ["prestep-join-mech", "prestep-join-sum-over", "prestep-hp-inf",
 # the CPU's side on vs15_p2 so that its foot units outnumber the properties
 # left to walk to -- four written and the APC removed, then all six.
 NOPROP = ["noprop-foot", "noprop-apc"]
+# The CO power (DERIVATION 50): P1's meter written to its threshold on
+# vs15_p2 -- Andy with a damaged unit, Max, and Eagle whose predicate
+# fires at the end-of-turn pass and sends the refreshed units round again.
+POWER = ["power-andy", "power-max", "power-eagle"]
 
 
 def trace(name):
@@ -123,7 +128,7 @@ class TestTheReplay(unittest.TestCase):
 
 class TestThePrediction(unittest.TestCase):
     """engine/cpu.predict against every trace (tools/cpu_trace.py predict)."""
-    ALL = EXACT + ["vs15-p1-cpu-fog"] + BUILDS + PRESTEP + NOPROP
+    ALL = EXACT + ["vs15-p1-cpu-fog"] + BUILDS + PRESTEP + NOPROP + POWER
 
     def test_every_trace_is_predicted_record_for_record(self):
         for name in self.ALL:
@@ -368,4 +373,55 @@ class TestTheFallback(unittest.TestCase):
                 self.assertEqual(log.count("goal None"), len(silent))
                 self.assertFalse(silent & {c.slot for c in r["turn"].commands})
                 self.assertEqual(r["predicted"], r["traced"])
+
+
+class TestThePower(unittest.TestCase):
+    """DERIVATION 50: the CPU fires its power (0x0801C120) when the meter
+    is at its threshold and the CO's predicate allows -- not a dispatcher
+    record, no RNG draw, the forward model's activation -- and the turn
+    goes on under it."""
+
+    def cmds(self, name):
+        return [(c["name"], c["slot"], (c["x"], c["y"])) for c in trace(name)["commands"]]
+
+    def test_andy_and_max_fire_at_the_first_pass(self):
+        for name in ("power-andy", "power-max"):
+            with self.subTest(name=name):
+                r = cpu_trace.predict(trace(name))
+                self.assertEqual([p["subphase"] for p in r["turn"].powers], [1])
+                after = load(FIX / f"{name}.after.json")
+                a = after.army(1)
+                self.assertEqual((a.power, a.power_uses, a.power_active), (0, 1, True))
+        # Hyper Repair: the 50-hp Infantry reads 70 after
+        after = load(FIX / "power-andy.after.json")
+        self.assertEqual(sim.unit_in(after, 1).hp, 70)
+        # a full-health army leaves Andy's meter alone (the older trace)
+        r = cpu_trace.predict(trace("vs15-p1-cpu-power"))
+        self.assertEqual(r["turn"].powers, [])
+
+    def test_max_force_moves_the_apc_seven_tiles(self):
+        """Direct units +1 move under Max's power: the APC's 7-tile move is
+        offered by the action layer only with co.move_bonus in the budget."""
+        self.assertIn(("wait", 5, (1, 4)), self.cmds("power-max"))
+        before = load(FIX / "power-max.before.json")
+        from engine import pathing
+        apc = sim.unit_in(before, 5)
+        self.assertEqual((apc.x, apc.y), (6, 2))
+        self.assertEqual(pathing.allowance(apc), 6)
+        fired = dataclasses.replace(before, armies=[
+            dataclasses.replace(a, power_active=True) if a.player == 1 else a
+            for a in before.armies])
+        self.assertEqual(pathing.allowance(apc, fired), 7)
+        self.assertIn((1, 4), pathing.destinations(fired, apc))
+
+    def test_eagles_power_at_the_end_pass_sends_the_refreshed_units_round_again(self):
+        cmds = self.cmds("power-eagle")
+        self.assertEqual(len(cmds), 12)
+        again = [c[1] for c in cmds[8:]]
+        self.assertEqual(again, [6, 7, 5, 8])            # Recon, Tank, APC, Artillery
+        self.assertNotIn(1, again)                       # foot units are not refreshed
+        r = cpu_trace.predict(trace("power-eagle"))
+        self.assertEqual([p["subphase"] for p in r["turn"].powers], [17])
+        self.assertIn("back to sub-phase 1", "\n".join(r["log"]))
+        self.assertEqual(r["predicted"], r["traced"])
 

@@ -399,6 +399,26 @@ def vision_bonus(co_id: int, unit_type: str, power: bool = False) -> int:
     return block["vision_bonus"].get(unit_type, 0)
 
 
+def move_bonus(co_id: int, unit_type: str, power: bool = False) -> int:
+    """Per-unit movement adjustment, pool entry +7, added to the stats move
+    by the move-budget reader at 0x0801D968 (fuel still caps it). Sami's
+    transports +1, Drake's navy +1, Max's direct units +1 under his power,
+    Sami's foot +1 under hers. Measured live by the CPU's own 7-tile APC
+    move on the power-max trace (DERIVATION 50)."""
+    block = _co_data()["records"][co_id]["power" if power else "normal"]
+    return block.get("move_bonus", {}).get(unit_type, 0)
+
+
+def range_bonus(co_id: int, unit_type: str, power: bool = False) -> int:
+    """Per-unit adjustment to an indirect unit's MAXIMUM range, pool entry
+    +9: Grit +1 (+3 under his power), Max -1. The AI's threat grid and
+    ring (0x08068F68, DERIVATION 45) add it only where the base maximum
+    exceeds 1; the engine does the same. Read off the ROM; no drive has
+    yet confirmed it on the game (ASSUMPTIONS)."""
+    block = _co_data()["records"][co_id]["power" if power else "normal"]
+    return block.get("range_bonus", {}).get(unit_type, 0)
+
+
 def pierces_concealment(co_id: int, power: bool = False) -> bool:
     """Header byte 1: nonzero makes the fog marker skip the Wood/Reef
     concealment check entirely (0x0801EA60). Set only on Sonja's power

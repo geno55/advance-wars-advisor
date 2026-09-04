@@ -67,13 +67,29 @@ def unit_stats(unit_type: str) -> dict:
     return s[unit_type]
 
 
-def allowance(unit) -> int:
+def allowance(unit, board=None) -> int:
     """Movement points this unit can actually spend right now.
 
     Fuel is the binding constraint far more often than people expect -- a
-    Bomber with 4 fuel left moves 4, not 7.
+    Bomber with 4 fuel left moves 4, not 7. With `board`, the owner's CO
+    adds its per-unit move adjustment (co.move_bonus: Sami's transports,
+    Drake's navy, Max's direct units under power, Sami's foot under power)
+    before the fuel cap, as the game's move-budget reader 0x0801D968 does.
     """
-    return min(unit_stats(unit.type)["move"], unit.fuel)
+    move = unit_stats(unit.type)["move"]
+    if board is not None:
+        try:
+            army = board.army(unit.player)
+        except (StopIteration, AttributeError):
+            army = None
+        if army is not None and army.co_id is not None:
+            try:                            # co imports nothing of ours, but
+                from . import co as co_mod  # pathing is imported everywhere
+            except ImportError:
+                import co as co_mod
+            move += co_mod.move_bonus(army.co_id, unit.type,
+                                      bool(army.power_active))
+    return min(move, unit.fuel)
 
 
 def transport_has_room(board, transport, passenger_type: str) -> bool:
@@ -112,7 +128,7 @@ def reachable(board, unit, weather: Optional[str] = None) -> Dict[Coord, int]:
     if unit.loaded:
         return {}
     start = (unit.x, unit.y)
-    budget = allowance(unit)
+    budget = allowance(unit, board)
     occupied = _occupancy(board)
     move_type = unit_stats(unit.type)["move_type"]
 
@@ -174,7 +190,7 @@ def trap_tiles(board, unit, hidden_slots, weather: Optional[str] = None) -> Dict
     """
     reach = reachable(board, unit, weather)
     st = unit_stats(unit.type)
-    budget = allowance(unit)
+    budget = allowance(unit, board)
     out = {}
     for enemy in board.units:
         if enemy.slot not in hidden_slots or enemy.loaded:

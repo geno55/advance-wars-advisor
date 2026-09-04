@@ -359,6 +359,17 @@ fixtures, and in this file's git history.
   side's last unit while it holds a Base and funds, and the match state
   after (the turn block, the result screen).
 
+- **The CO range adjustment lands on the maximum range only, and only
+  where the base maximum exceeds 1.** The CO records' pool entries carry
+  a signed range byte at `+9` (Grit +1, +3 under power; Max -1 on his
+  indirects), read off the ROM in DERIVATION 50 and applied by
+  `actions.actions_for` and `threat.covered_tiles` the way the AI's own
+  threat grid applies it (`0x08068F68`). No drive has fired a Grit or Max
+  artillery on the game. Kill by: a `sim_diff` drive of a Grit Artillery
+  at a target four tiles out (offered), and of a Max Artillery at three
+  (refused). The sibling move byte at `+7` is measured, once: the CPU's
+  APC drove seven tiles under Max's power on the `power-max` trace.
+
 Everything else this file has carried is either in Established above or in
 the Retired ledger below, each killed by a measurement or a read with its
 account named. The section refills with each composed feature — that is

@@ -146,6 +146,13 @@ def covered_tiles(board, unit, weather: Optional[str] = None) -> Dict[Coord, Set
     """
     st = pathing.unit_stats(unit.type)
     lo, hi = st["min_range"], st["max_range"]
+    cid = _co_of(board, unit.player, None)
+    if cid is not None and hi > 1:          # the CO's range adjustment on an
+        try:                                # indirect's maximum (co.range_bonus)
+            power = bool(board.army(unit.player).power_active)
+        except (StopIteration, AttributeError):
+            power = False
+        hi += co_mod.range_bonus(cid, unit.type, power)
     out: Dict[Coord, Set[Coord]] = {}
     for src in firing_positions(board, unit, weather):
         for tgt in in_range(board, src, lo, hi):

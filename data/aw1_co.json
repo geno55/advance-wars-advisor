@@ -152,6 +152,8 @@
           ]
         },
         "vision_bonus": {},
+        "move_bonus": {},
+        "range_bonus": {},
         "header": [
           1,
           0,
@@ -253,6 +255,8 @@
           ]
         },
         "vision_bonus": {},
+        "move_bonus": {},
+        "range_bonus": {},
         "header": [
           1,
           0,
@@ -364,6 +368,8 @@
           ]
         },
         "vision_bonus": {},
+        "move_bonus": {},
+        "range_bonus": {},
         "header": [
           1,
           0,
@@ -465,6 +471,8 @@
           ]
         },
         "vision_bonus": {},
+        "move_bonus": {},
+        "range_bonus": {},
         "header": [
           1,
           0,
@@ -576,6 +584,13 @@
           ]
         },
         "vision_bonus": {},
+        "move_bonus": {},
+        "range_bonus": {
+          "Artillery": -1,
+          "Rockets": -1,
+          "Missiles": -1,
+          "Battleship": -1
+        },
         "header": [
           1,
           0,
@@ -677,6 +692,26 @@
           ]
         },
         "vision_bonus": {},
+        "move_bonus": {
+          "MdTank": 1,
+          "Tank": 1,
+          "Recon": 1,
+          "APC": 1,
+          "AntiAir": 1,
+          "Fighter": 1,
+          "Bomber": 1,
+          "BCopter": 1,
+          "TCopter": 1,
+          "Cruiser": 1,
+          "Lander": 1,
+          "Sub": 1
+        },
+        "range_bonus": {
+          "Artillery": -1,
+          "Rockets": -1,
+          "Missiles": -1,
+          "Battleship": -1
+        },
         "header": [
           1,
           0,
@@ -788,6 +823,8 @@
           ]
         },
         "vision_bonus": {},
+        "move_bonus": {},
+        "range_bonus": {},
         "header": [
           1,
           0,
@@ -889,6 +926,8 @@
           ]
         },
         "vision_bonus": {},
+        "move_bonus": {},
+        "range_bonus": {},
         "header": [
           1,
           0,
@@ -1000,6 +1039,12 @@
           ]
         },
         "vision_bonus": {},
+        "move_bonus": {
+          "APC": 1,
+          "TCopter": 1,
+          "Lander": 1
+        },
+        "range_bonus": {},
         "header": [
           1,
           0,
@@ -1101,6 +1146,14 @@
           ]
         },
         "vision_bonus": {},
+        "move_bonus": {
+          "Infantry": 1,
+          "Mech": 1,
+          "APC": 1,
+          "TCopter": 1,
+          "Lander": 1
+        },
+        "range_bonus": {},
         "header": [
           1,
           0,
@@ -1212,6 +1265,13 @@
           ]
         },
         "vision_bonus": {},
+        "move_bonus": {},
+        "range_bonus": {
+          "Artillery": 1,
+          "Rockets": 1,
+          "Missiles": 1,
+          "Battleship": 1
+        },
         "header": [
           1,
           0,
@@ -1313,6 +1373,13 @@
           ]
         },
         "vision_bonus": {},
+        "move_bonus": {},
+        "range_bonus": {
+          "Artillery": 3,
+          "Rockets": 3,
+          "Missiles": 3,
+          "Battleship": 3
+        },
         "header": [
           1,
           0,
@@ -1424,6 +1491,8 @@
           ]
         },
         "vision_bonus": {},
+        "move_bonus": {},
+        "range_bonus": {},
         "header": [
           1,
           0,
@@ -1525,6 +1594,8 @@
           ]
         },
         "vision_bonus": {},
+        "move_bonus": {},
+        "range_bonus": {},
         "header": [
           1,
           0,
@@ -1655,6 +1726,8 @@
           "Lander": 1,
           "Sub": 1
         },
+        "move_bonus": {},
+        "range_bonus": {},
         "header": [
           0,
           0,
@@ -1775,6 +1848,8 @@
           "Lander": 3,
           "Sub": 3
         },
+        "move_bonus": {},
+        "range_bonus": {},
         "header": [
           0,
           1,
@@ -1886,6 +1961,8 @@
           ]
         },
         "vision_bonus": {},
+        "move_bonus": {},
+        "range_bonus": {},
         "header": [
           1,
           0,
@@ -1987,6 +2064,8 @@
           ]
         },
         "vision_bonus": {},
+        "move_bonus": {},
+        "range_bonus": {},
         "header": [
           1,
           0,
@@ -2098,6 +2177,13 @@
           ]
         },
         "vision_bonus": {},
+        "move_bonus": {
+          "Battleship": 1,
+          "Cruiser": 1,
+          "Lander": 1,
+          "Sub": 1
+        },
+        "range_bonus": {},
         "header": [
           1,
           0,
@@ -2199,6 +2285,13 @@
           ]
         },
         "vision_bonus": {},
+        "move_bonus": {
+          "Battleship": 1,
+          "Cruiser": 1,
+          "Lander": 1,
+          "Sub": 1
+        },
+        "range_bonus": {},
         "header": [
           1,
           0,
@@ -2310,6 +2403,8 @@
           ]
         },
         "vision_bonus": {},
+        "move_bonus": {},
+        "range_bonus": {},
         "header": [
           1,
           0,
@@ -2411,6 +2506,8 @@
           ]
         },
         "vision_bonus": {},
+        "move_bonus": {},
+        "range_bonus": {},
         "header": [
           1,
           0,
@@ -2522,6 +2619,8 @@
           ]
         },
         "vision_bonus": {},
+        "move_bonus": {},
+        "range_bonus": {},
         "header": [
           1,
           0,
@@ -2623,6 +2722,8 @@
           ]
         },
         "vision_bonus": {},
+        "move_bonus": {},
+        "range_bonus": {},
         "header": [
           1,
           0,
