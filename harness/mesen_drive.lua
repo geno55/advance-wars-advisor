@@ -144,6 +144,67 @@ function M.apply_writes(writes)
           or (wr.meter and ar.power ~= wr.meter) or (wr.uses and ar.power_uses ~= wr.uses) then
         return false, "write " .. i .. ": army read-back mismatch"
       end
+    elseif k == "proplist" then
+      -- Insert {id, x, y, 0,0,0,0,0} into the game's property list at
+      -- [0x08282CC4] (8-byte records sorted by y then x, 0xFF-terminated,
+      -- DERIVATION 14). The AI's build phase walks THIS list (0x08067684),
+      -- not the terrain grid, so a written factory has to join it.
+      local base = M.r32(0x08282CC4)
+      local recs = {}
+      local n = 0
+      while n < 512 and M.r8(base + n * 8) ~= 0xFF do
+        local r = {}
+        for j = 0, 7 do r[j + 1] = M.r8(base + n * 8 + j) end
+        recs[#recs + 1] = r
+        n = n + 1
+      end
+      local at = #recs + 1
+      for j, r in ipairs(recs) do
+        if r[3] > wr.y or (r[3] == wr.y and r[2] > wr.x) then at = j; break end
+      end
+      table.insert(recs, at, { wr.id, wr.x, wr.y, 0, 0, 0, 0, 0 })
+      for j, r in ipairs(recs) do
+        for b = 1, 8 do M.w8(base + (j - 1) * 8 + b - 1, r[b]) end
+      end
+      M.w8(base + #recs * 8, 0xFF)
+      local chk = M.r8(base + (at - 1) * 8)
+      if chk ~= wr.id then return false, "write " .. i .. ": property list read-back mismatch" end
+      -- the tile -> record index table: every index at or past the
+      -- insertion point moves up one, and the new tile gets the slot
+      local map = M.r32(0x08282CB4)
+      local w, h = M.dims()
+      local idx = at - 1
+      local shifted = 0
+      for y = 0, h - 1 do
+        local rowoff = M.r16(map + 0x4682 + y * 2)
+        for x = 0, w - 1 do
+          local a = map + 0x193A + rowoff + x
+          local v = M.r8(a)
+          if v >= idx and v < 0x80 and not (x == wr.x and y == wr.y) then M.w8(a, v + 1); shifted = shifted + 1 end
+        end
+      end
+      M.w8(map + 0x193A + M.r16(map + 0x4682 + wr.y * 2) + wr.x, idx)
+      -- The income is CACHED: the walker at 0x08025208 fills army +0x08
+      -- and the per-type counters +0xC..+0xF (Base, City, Airport, Port)
+      -- at map load and on capture, and the turn-start payer pays +0x08
+      -- as it stands (DERIVATION 47). A written property joins that cache
+      -- here, the way a capture would, or the game pays for one fewer
+      -- property than the board shows.
+      local owner = math.floor(M.r8(M.map_addr(wr.x, wr.y)) / 32)
+      if owner > 0 then
+        local a = M.army_addr(owner)
+        M.w32(a + 8, M.r32(a + 8) + M.r32(M.RATE))
+        local ctr = ({ [14] = 0xC, [6] = 0xD, [10] = 0xE, [11] = 0xF })[wr.id]
+        if ctr then M.w8(a + ctr, M.r8(a + ctr) + 1) end
+        M.L(string.format("  proplist: P%d cached income now %d", owner, M.r32(a + 8)))
+      end
+      M.L(string.format("  proplist: inserted id %d at (%d,%d) as record %d, now %d records; %d tile indices shifted; sample index bytes (4,1)=%d (0,8)=%d",
+        wr.id, wr.x, wr.y, idx, #recs, shifted,
+        M.r8(map + 0x193A + M.r16(map + 0x4682 + 1 * 2) + 4), M.r8(map + 0x193A + M.r16(map + 0x4682 + 8 * 2) + 0)))
+    elseif k == "raw" then
+      if wr.size == 4 then M.w32(wr.addr, wr.value)
+      elseif wr.size == 2 then M.w16(wr.addr, wr.value)
+      else M.w8(wr.addr, wr.value) end
     elseif k == "fog" then M.w8(M.FOG, wr.value)
     elseif k == "weather" then M.w8(M.WEATHER, wr.value)
     elseif k == "rng" then M.w32(M.RNG, wr.value)
@@ -288,6 +349,43 @@ emu.addMemoryCallback(function()
   end
 end, emu.callbackType.exec, M.CMD_DISPATCH, M.CMD_DISPATCH, emu.cpuType.gba, emu.memType.gbaMemory)
 
+-- The AI BUILDS inside driver state 4 (0x08066EC8): its writer 0x08067A48
+-- calls the purchase routine 0x080243DC(x, y, type) directly, so a build
+-- never passes the command dispatcher and the record trace cannot show
+-- it. An exec hook on the purchase's entry logs the arguments (r0 x, r1
+-- y, r2 RAM type), the funds and the RNG state as it is called.
+M.PURCHASE = 0x080243DC
+M.builds = nil
+emu.addMemoryCallback(function()
+  if not M.builds then return end
+  local ok, st = pcall(emu.getState)
+  if not ok then return end
+  local side = M.r16(0x030036AC)
+  M.builds[#M.builds + 1] = {
+    x = tonumber(st["cpu.r0"]) or -1, y = tonumber(st["cpu.r1"]) or -1,
+    type = tonumber(st["cpu.r2"]) or -1, lr = tonumber(st["cpu.r14"]) or -1,
+    funds = M.r32(M.army_addr(side)), rng = M.r32(0x03001D30),
+    draws = M.draws and #M.draws or 0, cmds = M.trace and #M.trace or 0,
+    state = M.r16(0x030051B0), mode = M.r8(0x030050F0 + 7),
+    -- what the foot-cap check 0x08068824(0) sums: army record 0's bytes
+    -- +0xC..+0xF; and the side flags byte the transport choosers test
+    a0 = { M.r8(M.army_addr(0) + 0xC), M.r8(M.army_addr(0) + 0xD),
+           M.r8(M.army_addr(0) + 0xE), M.r8(M.army_addr(0) + 0xF) },
+    flags_e4 = M.r8(0x030050E4), day = M.r32(M.TURN),
+  }
+end, emu.callbackType.exec, M.PURCHASE, M.PURCHASE, emu.cpuType.gba, emu.memType.gbaMemory)
+-- the AI driver's state (0x030051B0): every write, with the writer's PC
+M.state_log = nil
+emu.addMemoryCallback(function(addr, value)
+  if not M.state_log then return end
+  local ok, st = pcall(emu.getState)
+  local pc = ok and (tonumber(st["cpu.r15"]) or -1) or -1
+  local last = M.state_log[#M.state_log]
+  if last and last.v == value and last.pc == pc then last.n = last.n + 1; return end
+  M.state_log[#M.state_log + 1] = { v = value, pc = pc, n = 1, cmds = M.trace and #M.trace or 0,
+                                    builds = M.builds and #M.builds or 0 }
+end, emu.callbackType.write, 0x030051B0, 0x030051B0, emu.cpuType.gba, emu.memType.gbaMemory)
+
 -- End the human's turn and let the game play the next side (whose control
 -- byte the case wrote to 2), polling until the turn comes back; the trace
 -- is returned on the step result.
@@ -318,6 +416,8 @@ function M.cpu_turn(s)
   local before = M.active_player()
   M.trace = {}
   M.draws = {}
+  M.builds = {}
+  M.state_log = {}
   M.cpu_side = s.cpu
   -- each side's byte AS RELOADED is what comes back (M.control_orig, read
   -- in run_case before any write): a 0 (no controller, the empty P3/P4
@@ -351,8 +451,12 @@ function M.cpu_turn(s)
   end
   r.commands = M.trace
   r.draws = M.draws
+  r.builds = M.builds
+  r.state_log = M.state_log
   M.trace = nil
   M.draws = nil
+  M.builds = nil
+  M.state_log = nil
   M.cpu_side = nil
   for p = 1, 4 do M.w8(M.army_addr(p) + 0x1B, M.control_orig[p]) end
   if not back then r.why = string.format("P%d never handed the turn back (%s)", cpu, last); return r end
@@ -532,6 +636,8 @@ function M.run_case(c, states)
       result.drop_note = r.drop_note
       result.commands = r.commands
       result.draws = r.draws
+      result.builds = r.builds
+      result.state_log = r.state_log
       result.cpu_player = r.cpu_player
       if r.ok then
         M.wait(60)

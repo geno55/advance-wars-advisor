@@ -94,12 +94,16 @@ Three decisions, made once so they do not get re-argued:
    the forecast with its luck draws, the mover, the threat grid, the
    profile (`data/aw1_ai.json`, `tools/extract_ai.py`) -- reproduces all
    seven traced turns record for record and draw for draw and leaves the
-   game's board (`tests/test_cpu.py`). Not yet: movement modes 2, 3, 5, 6,
-   7, the Lander, the TCopter, the loaded transport's move, the join and
-   retreat pre-steps, firing a power, building -- each raises
-   NotImplementedError naming its routine, and each needs a trace that
-   enters it (a map with a factory, an air or sea side, a damaged or dry
-   unit) before it is ported.
+   game's board (`tests/test_cpu.py`). **Building is read and ported**
+   (DERIVATION 47): the CPU buys at the end of its turn through five
+   choosers over the profile's own bytes, and twelve build traces --
+   a factory inserted into the game's property list -- reproduce purchase
+   for purchase, mode for mode and draw for draw. Not yet: movement modes
+   2, 3, 5, 6, 7, the Lander, the TCopter, the loaded transport's move,
+   the join and retreat pre-steps, firing a power, the TCopter and Lander
+   purchases -- each raises NotImplementedError naming its routine, and
+   each needs a trace that enters it (an air or sea side, a damaged or
+   dry unit) before it is ported.
 
 4. **The enemy reply.** The planner's lookahead scores against a modelled
    reply instead of worst-case focus fire: `cpu.py` when the opponent is the

@@ -14,9 +14,14 @@ so, relative to a record base of 0x284A30:
 
     +0x00   16 header bytes -- see HEADER_NOTES, only partly identified
     +0x10   3 x u32  pointers to movement-cost tables, indexed by weather 0..2
-    +0x1C   24 x u32 pointers into the modifier pool at 0x28491C,
+    +0x1C   25 x u32 pointers into the modifier pool at 0x28491C,
             indexed by the 1-BASED RAM unit type (so entry i is unit id i-1,
-            the same off-by-one as the damage matrices)
+            the same off-by-one as the damage matrices). Entry 0 is the
+            unused id -1; entry 24, the last word of the sub-block at
+            +0x7C, is the Sub (RAM type 24). An earlier version of this
+            file read 24 entries and silently dropped the Sub -- Max's
+            150/170, Sami's 90, Grit's and Eagle's 80 and Sonja's vision
+            bonus all apply to it (DERIVATION 46).
     +0x80   the whole thing again: the second stat sub-block
 
 Pool entries are 12 bytes with attack at +5 and defence at +6.
@@ -155,7 +160,7 @@ def main(rom_path, out_path):
             weather.append((p - MOVECOST_0) // MOVECOST_STRIDE)
         mods = {}
         vision = {}
-        for i in range(24):
+        for i in range(25):                 # +0x1C .. +0x7F, see docstring
             p = u32(addr + 0x1C + i * 4) - ROM_BASE
             check(POOL <= p < POOL + POOL_LEN,
                   f"modifier pointer {p:#x} is outside the pool")
@@ -259,8 +264,8 @@ def main(rom_path, out_path):
     check(g.get((115, 90)) == AIR,
           f"Eagle (co=8) should boost exactly the air units, got "
           f"{sorted(g.get((115, 90), []))}")
-    check(g.get((80, 100)) == NAVAL - {"Sub"},
-          f"Eagle (co=8) should weaken the surface navy, got "
+    check(g.get((80, 100)) == NAVAL,
+          f"Eagle (co=8) should weaken every naval unit, the Sub included, got "
           f"{sorted(g.get((80, 100), []))}")
 
     # Drake: rain costs him nothing, and his air arm is weak.
@@ -303,16 +308,17 @@ def main(rom_path, out_path):
     check(records[4]["power"]["weather_tables"] == [3, 4, 5],
           "Sami's power block should select the foot-cost-1 movement tables")
 
-    # Sonja, and only Sonja: +1 vision on every type but Sub, +3 under power,
-    # and her power block alone sets header[1] -- the concealment-pierce flag
-    # the fog marker tests at 0x0801EA60. Header[0]=0 is her HP-hide.
+    # Sonja, and only Sonja: +1 vision on EVERY type, the Sub included, +3
+    # under power, and her power block alone sets header[1] -- the
+    # concealment-pierce flag the fog marker tests at 0x0801EA60. Header[0]=0
+    # is her HP-hide. ("Sub spared" was the 24-entry read's artefact.)
     for co in range(N):
         for blk in ("normal", "power"):
             vb = records[co][blk]["vision_bonus"]
             if co == 7:
                 want = 3 if blk == "power" else 1
-                check(set(vb.values()) == {want} and "Sub" not in vb,
-                      f"Sonja {blk} vision bonus should be +{want}, Sub spared")
+                check(set(vb.values()) == {want} and set(vb) == set(UNITS.values()),
+                      f"Sonja {blk} vision bonus should be +{want} on all 18 types")
             else:
                 check(vb == {}, f"co {co} {blk} should have no vision bonus")
     check(records[7]["normal"]["header"][0] == 0

@@ -26,6 +26,12 @@ from engine.state import load                                 # noqa: E402
 FIX = ROOT / "tests" / "fixtures" / "cpu"
 EXACT = ["vs15-p1-cpu", "vs15-p1-cpu-max", "vs15-p1-cpu-power",
          "vs15-p1-cpu-build", "a15-p2-cpu", "vs15-p2-cpu"]
+# The build traces (DERIVATION 47): a factory inserted into the game's
+# property list, P1 as the CPU, one variable each.
+BUILDS = ["build-b1-base", "build-b2-two-bases", "build-b3-broke",
+          "build-b4-day10", "build-b5-airport", "build-b6-port",
+          "build-b7-enemy-tanks", "build-b8-five-foot", "build-b9-max",
+          "build-b10-kanbei", "build-b11-rich-tanks", "build-b12-fallback-rockets"]
 
 
 def trace(name):
@@ -108,7 +114,7 @@ class TestTheReplay(unittest.TestCase):
 
 class TestThePrediction(unittest.TestCase):
     """engine/cpu.predict against every trace (tools/cpu_trace.py predict)."""
-    ALL = EXACT + ["vs15-p1-cpu-fog"]
+    ALL = EXACT + ["vs15-p1-cpu-fog"] + BUILDS
 
     def test_every_trace_is_predicted_record_for_record(self):
         for name in self.ALL:
@@ -172,3 +178,79 @@ class TestWhatTheCpuDidNotDo(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class TestBuilding(unittest.TestCase):
+    """Driver state 4 (DERIVATION 47): the purchases the game made, hooked
+    at 0x080243DC, against the port's -- type, factory, and the mode byte
+    the new unit is given -- and the RNG draws the choosers make."""
+
+    def test_every_build_trace_is_predicted_purchase_for_purchase(self):
+        for name in BUILDS:
+            with self.subTest(name=name):
+                r = cpu_trace.predict(trace(name))
+                self.assertEqual(r["predicted_builds"], r["traced_builds"], "\n".join(r["log"]))
+
+    def test_the_build_happens_after_the_last_unit_and_draws_twice(self):
+        """b1: the two draws after the Artillery's own random are the
+        Infantry/Mech roll (0x0806702A) and the mode roll (0x08067BD8)."""
+        t = trace("build-b1-base")
+        self.assertEqual([hex(d["lr"]) for d in t["draws"][-2:]], ["0x806702f", "0x8067bdd"])
+        self.assertEqual(t["builds"][0]["state"], 5)
+        r = cpu_trace.predict(t)
+        self.assertEqual([d["why"] for d in r["turn"].draws[-2:]],
+                         ["build foot roll", "build mode roll Infantry"])
+
+    def test_the_foot_share_cap_hands_the_second_base_to_the_counter_chooser(self):
+        """b2: one Infantry makes five foot soldiers of nine (over
+        header[0] and header[2]), so the second Base goes to the counter
+        chooser: the enemy Recon is the least-answered type and the MdTank
+        (primary 105 against it) is within 50% of the 37000 in the bank."""
+        t = trace("build-b2-two-bases")
+        self.assertEqual([(b["type"], b["x"], b["y"]) for b in t["builds"]],
+                         [(1, 2, 4), (3, 1, 4)])
+        r = cpu_trace.predict(t)
+        self.assertIn("build counter: MdTank vs Recon", "\n".join(r["turn"].log))
+
+    def test_with_less_in_the_bank_the_fallback_buys_by_share(self):
+        """b12: the same five foot soldiers with 28500 at the shop: the
+        MdTank is over 50% of the funds, no other enemy type scores, and
+        the fallback (0x08067624) buys the heaviest of the zero-share types
+        -- Rockets, weight 40, over MdTank 10, Recon 9 and AntiAir 5."""
+        t = trace("build-b12-fallback-rockets")
+        self.assertEqual([(b["type"], b["funds"]) for b in t["builds"]], [(11, 28500)])
+        r = cpu_trace.predict(t)
+        self.assertIn("build fallback: Rockets", "\n".join(r["turn"].log))
+
+    def test_the_day_scales_the_mech_chance(self):
+        """b4: day 11 makes min(80, 11 x header[3]) = 55 percent; the roll
+        landed under it and a Mech was bought."""
+        t = trace("build-b4-day10")
+        self.assertEqual(t["builds"][0]["type"], 2)
+        r = cpu_trace.predict(t)
+        self.assertEqual(r["predicted_builds"][0][2], 2)
+
+    def test_air_and_naval_rows_of_weight_zero_buy_nothing(self):
+        for name in ("build-b5-airport", "build-b6-port"):
+            with self.subTest(name=name):
+                t = trace(name)
+                self.assertEqual(t["builds"], [])
+                self.assertEqual(cpu_trace.predict(t)["predicted_builds"], [])
+
+    def test_kanbei_pays_the_value_multiplier(self):
+        t = trace("build-b10-kanbei")
+        r = cpu_trace.predict(t)
+        self.assertEqual(r["turn"].builds[0]["price"], 1200)
+        before, after = load(FIX / t["before"]), load(FIX / t["after"])
+        # 19000 in the bank, the HQ and the written Base paying 9500 each
+        self.assertEqual(after.army(1).funds, before.army(1).funds + 19000 - 1200)
+
+    def test_the_mode_roll_follows_the_rows_cumulative_table(self):
+        """Rockets' row is [0, 0, 90, 90, 100, 0, 0]: a roll under 90 gives
+        mode 3 (b12); the MdTank's [20, 30, 50, 70, 80, 236, 0] gives 6 to a
+        roll of 80 or more (b8); a foot soldier's 0xFF row gives 0 (b1)."""
+        for name, mode in (("build-b12-fallback-rockets", 3), ("build-b8-five-foot", 6),
+                           ("build-b1-base", 0)):
+            with self.subTest(name=name):
+                t = trace(name)
+                self.assertEqual(t["builds"][0]["mode"], mode)

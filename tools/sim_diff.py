@@ -248,6 +248,12 @@ def lua_writes(writes) -> list:
             out.append({"kind": "repair_free", "value": int(w["repair_free"])})
         elif "rate" in w:
             out.append({"kind": "rate", "value": int(w["rate"])})
+        elif "proplist" in w:
+            x, y = w["proplist"]
+            out.append({"kind": "proplist", "x": x, "y": y, "id": w["id"]})
+        elif "raw" in w:
+            out.append({"kind": "raw", "addr": int(w["raw"], 0), "size": w.get("size", 1),
+                        "value": int(w["value"])})
         else:
             raise ValueError(f"unknown write {w}")
     return out
@@ -314,6 +320,12 @@ def py_writes(board, writes):
             kw["funds_per_property"] = int(w["rate"])
         elif "rng" in w:
             pass
+        elif "proplist" in w:
+            pass                      # the terrain write beside it is the board's view
+        elif "raw" in w:
+            if int(w["raw"], 0) == 0x03004420:
+                kw["day"] = int(w["value"])
+            # any other raw cell is outside the board's model
         else:
             raise ValueError(f"unknown write {w}")
     return dataclasses.replace(board, units=list(units.values()),

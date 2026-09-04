@@ -192,6 +192,11 @@ function M.state_json(opts)
   end
   w_(table.concat(rows, ",\n"))
   w_("  ],")
+  -- army record 0's +0xC..+0xF (0x08068824 sums them for the AI's
+  -- foot-share cap) and the AI side-flags byte (DERIVATION 47)
+  local a0 = M.army_addr(0)
+  w_(string.format('  "army0": [%d, %d, %d, %d], "flags_e4": %d,',
+    M.r8(a0 + 0xC), M.r8(a0 + 0xD), M.r8(a0 + 0xE), M.r8(a0 + 0xF), M.r8(0x030050E4)))
 
   w_('  "units": [')
   rows = {}

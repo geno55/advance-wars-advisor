@@ -236,4 +236,7 @@ demands them), is `docs/ROADMAP.md`. The list below is the inventory.
 - Tests: ~~invariance and scenario tests for the planner~~ (delivered);
   ~~the `sim_diff` corpus and its result log as checked-in fixtures once it
   runs clean~~ (delivered: `tests/fixtures/sim_diff/`, `tests/test_sim_diff.py`).
+- Step 3's last piece, the CPU's building, is read and ported (DERIVATION
+  47): `engine/cpu_ai.py` build section, `tests/fixtures/cpu/build-b*`,
+  `harness/mesen_drive.lua`'s `proplist` write and purchase hook.
 - Single-sentence-finding commit subjects, straight to main, push.

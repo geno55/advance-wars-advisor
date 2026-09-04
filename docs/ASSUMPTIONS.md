@@ -192,7 +192,8 @@ fixtures, and in this file's git history.
   non-foot units; Sami's block swaps to movement tables where foot pays 1
   everywhere; Grit's indirects reach max range +2 (measured 5, refused 6).
 - **Sonja, whole** (DERIVATION 28). Vision: pool entry `+8` is a per-unit
-  vision adjustment the fog marker adds — Sonja +1 on everything but Sub,
+  vision adjustment the fog marker adds — Sonja +1 on every type (the Sub
+  too: the 24-entry read that spared it was one pointer short, DERIVATION 46),
   +3 under Enhanced Vision — and her power block's header byte 1 makes the
   marker skip wood/reef concealment entirely. Both measured against the
   game's own count array, 150/150 tiles on three captures
@@ -436,27 +437,36 @@ A16, both born the day action enumeration was written.
   and now read (DERIVATION 45): the AI path has no forecast screen before
   its battle, so the battle's own two draws are the first it makes.
   `engine/cpu.py` `AI_STRIKE_DRAW`.
-- **The CPU's predictor covers what the seven traces exercised**
-  (DERIVATION 45): the foot, direct, indirect, empty-APC, loaded-APC drop
-  and supply passes, movement mode 4, the power predicates. Modes 2, 3,
-  5, 6, 7, the Lander, the TCopter, the loaded transport's move, the join
-  and retreat pre-steps, firing a power and building raise
-  NotImplementedError naming the routine. Kill by: traces that enter
-  them -- a damaged foot unit, a low-fuel unit, an air or sea side, a
-  map with a factory -- then the port.
-- **The CPU did not build on a written Base** (DERIVATION 44): the build
-  phase walks the property list, which a terrain write never joins, and
-  the AI's build logic (driver states 4/5) is untraced until a fixture
-  with a real factory exists. Kill by: a parked state on a map with a
-  Base, both sides human. The unfired meter is explained: Andy's AI
-  predicate wants a damaged unit (DERIVATION 45).
+- **The CPU's predictor covers what the traces exercised** (DERIVATION
+  45, 47): the foot, direct, indirect, transport and supply passes,
+  movement mode 4, the power predicates, and now building -- the five
+  choosers, the mode roll, the factory ranking -- on twelve build traces.
+  Still raising NotImplementedError with the ROM address: movement modes
+  2, 3, 5, 6, 7, the Lander pass, the TCopter, the loaded transport's
+  move, the join and retreat pre-steps, firing a power, campaign
+  profiles, and within building the TCopter and Lander purchases.
+- **Income is a cached sum.** The walker that fills army `+0x08` (and
+  the per-type counters `+0xC..+0xF`) does not run at turn start; the
+  payer pays `+0x08` as it stands (DERIVATION 47, measured: a written
+  Base earned nothing until the cache was bumped, and the CPU shopped
+  with 9500 less than the grid says). `engine/economy.py` recomputes
+  from the grid, which equals the cache on every board the game built
+  itself -- the walker runs at map load and, by every natural fixture,
+  at capture. Kill the "at capture" half by: a capture trace whose
+  after-dump income field disagrees with the grid. (The CPU's building
+  on a written Base, DERIVATION 44's open item, is closed the same way:
+  the AI's factory list walks the property list, and a record inserted
+  there is bought on -- DERIVATION 47. The unfired meter is explained:
+  Andy's AI predicate wants a damaged unit, DERIVATION 45.)
 - **The funds-rate cell is a mirror, not the payer's source.** Writing 200
   into `0x03004338` and ending the turn paid 9500 (DERIVATION 43,
   `end-turn-repair-broke`), though DERIVATION 39 read the paying body as a
   load from that cell and the cell's value matches the income on every
   natural board. `economy.funds_rate` derives from an army's income field
-  first for this reason. Kill by: a write-watch on the payer's load at
-  `0x08025186`, which names the address it really reads.
+  first for this reason. Explained by DERIVATION 47: the load at
+  `0x08025186` sits inside the walker's per-tile helper, and the walker
+  does not run at turn start -- the payer adds the cached `+0x08`, so the
+  cell only matters when the cache is rebuilt.
 - **Fog over a submerged sub.** In the clear the enemy's grid expands
   through a concealed sub (DERIVATION 41); under fog a hidden tile is
   entered but never expanded through (DERIVATION 38). Which rule the grid

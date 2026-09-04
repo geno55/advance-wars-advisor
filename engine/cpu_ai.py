@@ -45,12 +45,15 @@ from dataclasses import dataclass, field
 from typing import Dict, List, Optional, Tuple
 
 try:
-    from . import co as co_mod, damage, pathing, rng as rng_mod, sim
+    from . import actions, co as co_mod, damage, pathing, production
+    from . import rng as rng_mod, sim
     from .cpu import Command
 except ImportError:                     # engine/ on the path
+    import actions
     import co as co_mod
     import damage
     import pathing
+    import production
     import rng as rng_mod
     import sim
     from cpu import Command
@@ -120,9 +123,23 @@ class Context:
     settings_6: int = 0                 # nonzero: the forecast rolls no luck
     settings_8: int = 1                 # nonzero: CO-specific stat blocks
     fog: bool = False
+    # The game's own property list, [(terrain id, x, y)] in its y-then-x
+    # order (0x03004500): the AI's factory list walks it, not the terrain
+    # grid, so a written Base joins the AI's shopping only through it.
+    properties: Optional[list] = None
+    # Army record 0's bytes +0xC..+0xF, summed (+1) by 0x08068824 as the
+    # divisor of the foot-share cap. Zero on every dump so far.
+    army0: List[int] = field(default_factory=lambda: [0, 0, 0, 0])
+    # 0x030050E4 as the dump read it -- informational only: the AI's
+    # state 0 recomputes it from the map (Turn.side_flags).
+    flags_e4: int = 0
 
     @classmethod
-    def from_dump(cls, path) -> "Context":
+    def from_dump(cls, path, player: Optional[int] = None) -> "Context":
+        """`player` is the side the CPU will play: its CO picks the
+        profile row (0x0806826C reads the ACTIVE army's +0x1D at the
+        CPU's own state 0). A dump taken on the human's turn names the
+        human as active, so the caller says who is about to move."""
         d = json.loads(pathlib.Path(path).read_text(encoding="utf-8"))
         t = tables()
         ai = {u["slot"]: list(u.get("ai", [0, 0, 0])) for u in d["units"]}
@@ -141,10 +158,14 @@ class Context:
         if prof is None or all(b == 0 for b in prof["header"]):
             prof = profile_for(d.get("map_id", 0),
                                {a["player"]: a.get("co_id", 1) for a in d["armies"]},
-                               d.get("active_player", 1))
+                               player or d.get("active_player", 1))
+        props = d.get("properties")
         return cls(ai=ai, sides=sides, profile=prof,
                    settings_6=d.get("settings_6", 0), settings_8=d.get("settings_8", 1),
-                   fog=bool(d.get("fog", False)))
+                   fog=bool(d.get("fog", False)),
+                   properties=[(p["t"], p["x"], p["y"]) for p in props] if props else None,
+                   army0=list(d.get("army0", [0, 0, 0, 0])),
+                   flags_e4=int(d.get("flags_e4", 0)))
 
 
 def profile_for(map_id: int, co_ids: Dict[int, int], player: int) -> dict:
@@ -176,11 +197,13 @@ class Turn:
     rng: int
     ctx: Context
     commands: List[Command] = field(default_factory=list)
+    builds: List[dict] = field(default_factory=list)            # state 4's purchases
     draws: List[dict] = field(default_factory=list)
     warnings: List[str] = field(default_factory=list)
     targeted: Dict[int, int] = field(default_factory=dict)      # 0x03005160
     counters: Dict[int, List[int]] = field(default_factory=dict)  # 0x08282CC4 +3..
     flags_5008: int = 0
+    _side_flags: Optional[int] = None                           # 0x030050E4, computed once
     behaviour: int = 0                                          # 0x030050DC
     subphase: int = 0                                           # 0x030051A0
     threat: Optional[Dict[Coord, int]] = None
@@ -892,7 +915,22 @@ class Turn:
         return False
 
     def ctx_flag_air(self) -> bool:
-        return False                                             # 0x030050E4 bit 0 unread
+        return bool(self.side_flags() & 1)                       # 0x030050E4 bit 0
+
+    def side_flags(self) -> int:
+        """0x030050E4, as state 0 computes it (0x080689A8): the OR over
+        EVERY tile of the map, whoever owns it, of the 5-byte table at
+        0x0811A92C indexed by the terrain's factory class (0x083B7DDC)
+        >> 1 -- so any Airport on the map sets bit 0 (foot soldiers then
+        ask for TCopters) and any Port bit 1 (the Lander buy)."""
+        if self._side_flags is None:
+            t = tables()
+            f = 0
+            for x, y in self.scan():
+                cls = t["capture_bonus"][self.board.terrain[y][x] & 0x1F]
+                f |= t["side_flags"][cls >> 1]
+            self._side_flags = f
+        return self._side_flags
 
     def board_transport(self, unit):                            # 0x080665B8 / 0x08066664
         reach = self.own_reach(unit)
@@ -1177,6 +1215,7 @@ class Turn:
                 self.targeted.clear()
                 continue
             if name == "end":
+                self.build_pass()
                 break
             plan = {"foot_capture": (1, self.capture_pass),
                     "indirect_fire": (4, self.indirect_pass),
@@ -1207,6 +1246,390 @@ class Turn:
         return self.commands
 
 
+    # -- building: driver state 4 (0x08066EC8), once, after the last sub-phase --
+    #
+    # The AI buys at the END of its turn: the "end" sub-phase writes driver
+    # state 5, and the end-turn path runs 0x08066EC8 once before the
+    # human's turn (DERIVATION 47; the purchase is made directly by the
+    # writer 0x08067A48 -> 0x080243DC, never through the command
+    # dispatcher, which is why no command trace ever showed one). The
+    # parameters are the AI PROFILE itself: 0x08068346 copies the profile
+    # block to 0x0202370C and every chooser reads it through 0x083B7CE4 --
+    # header bytes 0..8 and, per unit type, the row's bytes 4..10 (the mode
+    # roll's cumulative table) and 11 (the weight).
+
+    def profile_byte(self, off: int) -> int:
+        """The profile block by flat offset: 16 header bytes, then a
+        12-byte row per RAM type at 4 + 12 * type."""
+        p = self.ctx.profile
+        if off < 16:
+            return p["header"][off]
+        t, j = divmod(off - 4, 12)
+        name = tables()["unit_stats"]
+        for n, s in name.items():
+            if s["type"] == t:
+                return p["units"][n][j]
+        return 0
+
+    def own_records(self) -> list:
+        return [u for u in self.board.units if u.player == self.player]
+
+    @staticmethod
+    def named(tid: int) -> Optional[str]:
+        """The unit name of a RAM type, None for the six vestigial ids
+        (4, 8, 9, 12, 13, 18) -- their damage rows and profile rows are
+        zero, so the choosers skip them where the ROM reads zeros."""
+        for n, s in tables()["unit_stats"].items():
+            if s["type"] == tid:
+                return n
+        return None
+
+    def count_type(self, tid: int) -> int:                   # 0x0805F0A4
+        return sum(1 for u in self.own_records() if type_id(u.type) == tid)
+
+    def count_class(self, cls: int) -> int:                  # 0x0805F000
+        return sum(1 for u in self.own_records() if stats(u.type)["ai_class"] == cls)
+
+    def count_move_mask(self, mask: int) -> int:             # 0x0805F050
+        return sum(1 for u in self.own_records() if stats(u.type)["move_class"] & mask)
+
+    def enemy_count_type(self, tid: int) -> int:             # 0x0805F0E4
+        sides = set(self.enemy_sides())
+        return sum(1 for u in self.board.units
+                   if u.player in sides and type_id(u.type) == tid)
+
+    def price(self, tid: int) -> int:                        # 0x080243DC's arithmetic
+        a = self.board.army(self.player)
+        cid = a.co_id if self.ctx.settings_8 else 1
+        return production.price(type_name(tid), cid, bool(a.power_active))
+
+    def factory_records(self) -> list:                       # 0x08067684
+        """The AI's factory list: every record of the game's property list
+        (0x03004500, y-then-x order) that is a Base/Airport/Port of the
+        active side with no unit on it -- as {x, y, cls, mark}, cls from
+        0x083B7DDC (Base 2, Airport 4, Port 6), mark 0x7F until ranked."""
+        b = self.board
+        props = self.ctx.properties
+        if props is None:
+            props = [(b.terrain[y][x], x, y) for x, y in self.scan()]
+        out = []
+        for t, x, y in props:
+            tid = b.terrain[y][x]
+            if tid not in (10, 11, 14) or b.owner[y][x] != self.player:
+                continue
+            if b.unit_at(x, y) is not None:
+                continue
+            out.append({"x": x, "y": y, "cls": tables()["capture_bonus"][tid], "mark": 0x7F})
+        return out
+
+    def factories_of(self, cls: int) -> int:                 # 0x080677B0
+        return sum(1 for r in self._factories if r["cls"] == cls and r["mark"] != 0xFE)
+
+    def build_pass(self) -> None:                            # 0x08066EC8
+        hdr = self.ctx.profile["header"]
+        param = 0
+        if self.board.day > 3:                               # 0x08067650
+            param = min(0x50, self.board.day * hdr[3])
+        self._factories = self.factory_records()
+        self._enemy_battleships = self.enemy_count_type(21)  # 0x03005014
+        self.log.append(f"-- build: {len(self._factories)} factory(ies), mech chance {param}")
+        for _ in range(len(self._factories)):
+            self.build_one(param)
+
+    def build_one(self, param: int) -> None:                 # 0x08066F10
+        total = len(self.own_records())                      # 0x030050A4
+        foot = self.count_class(1)                           # 0x03005104
+        chosen = self.choose_foot(param, total, foot)        # 0x08066FCC
+        if chosen == 0:
+            chosen = self.choose_transport(foot)             # 0x08067064
+        if chosen == 0:
+            chosen = self.choose_counter(total)              # 0x080671E0
+        if chosen == 0:
+            chosen = self.choose_sub()                       # 0x080671AC
+        if chosen == 0:
+            chosen = self.choose_fallback(total)             # 0x08067624
+        if chosen:
+            self.write_build(chosen, total)                  # 0x08067A48
+
+    def choose_foot(self, param: int, total: int, foot: int) -> int:
+        """0x08066FCC: a foot soldier unless the foot share is over the
+        profile's caps; Mech with `param` percent, else Infantry."""
+        if self.factories_of(2) == 0:
+            return 0
+        hdr = self.ctx.profile["header"]
+        pct = div(foot * 100, total) if total else 0
+        if foot >= hdr[0] and pct > hdr[2]:
+            r2 = sum(self.ctx.army0[:4]) + 1                 # 0x08068824(0)
+            if r2 == 0:
+                return 0
+            if div(foot * 100, r2) > hdr[1]:
+                return 0
+        roll = self.draw("build foot roll") % 100
+        return 2 if roll < param else 1
+
+    def choose_transport(self, foot: int) -> int:            # 0x08067064
+        hdr = self.ctx.profile["header"]
+        flags = self.side_flags()
+        if flags & 1 and self.factories_of(4):               # 0x080670A0 TCopter
+            c = self.count_type(20)
+            ratio = 100 if foot == 0 else div(c * 100, foot)
+            if ratio < hdr[4]:
+                return 20
+        if self.factories_of(2):                             # 0x080670EC APC
+            c = self.count_type(7)
+            ratio = 100 if foot == 0 else div(c * 100, foot)
+            if ratio < (hdr[5] if flags & 1 else hdr[6]):
+                return 7
+        if flags & 2 and self.factories_of(6):               # 0x08067154 Lander
+            c = self.count_type(23)
+            ground = self.count_move_mask(7)
+            ratio = 100 if ground == 0 else div(c * 100, ground)
+            if ground > self.profile_byte(0x22) and ratio < hdr[7]:
+                return 23
+        return 0
+
+    def attack_mods(self, tid: int) -> tuple:
+        """(pool attack, universal attack) of the active side's CO for a
+        type -- record 1's when the CO gate (settings +0x08) is off."""
+        a = self.board.army(self.player)
+        cid = a.co_id if self.ctx.settings_8 else 1
+        power = bool(a.power_active)
+        try:
+            pool = co_mod.modifiers(cid, type_name(tid), power)[0]
+        except KeyError:
+            pool = 100
+        return pool, co_mod.universal(cid, power)[0]
+
+    def desire_table(self) -> Dict[int, int]:                # 0x08069748
+        """Per enemy type: its total hp less what our army's primary
+        weapons deal it, CO-modified -- the enemy type we are least able
+        to answer scores highest."""
+        enemy_hp: Dict[int, int] = {}
+        own_hp: Dict[int, int] = {}
+        sides = set(self.enemy_sides())
+        for u in self.board.units:
+            if u.player not in self.ctx.sides:
+                continue
+            d = enemy_hp if u.player in sides else own_hp
+            d[type_id(u.type)] = d.get(type_id(u.type), 0) + u.hp
+        prim = damage.tables()["primary"]
+        out: Dict[int, int] = {}
+        for k in range(1, 25):
+            v = enemy_hp.get(k, 0)
+            if v == 0:
+                out[k] = 0
+                continue
+            for j in range(1, 25):
+                nj, nk = self.named(j), self.named(k)
+                base = prim.get(nj, {}).get(nk, 0) if nj and nk else 0
+                if base and own_hp.get(j):
+                    pool, uni = self.attack_mods(j)
+                    m = div(div(base * pool, 100) * uni, 100)
+                    v -= own_hp[j] * m
+            out[k] = ((v + 0x8000) & 0xFFFF) - 0x8000       # stored as u16, read as s16
+        return out
+
+    def choose_counter(self, total: int) -> int:             # 0x080671E0
+        """The buildable, affordable type with the best CO-modified base
+        damage against the most under-answered enemy type; indirects only
+        under their share cap, nothing over profile[0x23]% of the funds."""
+        ind_pct = 100 if total == 0 else div(self.count_class(4) * 100, total)
+        desire = self.desire_table()
+        prim = damage.tables()["primary"]
+        funds = self.board.army(self.player).funds
+        while True:
+            best, target = 0, 0
+            for k in range(1, 25):                           # strict >, first wins
+                if desire[k] > best:
+                    best, target = desire[k], k
+            if target == 0:
+                return 0
+            thr = 0x28 if best > 100 else div(best, 3)
+            score = {}
+            for i in range(24):
+                t = i + 1
+                if self.profile_byte(0x1B + 12 * i) == 0 or not self.named(t):
+                    score[t] = 0
+                    continue
+                base = prim.get(self.named(t), {}).get(self.named(target), 0)
+                if base == 0:
+                    score[t] = 0
+                    continue
+                pool, uni = self.attack_mods(t)
+                v = div(div(base * pool, 100) * uni, 100)
+                score[t] = (v & 0xFF) if v >= thr else 0
+            while True:
+                pick, top = 0, 0
+                for t in range(1, 25):                       # strict >, first wins
+                    if score[t] > top:
+                        top, pick = score[t], t
+                if pick == 0:
+                    break
+                score[pick] = 0
+                mc = stats(type_name(pick))["move_class"]
+                cls = 4 if mc == 0x10 else 6 if mc == 0x20 else 2
+                price = self.price(pick)
+                if self.factories_of(cls) == 0 or price > funds:
+                    continue
+                if stats(type_name(pick))["ai_class"] == 4 and ind_pct > self.profile_byte(0x21):
+                    pick = 0
+                    break
+                if (price * 100) // funds > self.profile_byte(0x23):
+                    pick = 0
+                    break
+                self.log.append(f"  build counter: {type_name(pick)} vs {type_name(target)}")
+                return pick
+            desire[target] = 0
+
+    def choose_sub(self) -> int:                             # 0x080671AC
+        if self._enemy_battleships > self.count_type(24) and self.factories_of(6):
+            return 24
+        return 0
+
+    def choose_fallback(self, total: int) -> int:            # 0x08067624
+        """0x080677EC / 0x08067850 / 0x08067978: the type furthest under
+        its profile weight -- share (per mille of the army) over weight --
+        among the buildable and affordable, if that ratio is at most
+        header[8]; ties go to the heaviest weight."""
+        hdr = self.ctx.profile["header"]
+        funds = self.board.army(self.player).funds
+        ratio = {}
+        for i in range(24):
+            t = i + 1
+            w = self.profile_byte(0x1B + 12 * i)
+            if w == 0:
+                ratio[t] = 0xFF
+                continue
+            share = div(1000 * self.count_type(t), total) if total else 0
+            ratio[t] = div(10 * share, w) & 0xFFFF
+        for t in range(1, 25):                               # 0x08067850
+            cls = tables()["behaviour_by_type"][t]
+            if not self.named(t) or self.factories_of(cls) == 0 or self.price(t) > funds:
+                ratio[t] = 0xFF
+        low, pick = 0xFF, 0                                  # 0x08067978
+        for t in range(1, 25):
+            v = ((ratio[t] + 0x8000) & 0xFFFF) - 0x8000
+            if v < low:
+                low, pick = v, t
+        if low > hdr[8]:
+            return 0
+        ties = [t for t in range(1, 25) if ((ratio[t] + 0x8000) & 0xFFFF) - 0x8000 == low]
+        if len(ties) <= 1:
+            return ties[0] if ties else pick
+        best_w, out = 0, pick
+        for t in ties:
+            w = self.profile_byte(0x1B + 12 * (t - 1))
+            if w > best_w:
+                best_w, out = w, t
+        self.log.append(f"  build fallback: {type_name(out)} (ratio {low}, ties {[type_name(t) for t in ties]})")
+        return out
+
+    def roll_mode(self, tid: int) -> int:                    # 0x08067BD0
+        """One draw, then the row's cumulative bytes 4..10: the first
+        entry above the roll names the mode; no table (0xFF) gives foot
+        soldiers 0 and everyone else 1."""
+        roll = self.draw(f"build mode roll {type_name(tid)}") % 100
+        row = [self.profile_byte(0x14 + 12 * (tid - 1) + j) for j in range(7)]
+        if row[0] == 0xFF:
+            return 0 if tid <= 2 else 1
+        for j, b in enumerate(row):
+            if b == 0xFF:
+                continue
+            if b > roll:
+                return j + 1
+        return 1
+
+    def rank_factories(self, tid: int, mode: int) -> bool:   # 0x08067D70
+        """Fill from every free factory of the type's class and write the
+        distance to its nearest candidate of `mode` into the record; False
+        as soon as one free factory has no candidate at all."""
+        b = self.board
+        want = tables()["behaviour_by_type"][tid]
+        base = 64 * (self.player - 1)
+        for r in self._factories:
+            if r["cls"] != want or b.unit_at(r["x"], r["y"]) is not None:
+                continue
+            grid = self.fill(r["x"], r["y"], 20 if mode == 4 else tid, 0x78, False)
+            best = None
+            for x, y in self.scan():
+                d = grid.get((x, y))
+                if d is None:
+                    continue
+                if mode == 0:
+                    tid_here = b.terrain[y][x]
+                    ok = tables()["property_terrain"][tid_here] == 1 and b.owner[y][x] != self.player
+                elif mode == 2:
+                    ok = b.terrain[y][x] in (0xB, 0xD)
+                else:
+                    u = b.unit_at(x, y)
+                    ok = u is not None and base <= u.slot < base + 64
+                    if ok and mode == 1:
+                        ok = u.type == "TCopter" and u.cargo == 0
+                    elif ok and mode == 3:
+                        ok = type_id(u.type) <= 2 and not (self.ai(u)[0] & 8)
+                    elif ok and mode == 4:
+                        ok = bool(tables()["t7D9C"][type_id(u.type)]) and not (self.ai(u)[0] & 8)
+                if ok and (best is None or d <= best):
+                    best = d
+            if best is None:
+                return False
+            r["mark"] = best & 0xFF
+        return True
+
+    def finish_factory(self, tid: int):                      # 0x080680D0
+        want = tables()["behaviour_by_type"][tid]
+        low, pick = 0xFE, None
+        for r in self._factories:
+            if r["mark"] < low and r["cls"] == want:
+                low, pick = r["mark"], r
+        if pick is None:
+            return None
+        pick["mark"] = 0xFE
+        return (pick["x"], pick["y"])
+
+    def pick_factory(self, tid: int):                        # 0x08067C38
+        modes = []
+        if tid == 20:
+            modes.append(3)
+        if tid == 23:
+            modes.append(4)
+        modes.append(0)
+        if tid <= 2:
+            modes.append(1)
+        if tables()["behaviour_by_type"][tid] != 2:
+            modes.append(2)
+        for m in modes:
+            if self.rank_factories(tid, m):
+                return self.finish_factory(tid)
+        want = tables()["behaviour_by_type"][tid]              # 0x08067CD6
+        for r in self._factories:
+            if r["mark"] <= 0xFD and r["cls"] == want:
+                r["mark"] = 0xFE
+                return (r["x"], r["y"])
+        return None
+
+    def write_build(self, tid: int, total: int) -> None:     # 0x08067A48
+        funds = self.board.army(self.player).funds
+        price = self.price(tid)
+        if price > funds or total > 0x3F:
+            return
+        mode = self.roll_mode(tid)
+        tile = self.pick_factory(tid)
+        if tile is None:
+            return
+        name = type_name(tid)
+        acts = [a for a in actions.build_actions(self.board, self.player, warnings=self.warnings)
+                if tuple(a.tile) == tile and a.build_type == name]
+        if not acts:
+            raise RuntimeError(f"predicted build of {name} at {tile} names no engine Action")
+        self.board = sim.apply(self.board, acts[0], warnings=self.warnings)
+        slot = acts[0].target.slot
+        self.ctx.ai[slot] = [0, 0, mode]
+        self.builds.append({"x": tile[0], "y": tile[1], "type": tid, "name": name,
+                            "mode": mode, "price": price, "slot": slot, "rng": self.rng})
+        self.log.append(f"  build: {name} at {tile} for {price}, mode {mode}, slot {slot}")
+
+
 # What the seven traces exercised and this port reproduces draw for draw
 # (tests/test_cpu.py): the foot passes (0x080646B0, 0x08064C94) with the
 # guard (0x080651AC), the property choice (0x08025DFC, 0x0805F150), the
@@ -1223,8 +1646,14 @@ class Turn:
 # TCopter (0x08060670); the loaded transport's move (0x08060708,
 # 0x080607C4); the join and retreat pre-steps (0x08065590, 0x080650B8);
 # the "nothing to do" fallbacks (0x0806606C); firing a power (0x0801C120);
-# campaign profiles (0x080683B0). Building is driver state 4/5, outside
-# this module and untraced.
+# campaign profiles (0x080683B0).
+#
+# Building (driver state 4, 0x08066EC8, run once at the turn's end) is
+# ported above and reproduces the eleven build traces (DERIVATION 47):
+# the factory list off the property list, the foot / transport / counter /
+# Sub / fallback choosers, the mode roll, the factory ranking, the
+# purchase. Untraced within it: the TCopter and Lander branches (flags
+# byte 0x030050E4 was 0 on every trace) and a nonzero army-0 divisor.
 
 
 def predict(board, player: int, ctx: Context, *, rng: Optional[int] = None) -> Turn:

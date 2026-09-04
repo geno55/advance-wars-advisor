@@ -99,7 +99,9 @@ def run_case(name: str, state: str, writes: list, setup: list, limit: int) -> di
            "before": f"{name}.before.json", "after": f"{name}.after.json",
            "commands": [dict(c, name=COMMAND_NAMES.get(c["id"], f"cmd{c['id']}"))
                         for c in (r.get("commands") or [])],
-           "draws": r.get("draws") or []}
+           "draws": r.get("draws") or [],
+           "builds": r.get("builds") or [],
+           "state_log": r.get("state_log") or []}
     (FIX / f"{name}.json").write_text(json.dumps(rec, indent=1), encoding="utf-8")
     return rec
 
@@ -145,19 +147,25 @@ def predict(rec: dict) -> dict:
     before_path = FIX / rec["before"]
     before = load(before_path)
     raw = json.loads(before_path.read_text(encoding="utf-8"))
-    ctx = cpu_ai.Context.from_dump(before_path)
+    ctx = cpu_ai.Context.from_dump(before_path, player=rec["cpu"])
     board = sim.end_turn(before)
     turn = cpu.predict(board, rec["cpu"], ctx, rng=raw["rng"])
     predicted = [(c.id, c.slot, c.tile, c.arg, c.arg2, c.rng) for c in turn.commands]
     traced = [(c["id"], c["slot"], (c["x"], c["y"]), c["b6"], c["b7"], c["rng"])
               for c in rec["commands"]]
+    # the purchases: the hook at 0x080243DC logs (x, y, type) and the
+    # record's +7, the mode the new unit is given (DERIVATION 47)
+    predicted_builds = [(b["x"], b["y"], b["type"], b["mode"]) for b in turn.builds]
+    traced_builds = [(b["x"], b["y"], b["type"], b["mode"]) for b in rec.get("builds") or []]
     logged = rec.get("draws") or []
     first_bad = None
     for i, d in enumerate(turn.draws):
         if i + 1 < len(logged) and logged[i + 1]["rng"] != d["rng"]:
             first_bad = i + 1
             break
-    return {"predicted": predicted, "traced": traced, "agree": predicted == traced,
+    return {"predicted": predicted, "traced": traced,
+            "agree": predicted == traced and predicted_builds == traced_builds,
+            "predicted_builds": predicted_builds, "traced_builds": traced_builds,
             "draws": len(turn.draws), "logged_draws": len(logged),
             "first_bad_draw": first_bad, "log": turn.log, "turn": turn}
 

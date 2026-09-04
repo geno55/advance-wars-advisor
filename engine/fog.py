@@ -83,7 +83,9 @@ and added three more:
 
   co_vision           the marker ADDS pool entry +8 (per unit type, per stat
                       block) to the stats vision. Sonja and only Sonja: +1 on
-                      everything but Sub, +3 under Enhanced Vision. Measured
+                      every type (the Sub included -- an earlier
+                      extraction read one pool entry short), +3 under
+                      Enhanced Vision. Measured
                       against the game's array on three captures.
   co_conceal_pierce   CO header byte 1 makes the marker skip the Wood/Reef
                       check entirely (0x0801EA60). Sonja's power block alone

@@ -473,6 +473,19 @@ lives.
   scenarios. None of them says the plans are good; `docs/ADVISOR.md` lists
   where the planner is naive and why no weight fixes it.
 
+**The CPU builds (ROADMAP step 3, DERIVATION 47).** The AI buys at the
+end of its turn, directly through the purchase routine -- never through the
+command dispatcher, which is why no command trace had shown one. Its
+parameters are the AI profile itself; its choosers are a foot soldier
+(Infantry or Mech by a day-scaled roll, under share caps), a transport by
+ratio, a counter to the enemy type our primaries answer worst, a Sub against
+Battleships, and a share-over-weight fallback; the new unit's movement mode
+is rolled from its profile row. `engine/cpu_ai.py` ports it and twelve
+traces (a factory inserted into the game's property list) reproduce every
+purchase, mode and RNG draw. Two things the rig learned on the way: the
+list's tile-to-record index has to move with an inserted record, and income
+is a cached sum the turn-start payer does not recompute.
+
 ## Layout
 
 ```

@@ -1470,6 +1470,8 @@ And the concealment check itself opens with **CO header byte 1**
 (`0x0801EA60`): nonzero, and the whole wood/reef clause is skipped. Sonja's
 power block alone sets it. So **Enhanced Vision = +3 vision on everything
 but Sub, plus sight INTO woods and reefs** — both halves data, not code.
+(The "but Sub" was an extraction artefact: the pool has 25 pointers, not
+24, and the Sub's is the last one. Section 46.)
 
 ### Measured against the game's own array
 
@@ -2963,3 +2965,193 @@ loaded transport's move; the TCopter; the join and retreat pre-steps
 to do" fallbacks `0x0806606C`; firing the power; building (driver states
 4/5); campaign profiles (`0x080683B0`). Each raises NotImplementedError
 with its address in `engine/cpu_ai.py`.
+
+## 46. The Sub the CO pool had been missing
+
+Found while building a differential corpus in parallel with section 43 on
+a machine without the emulator: validating a Cruiser-into-dived-Sub case
+raised `KeyError: 'Sub' has no modifier entry for Andy` out of
+`Attack.between`. The CO records' per-unit pool had **17 entries and no
+Sub**.
+
+`tools/extract_co.py` read `24` pointers from `+0x1C` with `uid = i - 1`.
+The index is 1-based, so the Sub (RAM type 24) is entry 24 -- at `+0x7C`,
+the LAST word of the 128-byte sub-block -- and the loop stopped one short.
+Read off the ROM (sha1 `15053499…`) for all twelve records, both blocks:
+every entry 24 points inside the pool at `0x28491C` and carries real
+values --
+
+| CO | Sub, normal | Sub, power | vision +8 |
+|---|---|---|---|
+| Max | 150/100 | 170/100 | -- |
+| Sami | 90/100 | 90/100 | -- |
+| Grit | 80/100 | 80/100 | -- |
+| Eagle | 80/100 | 80/100 | -- |
+| Sonja | 100/100 | 100/100 | +1 / +3 |
+| the rest | 100/100 | 100/100 | -- |
+
+-- exactly the pattern each CO applies to its other direct, naval or
+all-unit entries. Two of the extractor's own assertions had encoded the
+artefact ("Eagle weakens the surface navy", `NAVAL - {"Sub"}`; "Sonja's
+vision bonus, Sub spared"). Both are corrected, the extractor reads 25
+pointers, `data/aw1_co.json` is regenerated (18 entries per block), and
+the claim "+1 on everything but Sub" is retracted where it was repeated
+(`engine/co.py`, `engine/fog.py`, ASSUMPTIONS, section 28). No measured
+fixture changes: no capture ever had a Sub under a CO with a non-neutral
+pool, which is why nothing caught it.
+
+What the engine had been getting wrong, silently: a Max Sub's torpedo
+quoted at 100 instead of 150 (170 under power), Eagle's and Grit's Subs at
+100 instead of 80, Sami's at 100 instead of 90, a Sonja Sub's sight one
+short -- and every Sub attack with BOTH COs known raising instead of
+quoting, which the threat layer's `_modifier` had been swallowing to a
+neutral 100. Section 43's sixty-three drives did not exercise a Sub under
+a non-neutral CO, so the differential corpus is not contradicted; a
+Max-vs-dived-Sub drive is the case that would confirm the 150 live.
+
+## 47. The CPU builds: driver state 4, read and reproduced on twelve traces
+
+DERIVATION 45 left building unread: "driver states 4/5, outside this
+module and untraced". Both halves of that sentence turned out to be
+slightly wrong, and the second in a way that explains why no trace had
+ever shown a purchase.
+
+### Where the build is
+
+The AI driver's state table (`0x0806822C`) names six handlers: 0
+`0x08068368` setup, 1 `0x08068584` sub-phases, 2 `0x080642C8` decide, 3
+`0x080667A4` execute, **4 `0x08066EC8` build**, 5 `0x08068548` end. The
+"end" sub-phase writes 5, and the end-of-turn path runs the build routine
+once before handing over -- so the CPU buys at the END of its turn, after
+every unit has moved (the purchase hook logged driver state 5 on every
+trace). And the purchase is made directly: the build writer `0x08067A48`
+calls the purchase routine `0x080243DC(x, y, type)` itself. Nothing passes
+the command dispatcher, so the record trace of DERIVATION 44 cannot see a
+build; `harness/mesen_drive.lua` now hooks the purchase's entry (r0 x,
+r1 y, r2 type, the funds, the record's +7) and `tools/cpu_trace.py` ships
+the hits as `builds`. Command id 12 at the dispatcher is the LINK-play
+receiver of the same purchase (`0x08066B48`), not the AI's.
+
+### Where the parameters are
+
+`0x08068346` copies the AI profile block (`0x020235DC`, DERIVATION 45) to
+`0x0202370C`, and every chooser reads that copy through `0x083B7CE4`. The
+build has no table of its own: header bytes 0..8 and, per unit type, the
+row's bytes 4..10 (a cumulative table for the mode roll) and 11 (a
+weight) -- with three "globals" that are really the Mech row's bytes 5..7
+(offsets `0x21`..`0x23`). `data/aw1_ai.json` carried it all already. Two
+small tables are new: `0x0811A92C` (5 bytes) and `0x083B7D9C` (26).
+
+### The decision, per free factory
+
+`0x08067684` builds the factory list from the game's PROPERTY LIST
+(`0x03004500`): own Base/Airport/Port with no unit on it, class from
+`0x083B7DDC` (Base 2, Airport 4, Port 6). Then `0x08066F10` runs once per
+listed factory, with fresh unit counts each time, through five choosers
+in order until one names a type:
+
+1. **foot** (`0x08066FCC`): needs a Base. Unless the foot count is at least
+   header[0] AND its share of the army is over header[2] percent AND
+   100 x foot over (army record 0's bytes +0xC..+0xF, summed, +1 --
+   always 1 in VS) is over header[1]: one RNG draw, `draw % 100 <
+   min(80, day x header[3])` (day 4 on, 0 before) is a Mech, else an
+   Infantry.
+2. **transport** (`0x08067064`): a TCopter when the side flags' bit 0 is
+   set, an Airport is free, and TCopters are under header[4] percent of
+   the foot soldiers; an APC when a Base is free and APCs are under
+   header[5] (bit 0) or header[6] percent of the foot; a Lander when bit
+   1, a free Port, more ground units than byte 0x22, and Landers under
+   header[7] percent of them.
+3. **counter** (`0x080671E0`): `0x08069748` scores every ENEMY type as its
+   total hp less what our army's PRIMARY weapons deal it, CO-modified
+   (base x the pool attack / 100 x the universal attack / 100, times our
+   hp of each attacker type), stored as u16 and read as s16. Take the
+   highest positive; threshold 40 if it is over 100, else a third of it;
+   among our types with a nonzero weight, score each by the same modified
+   primary damage against that enemy type if it clears the threshold,
+   take the highest, and accept it if a factory of its class is free, it
+   is affordable, it is not an indirect while indirects exceed byte 0x21
+   percent of the army, and its price is at most byte 0x23 percent of the
+   funds. A candidate failing the first two is skipped for the next; one
+   failing the last two zeroes that enemy type and the search restarts
+   with the next-highest -- and with every other score negative, that is
+   the end of it.
+4. **Sub** (`0x080671AC`): when the enemy has more Battleships than we
+   have Subs and a Port is free.
+5. **fallback** (`0x08067624`): each type's share of the army in per
+   mille over its weight; types with weight 0, no free factory of their
+   class or a price over the funds read 255; the lowest wins if it is at
+   most header[8], ties going to the heaviest weight.
+
+The writer (`0x08067A48`) then re-checks the price and the 63-record cap,
+**draws once more for the new unit's movement mode** (`0x08067BD0`: the
+row's bytes 4..10 are cumulative percentages; the first over the roll
+names the mode, a row starting 0xFF gives foot soldiers 0 and others 1),
+picks the factory (`0x08067C38`: for each of a list of candidate modes --
+TCopter 3, Lander 4, everyone 0 = properties not ours, foot 1 = our empty
+TCopters, non-ground 2 = shoals and ports -- flood-fill 120 points from
+each free factory of the class and write its distance to the nearest
+candidate into the record; the first mode where every such factory has
+one wins, `0x080680D0` takes the nearest, ties to the earlier record),
+buys, and writes the mode into the new record's +0xB.
+
+Two things the map decides that the dumps do not carry. The side-flags
+byte `0x030050E4` is computed by the AI's setup (`0x080689A8`) as the OR,
+over EVERY tile of the map whatever its owner, of the 5-byte table at
+`0x0811A92C` `[0, 0, 1, 2, 4]` indexed by the terrain's factory class
+>> 1: an Airport anywhere on the map sets bit 0, a Port bit 1, terrain 18
+bit 2. Bit 0 also decides whether a foot soldier's ride check
+(`0x080630B8`, called from `0x08064D20`) asks for a TCopter or an APC --
+which is why, on the Airport trace, the APC that used to fetch Mech #4
+issued nothing: the Mech had asked for a TCopter. The port computes the
+byte the same way (`Turn.side_flags`).
+
+### The rig, and two things it had to learn
+
+The fixture map has no factory, so each case WRITES one: the terrain
+byte, and now a record in the property list, because the AI's factory
+list walks the list, not the grid. Two corrections followed from the
+first traces:
+
+- **The tile-to-record index.** `0x0805F150`'s per-property "taken"
+  counters live in the list records, reached through an s8 index per
+  tile at map `+0x193A`. Inserting a record shifts every later record, so
+  the driver shifts the index table with it; before it did, the counters
+  landed one record off and Infantry #1 walked to the HQ instead of the
+  city on every trace, same RNG.
+- **Income is cached.** The walker at `0x08025208` -- every tile, owner
+  from the terrain byte, `+0x08` accumulated and the per-type counters
+  `+0xC` Base, `+0xD` City, `+0xE` Airport, `+0xF` Port bumped -- does NOT
+  run at turn start: P1's income field read 9500 after the whole turn
+  with a P1 Base on the board, and the payer paid exactly that. It runs
+  at map load and, by every natural fixture agreeing with the grid, at
+  capture. So a written property has to join the cache too, and the
+  driver now adds the rate to `+0x08` and bumps the type's counter. The
+  first traces, with the cache stale, had the AI shopping with 9500 less
+  than the grid says -- and that is where a fallback Rockets (over 50%
+  of 28500) instead of a counter-chooser MdTank (under 50% of 37000)
+  came from. `engine/economy.py`'s grid-based figure is the cache's
+  value on any board the game built itself; it is stated as such in
+  ASSUMPTIONS.
+
+### Twelve traces, every one reproduced
+
+`tests/fixtures/cpu/build-b*`: one Base (an Infantry); two Bases (an
+Infantry, then -- five foot soldiers of nine being over both caps -- the
+counter chooser's MdTank against the least-answered enemy type, the
+Recon); funds 900 (income first, so an Infantry after all); day 11 (the
+Mech chance at 55%, and a Mech); an Airport and a Port (nothing: air and
+naval rows weigh 0 in this profile); an all-Tank enemy (foot first
+regardless); five foot soldiers (MdTank, mode 6 -- the roll landed in the
+236 band); Max and Kanbei (an Infantry, Kanbei's at 1200); 100,000 funds;
+and five foot soldiers with 28500 at the shop (the fallback's Rockets,
+weight 40 over MdTank, Recon and AntiAir at 0 share, mode 3). `engine/
+cpu_ai.py` reproduces the eleven purchases and the one refusal factory
+for factory, type for type, mode for mode, and every RNG draw (the foot
+roll at `0x0806702A`, the mode roll at `0x08067BD8`) lines up with the
+log; the after-boards match through `sim.apply` of the engine's own
+build action (`tests/test_cpu.py`).
+
+Not exercised: the TCopter and Lander purchases (the profile in play
+weighs them 0 and no trace had both the flag and the ratio), a nonzero
+army-record-0 divisor, and campaign profiles.

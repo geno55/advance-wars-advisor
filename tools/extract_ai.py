@@ -129,6 +129,14 @@ def extract(rom: bytes) -> dict:
         "t7E22": list(rom[0x3B7E22:0x3B7E22 + 25]),
         "t7E3B": list(rom[0x3B7E3B:0x3B7E3B + 25]),
         "drop_dirs": list(rom[0x3B7ED8:0x3B7ED8 + 8]),
+        # 0x3B7D9C [26]: per RAM type, 1 if a Lander may carry it -- the
+        # factory ranking's mode 4 (0x08067FE8, DERIVATION 47) reads it
+        "t7D9C": list(rom[0x3B7D9C:0x3B7D9C + 26]),
+        # 0x11A92C [5]: the side-flags byte 0x030050E4 is the OR, over every
+        # tile of the map whatever its owner, of this table indexed by the
+        # terrain's factory class >> 1 (0x080689A8, DERIVATION 47); bit 0
+        # makes foot soldiers ask for TCopters, bit 1 gates the Lander buy
+        "side_flags": list(rom[0x11A92C:0x11A92C + 5]),
         "terrain_value": [s8(rom, 0x08284314 + i) for i in range(32)],
         "counter_weight": list(struct.unpack_from("<6i", rom, 0x11A8E8)),
         "hunt_multiplier": list(rom[0x11A900:0x11A905]),

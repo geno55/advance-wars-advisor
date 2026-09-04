@@ -15,7 +15,7 @@ the one `tools/extract_co.py` decodes. So per-unit modifiers ARE damage inputs:
     Max      150/100 on direct units,  90/110 on the four indirects
     Sami     120/90 on Infantry and Mech
     Grit      80/100 on everything EXCEPT the indirects
-    Eagle    115/90 on air, 80/100 on the surface navy
+    Eagle    115/90 on air, 80/100 on every naval unit
     Drake     80/100 on air
 
 WHAT IS NOT, AND WHY THIS MODULE WILL NOT PRETEND OTHERWISE
@@ -392,7 +392,7 @@ def meteor_victims(board, center, damage: int) -> list:
 
 def vision_bonus(co_id: int, unit_type: str, power: bool = False) -> int:
     """Per-unit vision adjustment, pool entry +8, added by the fog marker at
-    0x0801ED06. Sonja and only Sonja: +1 on everything but Sub, +3 under
+    0x0801ED06. Sonja and only Sonja: +1 on every type, +3 under
     Enhanced Vision. Measured against the game's own count array
     (tests/fixtures/sonja_vision_*.json)."""
     block = _co_data()["records"][co_id]["power" if power else "normal"]
