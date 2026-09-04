@@ -101,7 +101,9 @@ class TestSonja:
         assert co.vision_bonus(s, "Infantry") == 1
         assert co.vision_bonus(s, "Recon") == 1
         assert co.vision_bonus(s, "Infantry", power=True) == 3
-        assert co.vision_bonus(s, "Sub") == 0          # the one exclusion
+        assert co.vision_bonus(s, "Sub") == 1          # the Sub too: the
+        # "Sub spared" reading was the extractor stopping one entry short
+        assert co.vision_bonus(s, "Sub", power=True) == 3
         assert co.vision_bonus(NAMES["Andy"], "Recon") == 0
         assert co.vision_bonus(NAMES["Andy"], "Recon", power=True) == 0
 

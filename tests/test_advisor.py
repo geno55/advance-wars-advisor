@@ -18,6 +18,13 @@ the CPU port plays the reply on a dumped board and the planner stands in
 where the port cannot, and one scenario where the reply overturns a call
 the worst case made.
 
+Property exposure (ROADMAP step 5's first shape fix) likewise: a unit stays
+on an HQ an enemy foot unit could step onto and the capture it forgoes is
+charged the share of the HQ that unit would hold; a plugged corridor counts
+as closed because the game's fill says so; a strike is credited what its
+target can no longer hold; and the evaluation carries the term for both
+sides.
+
 Boards are built by hand, one rule per test, the same way test_sim.py and
 test_actions.py do it.
 """
@@ -412,6 +419,118 @@ class TestScenarios(unittest.TestCase):
         ctx = advisor.Context(b, 1)
         self.assertFalse(any(c.action.kind == "trap"
                              for c in advisor.candidates(b, 1, ctx)))
+
+
+class TestPropertyExposure(unittest.TestCase):
+    """The mirror of the capture term (ROADMAP step 5's first shape fix):
+    a property an enemy foot unit can step onto next turn is priced, the
+    HQ at the win's value, and each action is charged the change it makes
+    to that. No rule says where a unit stands; the facts are the game's
+    fill and the ROM's capture gain, and the price is a weight."""
+
+    P = PLAIN
+    ROWS = [[HQ, P, CITY, P, P, P],
+            [P,  P, P,    P, P, P]]
+    OWNER = [[1, 0, 0, 0, 0, 0], [0] * 6]
+
+    def hq_share(self, held):
+        return advisor.WEIGHTS["hq_exposure"] * advisor.WEIGHTS["win"] * held / 20
+
+    def test_a_unit_on_the_hq_stays_when_an_enemy_foot_unit_could_step_on(self):
+        """Our Infantry on the HQ, a free city two tiles east, an enemy
+        Infantry three steps from the HQ once we leave it: the wait wins,
+        and the capture is charged half the HQ at the exposure weight --
+        the 10 bars the enemy would hold by the end of its turn."""
+        b = board(self.ROWS, [unit("Infantry", 0, 0, slot=1),
+                              unit("Infantry", 2, 1, player=2, slot=70)],
+                  owner=self.OWNER, armies=two_armies(0))
+        p = advisor.plan(b)
+        s = p.steps[0]
+        self.assertEqual((s.action.kind, s.action.tile), ("wait", (0, 0)))
+        self.assertFalse(any("exposure" in t.name for t in s.scored.terms))
+        ctx = advisor.Context(b, 1)
+        cap = [c for c in advisor.candidates(b, 1, ctx)
+               if c.action.kind == "capture" and c.action.tile == (2, 0)][0]
+        hq = [t for t in cap.terms if t.name == "hq_exposure"]
+        self.assertEqual(len(hq), 1)
+        self.assertAlmostEqual(hq[0].value, -self.hq_share(10))
+        self.assertIn("P2 Infantry #70 can hold 10/20", hq[0].fact)
+        self.assertIn("none ->", hq[0].fact)
+
+    def test_without_a_threat_in_reach_the_term_is_absent(self):
+        """The same board with the enemy Infantry one step further: no
+        candidate carries an exposure term and the city is taken."""
+        b = board(self.ROWS, [unit("Infantry", 0, 0, slot=1),
+                              unit("Infantry", 5, 1, player=2, slot=70)],
+                  owner=self.OWNER, armies=two_armies(0))
+        ctx = advisor.Context(b, 1)
+        for c in advisor.candidates(b, 1, ctx):
+            self.assertFalse(any("exposure" in t.name for t in c.terms))
+        s = advisor.plan(b).steps[0]
+        self.assertEqual((s.action.kind, s.action.tile), ("capture", (2, 0)))
+
+    def test_a_plugged_corridor_counts_as_closed(self):
+        """One row: stepping off the HQ onto the city still stands between
+        the enemy and the HQ, and the game's fill says so -- no charge."""
+        rows = [[HQ, PLAIN, CITY, PLAIN, PLAIN]]
+        b = board(rows, [unit("Infantry", 0, 0, slot=1),
+                         unit("Infantry", 4, 0, player=2, slot=70)],
+                  owner=[[1, 0, 0, 0, 0]], armies=two_armies(0))
+        ctx = advisor.Context(b, 1)
+        cap = [c for c in advisor.candidates(b, 1, ctx)
+               if c.action.kind == "capture" and c.action.tile == (2, 0)][0]
+        self.assertFalse(any("exposure" in t.name for t in cap.terms))
+        self.assertEqual(advisor.plan(b).steps[0].action.kind, "capture")
+
+    def test_shooting_the_foot_unit_beside_the_hq_earns_what_it_removes(self):
+        """An enemy Infantry one step from our empty HQ and a Tank that can
+        hit it: the strike is credited the share of the HQ the worst-case
+        remaining bars can no longer hold."""
+        rows = [[HQ, PLAIN, PLAIN, PLAIN, PLAIN, PLAIN]]
+        b = board(rows, [unit("Tank", 3, 0, slot=1),
+                         unit("Infantry", 1, 0, player=2, slot=70)],
+                  owner=[[1, 0, 0, 0, 0, 0]], armies=two_armies(0))
+        s = advisor.plan(b).steps[0]
+        self.assertEqual(s.action.kind, "attack")
+        import damage
+        left = damage.screen_bars(s.action.strike.max_remaining_hp)
+        hq = [t for t in s.scored.terms if t.name == "hq_exposure"]
+        self.assertEqual(len(hq), 1)
+        self.assertAlmostEqual(hq[0].value, self.hq_share(10) - self.hq_share(left))
+        self.assertGreater(hq[0].value, 0)
+
+    def test_a_city_is_priced_at_its_worth_to_the_enemy(self):
+        """Our Infantry on our city, an enemy Infantry that can reach it once
+        we step off: leaving is charged the city's worth to the enemy (the
+        rate over the horizon, doubled: it is ours to lose) x 10/20."""
+        rows = [[CITY, PLAIN, PLAIN, PLAIN], [PLAIN] * 4]
+        b = board(rows, [unit("Infantry", 0, 0, slot=1),
+                         unit("Infantry", 2, 1, player=2, slot=70)],
+                  owner=[[1, 0, 0, 0], [0] * 4], armies=two_armies(0))
+        ctx = advisor.Context(b, 1)
+        off = [c for c in advisor.candidates(b, 1, ctx)
+               if c.action.kind == "wait" and c.action.tile == (1, 0)][0]
+        t = [t for t in off.terms if t.name == "property_exposure"][0]
+        w = advisor.WEIGHTS
+        worth = 1000 * w["capture_horizon"] * w["enemy_property"]
+        self.assertAlmostEqual(t.value, -w["property_exposure"] * worth * 10 / 20)
+        self.assertIn("City at (0,0)", t.fact)
+
+    def test_the_evaluation_prices_both_sides(self):
+        """Each side's Infantry two steps from the other's HQ: the board
+        from P1's side carries the HQ's exposure against and for, equal and
+        opposite, and from P2's side the same the other way round."""
+        rows = [[HQ, PLAIN, PLAIN, PLAIN, HQ], [PLAIN] * 5]
+        b = board(rows, [unit("Infantry", 3, 1, slot=1),
+                         unit("Infantry", 1, 1, player=2, slot=70)],
+                  owner=[[1, 0, 0, 0, 2], [0] * 5], armies=two_armies(0))
+        for me in (1, 2):
+            hq = [t for t in advisor.evaluate(b, me) if t.name == "hq_exposure"]
+            self.assertEqual([round(t.value) for t in hq],
+                             [round(-self.hq_share(10)), round(self.hq_share(10))])
+            self.assertIn(f"P{me}'s HQ a foot unit", hq[0].fact)
+        self.assertEqual([t.name for t in advisor.evaluate(b, 1)][:3],
+                         ["material", "treasury", "income"])
 
 
 # --------------------------------------------------------------------------

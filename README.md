@@ -511,6 +511,18 @@ builds the worst case could not. Nine tests, one of them the scenario where
 the reply overturns the worst case's choice; `docs/ADVISOR.md` says where
 it is naive.
 
+**Property exposure (ROADMAP step 5's first fix).** The sparring harness's
+first lost game had every foot unit away capturing while one enemy
+Infantry walked onto the HQ. The planner now prices, on the board each
+action leaves, every own property an enemy foot unit can step onto next
+turn -- the game's own fill, so a tile we stand on or a pass we plug is
+closed -- by the share it can hold there by the end of that turn, the HQ
+at the win's value, and charges the action the change. No rule says where
+to stand: leaving an HQ a fresh Infantry can reach costs a tenth of the
+win, shooting that Infantry earns back what it can no longer hold, and a
+unit with nothing better to do than lose the HQ stays. The reply's
+evaluation carries the same term for both sides. Six tests.
+
 ## Layout
 
 ```
@@ -651,7 +663,8 @@ tools/advise.py           a turn's plan: facts quoted, weights labelled heuristi
 tools/sparring.py         the planner against the CPU port to the end: the
                           result a weight set is judged by (ROADMAP step 5)
 tests/test_sparring.py    4 tests: the rout, the day cap, the abort's dump, the HQ
-tests/test_advisor.py     30 tests: the arithmetic, invariance, scenarios, the reply
+tests/test_advisor.py     36 tests: the arithmetic, invariance, scenarios, the reply,
+                          property exposure
 engine/cpu.py             the CPU's command record decoded, replayed and
                           PREDICTED (ROADMAP step 3)
 engine/cpu_ai.py          the game's AI ported routine by routine: sub-phases,

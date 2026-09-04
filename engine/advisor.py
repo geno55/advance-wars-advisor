@@ -89,6 +89,23 @@ WHAT THE TERMS READ (facts) AND WHAT THEY ASSUME (weights)
                   Foot units head for the nearest property not theirs,
                   armed units for the nearest visible enemy, transports for
                   the enemy's properties
+  property_exposure
+                  the mirror of `capture`, read before and after the action:
+                  every own property an enemy FOOT unit can end its next
+                  move on (pathing.destinations, the game's own fill, on
+                  the board the action leaves -- a tile we stand on is not
+                  reachable, a pass we plug is closed, a target we kill is
+                  gone) x the property's worth to that enemy x the share
+                  it can hold there by the end of that turn (points in
+                  hand plus actions._capture_gain, the ROM's bars-plus-CO-
+                  shift) / 20. The term is the CHANGE the action makes,
+                  so a wait scores nothing and only stepping off, plugging
+                  or shooting moves it
+  hq_exposure     the same for an HQ, but at the win's value: `win` x the
+                  share of the HQ the enemy can hold by the end of its
+                  next turn, x hq_exposure. That is what makes a lone
+                  enemy Infantry beside an empty HQ an emergency and not
+                  a 6,000-funds city
   turn_start      what the next morning does on that tile (supply.TurnStart):
                   bars repaired x bar value, the repair's funds charge
                   against, a resupply as a fraction of the unit's price when
@@ -175,6 +192,11 @@ WEIGHTS: Dict[str, float] = {
     "enemy_property": 2.0,    # a property taken FROM an enemy is worth this x
     "win": 1_000_000,         # an HQ that falls this turn
     "objective_pull": 40,     # funds per movement point closer
+    "property_exposure": 1.0, # x a property's worth x the share of it an
+                              #   enemy foot unit can hold by the end of
+                              #   its next turn (delta per action)
+    "hq_exposure": 0.1,       # x win x the share of an HQ the enemy can
+                              #   hold by the end of its next turn
     "repair": 1.0,            # x funds of bars the morning repairs
     "repair_spend": 0.5,      # x funds the repair charges
     "resupply": 0.3,          # x price x fraction of fuel+ammo restored
@@ -470,9 +492,41 @@ class Context:
         self.fog_rules = fog_rules
         self.warnings = warnings if warnings is not None else []
         self.army_value = army_worth(board, player, co_ids) or 1
+        self._exposure: Optional[Exposure] = None
+        self._exposure_memo: Dict[tuple, Exposure] = {}
+        self._foot_slots: Optional[frozenset] = None
 
     def share(self, unit) -> float:
         return unit_worth(self.board, unit, self.co_ids) / self.army_value
+
+    # -- property exposure, resolved once per board: the enemy foot units
+    # -- this side can see are decided here, on the board as it stands,
+    # -- and every hypothetical is asked about the same units
+    @property
+    def foot_slots(self) -> frozenset:
+        if self._foot_slots is None:
+            self._foot_slots = frozenset(
+                e.slot for e in threat.hostiles(self.board, self.player,
+                                                ignore_acted=True, fog=self.fog_on,
+                                                rule_set=self.fog_rules)
+                if pathing.unit_stats(e.type)["unit_class"] == "foot")
+        return self._foot_slots
+
+    def exposure_of(self, board) -> Exposure:
+        key = tuple(sorted((u.slot, u.x, u.y, u.hp, u.loaded) for u in board.units))
+        hit = self._exposure_memo.get(key)
+        if hit is None:
+            hit = Exposure.of(board, self.player, self.w, self.co_ids,
+                              weather=self.weather, warnings=self.warnings,
+                              slots=self.foot_slots)
+            self._exposure_memo[key] = hit
+        return hit
+
+    @property
+    def exposure(self) -> Exposure:
+        if self._exposure is None:
+            self._exposure = self.exposure_of(self.board)
+        return self._exposure
 
 
 def _damage_terms(ctx: Context, a, actor, hp_start: int, exposure,
@@ -580,6 +634,153 @@ def _objective_term(ctx: Context, unit, end_tile: Coord) -> List[Term]:
                  f"{label}: {before} -> {after} movement points away")]
 
 
+# --------------------------------------------------------------------------
+# property exposure: which of a side's properties a foot unit of the other
+# side can step onto next turn, and how much of each it can hold by then
+# --------------------------------------------------------------------------
+
+@dataclass(frozen=True)
+class PropertyThreat:
+    """One property an enemy foot unit can end its next move on: the tile,
+    its terrain, the unit, and the capture it can hold there by the end
+    of that turn -- points already in hand plus one turn's gain."""
+    tile: Coord
+    terrain: int
+    unit: object
+    held_after: int
+
+
+def property_threats(board, player: int, *, co_ids=None, weather=None,
+                     fog: bool = False, fog_rules=None, warnings=None,
+                     slots=None) -> List[PropertyThreat]:
+    """For every property `player` owns, the foot unit of another army that
+    can end its next move on it and the capture it can hold there by the end
+    of that turn. Facts only: the reach is pathing.destinations, the game's
+    own fill, on this board as it stands -- so a tile one of `player`'s units
+    occupies is not reachable, nor one behind a plugged pass; the gain is
+    actions._capture_gain, the ROM's bars plus the CO's shift. Enemy `acted`
+    flags are ignored (next turn they refresh). Under fog only the units
+    `player` can legally see count, as everywhere else; `slots` restricts
+    the enemies further (a caller that resolved visibility on another
+    board). A foot unit riding a transport is not seen. One unit per tile:
+    the one that would hold the most."""
+    warnings = warnings if warnings is not None else []
+    capturable = actions_mod._capturable()
+    mine = [(x, y) for y in range(board.height) for x in range(board.width)
+            if board.owner[y][x] == player and board.terrain[y][x] in capturable]
+    if not mine:
+        return []
+    feet = [e for e in threat.hostiles(board, player, ignore_acted=True,
+                                       fog=fog, rule_set=fog_rules)
+            if pathing.unit_stats(e.type)["unit_class"] == "foot"
+            and (slots is None or e.slot in slots)]
+    best: Dict[Coord, PropertyThreat] = {}
+    for e in feet:
+        reach = pathing.allowance(e)
+        near = [t for t in mine if abs(t[0] - e.x) + abs(t[1] - e.y) <= reach]
+        if not near:
+            continue
+        dests = pathing.destinations(board, e, weather)
+        gain = actions_mod._capture_gain(board, e, co_ids, warnings)
+        for t in near:
+            if t not in dests:
+                continue
+            held = e.capture if (e.x, e.y) == t else 0
+            after = min(actions_mod.CAPTURE_GOAL, held + gain)
+            cur = best.get(t)
+            if cur is None or after > cur.held_after:
+                best[t] = PropertyThreat(t, board.terrain[t[1]][t[0]], e, after)
+    return [best[t] for t in sorted(best)]
+
+
+@dataclass(frozen=True)
+class Exposure:
+    """A side's property exposure in funds, before any weight: the
+    properties' worth x the share the enemy can hold, and the HQs' at the
+    win's value, with one line per threatened tile."""
+    properties: float
+    hq: float
+    facts: Tuple[str, ...]
+
+    @staticmethod
+    def of(board, player: int, w: dict, co_ids=None, **kw) -> "Exposure":
+        props, hq, facts = 0.0, 0.0, []
+        goal = actions_mod.CAPTURE_GOAL
+        for t in property_threats(board, player, co_ids=co_ids, **kw):
+            x, y = t.tile
+            e = t.unit
+            if t.terrain == TERRAIN_HQ:
+                worth = w["win"]
+                hq += worth * t.held_after / goal
+            else:
+                worth = property_worth(board, x, y, e.player, w)
+                props += worth * t.held_after / goal
+            facts.append(f"{board.terrain_name(x, y)} at ({x},{y}): P{e.player} "
+                         f"{e.type} #{e.slot} can hold {t.held_after}/{goal} "
+                         f"by the end of its turn (worth {worth:.0f})")
+        return Exposure(props, hq, tuple(facts))
+
+    @property
+    def summary(self) -> str:
+        return "; ".join(self.facts) if self.facts else "none"
+
+
+def _hypothetical(ctx: "Context", a):
+    """The board as it stands once `a` is taken, for the enemy's reach only:
+    the actor on its ending tile, a join's or load's actor gone, a drop's
+    passenger set down, a built unit on its factory, and an attack's target
+    at its worst-case remaining hp (gone when that is zero). None for the
+    power, which moves nothing."""
+    b = ctx.board
+    if a.kind == "power":
+        return None
+    if a.kind == "build":
+        return dataclasses.replace(b, units=b.units + [a.target], vision=None)
+    u = a.unit
+    if a.kind in ("join", "load"):
+        units = [x for x in b.units if x.slot != u.slot]
+        if a.kind == "join":
+            units = [dataclasses.replace(x, hp=a.hp_after)
+                     if x.slot == a.target.slot else x for x in units]
+        return dataclasses.replace(b, units=units, vision=None)
+    end = a.drop_tile if a.kind == "trap" else a.tile
+    hyp, _ = threat._relocate(b, u, end)
+    if a.kind == "drop":
+        dx, dy = a.drop_tile
+        hyp = dataclasses.replace(hyp, units=[
+            dataclasses.replace(x, x=dx, y=dy, loaded=False)
+            if x.slot == a.target.slot else x for x in hyp.units])
+    elif a.kind == "attack":
+        left = a.strike.max_remaining_hp
+        units = [x for x in hyp.units if x.slot != a.target.slot]
+        if left > 0:
+            units.append(dataclasses.replace(a.target, hp=left))
+        hyp = dataclasses.replace(hyp, units=units)
+    return hyp
+
+
+def _exposure_terms(ctx: "Context", a) -> List[Term]:
+    """property_exposure and hq_exposure as the CHANGE `a` makes: the
+    side's exposure on the board it leaves against the board as it stands.
+    Positive when the action plugs, blocks or shoots a threat away,
+    negative when it opens a property up."""
+    hyp = _hypothetical(ctx, a)
+    if hyp is None:
+        return []
+    before = ctx.exposure
+    after = ctx.exposure_of(hyp)
+    out = []
+    for name, was, now in (("property_exposure", before.properties, after.properties),
+                           ("hq_exposure", before.hq, after.hq)):
+        if was == now:
+            continue
+        what = "the HQ" if name == "hq_exposure" else "properties"
+        out.append(Term(name, ctx.w[name], was - now,
+                        f"{what} an enemy foot unit can step onto next turn: "
+                        f"{before.summary} -> {after.summary}"))
+    return out
+
+
 def _capture_terms(ctx: Context, a) -> List[Term]:
     w = ctx.w
     u = a.unit
@@ -640,6 +841,7 @@ def score_action(ctx: Context, a) -> Scored:
                                    a.hp_after, a.turn_start)
         terms += _capture_terms(ctx, a)
         terms += _objective_term(ctx, u, a.tile)
+        terms += _exposure_terms(ctx, a)
         return Scored(a, tuple(terms))
 
     if a.kind == "load":
@@ -656,6 +858,7 @@ def score_action(ctx: Context, a) -> Scored:
                               f"worst case loses this {u.type} with its ride"))
         terms += _capture_terms(ctx, a)
         terms += _objective_term(ctx, u, a.tile)
+        terms += _exposure_terms(ctx, a)
         return Scored(a, tuple(terms))
 
     if a.kind == "drop":
@@ -664,6 +867,7 @@ def score_action(ctx: Context, a) -> Scored:
         terms += _turn_start_terms(ctx, p, p.hp, a.turn_start)
         terms += _objective_term(ctx, p, a.drop_tile)
         terms += _objective_term(ctx, u, a.tile)
+        terms += _exposure_terms(ctx, a)
         return Scored(a, tuple(terms))
 
     if a.kind == "join":
@@ -677,6 +881,7 @@ def score_action(ctx: Context, a) -> Scored:
                               f"the join refunds {m.refund}"))
         terms += _capture_terms(ctx, a)
         terms += _objective_term(ctx, u, a.tile)
+        terms += _exposure_terms(ctx, a)
         return Scored(a, tuple(terms))
 
     if a.kind == "supply":
@@ -691,6 +896,7 @@ def score_action(ctx: Context, a) -> Scored:
         terms += _damage_terms(ctx, a, u, u.hp, a.exposure)
         terms += _turn_start_terms(ctx, u, u.hp, a.turn_start)
         terms += _objective_term(ctx, u, a.tile)
+        terms += _exposure_terms(ctx, a)
         return Scored(a, tuple(terms))
 
     # wait, capture, dive, rise, trap
@@ -704,6 +910,7 @@ def score_action(ctx: Context, a) -> Scored:
     terms += _turn_start_terms(ctx, actor, u.hp, a.turn_start)
     terms += _capture_terms(ctx, a)
     terms += _objective_term(ctx, u, end)
+    terms += _exposure_terms(ctx, a)
     return Scored(a, tuple(terms))
 
 
@@ -748,6 +955,7 @@ def _score_build(ctx: Context, a) -> Scored:
     if bias:
         terms.append(Term("build_bias", w["build_bias"], bias,
                           f"fixed early-table bias for {fresh.type}"))
+    terms += _exposure_terms(ctx, a)
     terms.append(Term("build_spend", w["build_spend"], -a.cost,
                       f"{fresh.type} costs {a.cost} at {a.terrain} "
                       f"({a.tile[0]},{a.tile[1]})"))
@@ -902,7 +1110,8 @@ REPLY_MODELS = ("cpu", "planner")
 
 # The terms the worst case has a say in: a step whose winner and runner-up
 # differ in one of these is a call the modelled reply may overturn.
-STAKE_TERMS = ("damage_dealt", "kill", "damage_taken", "loss", "capture", "win")
+STAKE_TERMS = ("damage_dealt", "kill", "damage_taken", "loss", "capture", "win",
+               "property_exposure", "hq_exposure")
 
 
 def _stake(s: Step) -> float:
@@ -1108,6 +1317,17 @@ def evaluate(board, player: int, weights=None, co_ids=None, *,
     if facts:
         out.append(Term("capture", w["capture"], held,
                         "captures in hand: " + "; ".join(facts)))
+    # what each side's foot units can step onto next: ours exposed against,
+    # theirs for -- the same facts the per-action term reads, with full
+    # information, as every term here has
+    for side, sign in [(player, -1)] + [(p, 1) for p in others]:
+        ex = Exposure.of(board, side, w, co_ids, warnings=[])
+        for name, qty, what in (("property_exposure", ex.properties, "properties"),
+                                ("hq_exposure", ex.hq, "HQ")):
+            if qty:
+                out.append(Term(name, w[name], sign * qty,
+                                f"P{side}'s {what} a foot unit of the other side "
+                                f"can step onto next turn: {ex.summary}"))
     for y in range(board.height):
         for x in range(board.width):
             if board.terrain[y][x] != TERRAIN_HQ:

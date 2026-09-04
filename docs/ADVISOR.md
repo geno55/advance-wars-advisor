@@ -73,8 +73,10 @@ the arbiter:
 3. **evaluate**: `advisor.evaluate` scores that board from our side, in
    funds, as named terms -- the same `weight x quantity <- fact` lines as a
    step's: material (our units' value less the enemy's), treasury, income
-   over the horizon, captures in hand, and against the start board an HQ
-   that changed hands or a side that lost its last unit, at `win`.
+   over the horizon, captures in hand, each side's properties a foot unit
+   of the other can step onto next turn (ours against, theirs for; the
+   HQ at `hq_exposure` x `win`), and against the start board an HQ that
+   changed hands or a side that lost its last unit, at `win`.
 4. **choose** the proposal whose reply scores best. Ties keep the greedy
    plan. The plan carries the reply (what the opponent did, line by line;
    the board; the terms), every proposal with its reply score, and the
@@ -100,6 +102,8 @@ a city. What it does not: see "Where it is naive".
 | `enemy_property` | 2.0 | a property taken from an enemy is worth this x | `Board.owner` |
 | `win` | 1,000,000 | an HQ that falls this turn | `Action.captures_now`, terrain id 8 |
 | `objective_pull` | 40 | funds per movement point closer to the objective | `advisor.distance_field` over `Board.move_cost` |
+| `property_exposure` | 1.0 | the change an action makes to: each own property an enemy foot unit can end its next move on x its worth to that enemy x the share it can hold there by the end of that turn / 20 | `pathing.destinations` on the board the action leaves, `actions._capture_gain`, `Unit.capture`, `property_worth` |
+| `hq_exposure` | 0.1 | the same for an HQ, at `win` instead of the property's worth | the same, terrain id 8 |
 | `repair` | 1.0 | funds of bars the morning repairs | `TurnStart.hp_after` |
 | `repair_spend` | 0.5 | the repair's charge | `TurnStart.repair_spent` |
 | `resupply` | 0.3 | a unit's price x the fraction of its fuel and ammo restored | `TurnStart`, `SupplyFill`, `supply.resupply_caps` |
@@ -119,6 +123,24 @@ The reply's evaluation also reuses `capture` (captures in hand, ours less
 theirs, each as worth x points / 20), `capture_horizon` and `win` (an HQ
 that changed hands against the start board; a side that had units and has
 none -- the rout, stated in ASSUMPTIONS).
+
+Property exposure is the mirror of `capture`, and the answer to the
+sparring harness's first lost game (ROADMAP step 5): every foot unit away
+capturing while one enemy Infantry walked onto the HQ. Nothing says
+"defend the HQ". The term reads, on the board an action leaves behind,
+which own properties an enemy foot unit can END its next move on -- the
+game's own fill, so a tile we stand on is not reachable and a one-tile
+pass we plug is closed -- and how much of each it can hold by the end of
+that turn (points in hand plus the ROM's bars-plus-CO-shift gain), priced
+at the property's worth to that enemy, or at `win` for an HQ. An action is
+charged the CHANGE: a wait in place scores nothing, stepping off an HQ a
+fresh Infantry can reach costs `hq_exposure` x `win` x 10/20, shooting
+that Infantry down to four bars earns the six it can no longer hold, and a
+build plugs its factory. The same exposure, absolute and for both sides,
+is a term of the reply's evaluation, so the reply sees an enemy Infantry
+arriving beside our HQ one ply before it steps on. What the term does not
+ask: whether we could dislodge the capturer before it finishes, which is a
+third ply; and a foot unit riding a transport is not seen at all.
 
 `BUILD_BIAS` is the one place in the module that names a unit type: Infantry
 +500, APC -1500, TCopter -2000, Lander -4000. Transports are held back
@@ -190,6 +212,13 @@ Written down so nobody tunes a weight to fix a shape problem.
   cannot choose it. The variants are the same actor's next-best action;
   "do nothing with this unit" is proposed only when a wait in place is that
   next-best.
+- **Property exposure is one turn deep.** An enemy foot unit that can
+  step onto a property next turn is priced as holding its first turn's
+  capture there; whether we could shoot it off before it finishes is not
+  asked, and a foot unit inside a transport is not seen. The HQ's weight
+  is the bluntest number in the table: at 0.1 a fresh enemy Infantry in
+  reach of an empty HQ outweighs any city, which is the intent, and also
+  outweighs any single unit's exposure, which may not always be.
 - **Two plies.** The reply is the opponent's next turn and nothing after
   it: a capture the reply starts counts as points in hand, a unit it leaves
   exposed to us counts as material, and our own next turn is never
