@@ -32,6 +32,11 @@ BUILDS = ["build-b1-base", "build-b2-two-bases", "build-b3-broke",
           "build-b4-day10", "build-b5-airport", "build-b6-port",
           "build-b7-enemy-tanks", "build-b8-five-foot", "build-b9-max",
           "build-b10-kanbei", "build-b11-rich-tanks", "build-b12-fallback-rockets"]
+# The condition byte and the pre-step (DERIVATION 48): one CPU unit written
+# damaged, dry or empty on the vs15_p2 state, P1 as the CPU.
+PRESTEP = ["prestep-join-mech", "prestep-join-sum-over", "prestep-hp-inf",
+           "prestep-hp-tank", "prestep-fuel-tank", "prestep-fuel-inf",
+           "prestep-repair-inf", "prestep-repair-tank"]
 
 
 def trace(name):
@@ -114,7 +119,7 @@ class TestTheReplay(unittest.TestCase):
 
 class TestThePrediction(unittest.TestCase):
     """engine/cpu.predict against every trace (tools/cpu_trace.py predict)."""
-    ALL = EXACT + ["vs15-p1-cpu-fog"] + BUILDS
+    ALL = EXACT + ["vs15-p1-cpu-fog"] + BUILDS + PRESTEP
 
     def test_every_trace_is_predicted_record_for_record(self):
         for name in self.ALL:
@@ -162,6 +167,80 @@ class TestThePrediction(unittest.TestCase):
         r = cpu_trace.predict(trace("vs15-p1-cpu-power"))
         self.assertTrue(r["agree"])
         self.assertEqual(cpu_ai.tables()["cos"][1]["power_fn"], "0x080632C4")
+
+
+class TestThePreStep(unittest.TestCase):
+    """The condition byte (record +9 bits 0..2) and what a conditioned unit
+    does before its pass -- DERIVATION 48, eight traces."""
+
+    def predicted(self, name):
+        return cpu_trace.predict(trace(name))
+
+    def cmds(self, name):
+        return [(c["name"], c["slot"], (c["x"], c["y"])) for c in trace(name)["commands"]]
+
+    def test_the_classifier_leaves_the_bits_the_game_left(self):
+        """The after-dump carries each unit's +9 byte; the port's context
+        ends the turn with the same condition bits for every CPU unit."""
+        for name in PRESTEP:
+            with self.subTest(name=name):
+                t = trace(name)
+                r = self.predicted(name)
+                after = json.loads((FIX / t["after"]).read_text(encoding="utf-8"))
+                game = {u["slot"]: u["ai"][0] & 7 for u in after["units"] if u["player"] == t["cpu"]}
+                port = {s: v[0] & 7 for s, v in r["turn"].ctx.ai.items() if s in game}
+                self.assertEqual(port, game)
+
+    def test_low_hp_is_condition_two_and_empty_gauges_condition_one(self):
+        after = json.loads((FIX / "prestep-hp-tank.after.json").read_text(encoding="utf-8"))
+        tank = next(u for u in after["units"] if u["slot"] == 7)
+        self.assertEqual(tank["ai"][0] & 7, 2)                     # 15 hp < 20
+        after = json.loads((FIX / "prestep-fuel-tank.after.json").read_text(encoding="utf-8"))
+        tank = next(u for u in after["units"] if u["slot"] == 7)
+        self.assertEqual(tank["ai"][0] & 7, 1)                     # fuel 5 of 70 < 20%
+        after = json.loads((FIX / "prestep-join-sum-over.after.json").read_text(encoding="utf-8"))
+        mech = next(u for u in after["units"] if u["slot"] == 1)
+        self.assertEqual((mech["ammo"], mech["ai"][0] & 7), (0, 1))  # an empty gauge
+
+    def test_a_weak_unit_joins_its_weak_neighbour(self):
+        """Mech #1 at 40 hp beside Mech #4 at 50: a join (id 9) onto (1,7)
+        as its command, before the foot pass -- 90 hp together."""
+        self.assertIn(("join", 1, (1, 7)), self.cmds("prestep-join-mech"))
+        after = load(FIX / "prestep-join-mech.after.json")
+        self.assertIsNone(sim.unit_in(after, 4))
+        self.assertEqual(sim.unit_in(after, 1).hp, 90)
+        # with the neighbour at 100 the pair would exceed 100: no join, and
+        # the empty gauge sends the Mech toward the HQ instead
+        cmds = self.cmds("prestep-join-sum-over")
+        self.assertNotIn("join", [c[0] for c in cmds])
+        self.assertIn(("wait", 1, (0, 7)), cmds)
+
+    def test_a_dry_unit_seeks_a_supplier_in_reach_else_a_property(self):
+        # the Tank (fuel 5) walks up to the APC at (6,2) and stops beside it
+        self.assertIn(("wait", 7, (6, 3)), self.cmds("prestep-fuel-tank"))
+        # the Infantry (fuel 5) has no supplier in reach: the HQ resupplies
+        cmds = self.cmds("prestep-fuel-inf")
+        self.assertEqual(cmds[0], ("wait", 1, (0, 8)))
+
+    def test_low_hp_without_an_own_repairing_property_changes_nothing(self):
+        """The HQ is not a repair point for the retreat (0x083B7DDC codes
+        it 0); with no own city the 15-hp Infantry and Tank play their
+        ordinary passes."""
+        self.assertIn(("wait", 1, (2, 8)), self.cmds("prestep-hp-inf"))
+        self.assertIn(("fire", 7, (7, 4)), self.cmds("prestep-hp-tank"))
+
+    def test_low_hp_with_an_own_city_retreats_to_it(self):
+        # the Tank at 15 hp reaches the written city (4,1) this turn: a Wait onto it
+        self.assertIn(("wait", 7, (4, 1)), self.cmds("prestep-repair-tank"))
+        # the Infantry at 15 hp cannot reach (3,8) in one move: it moves
+        # toward it in the pre-step -- the FIRST command of the turn, where
+        # without the city (prestep-hp-inf) the same unit walked in the
+        # foot pass, fourth -- and stops one tile from the city
+        cmds = self.cmds("prestep-repair-inf")
+        self.assertEqual(cmds[0], ("wait", 1, (2, 8)))
+        plain = self.cmds("prestep-hp-inf")
+        self.assertEqual(plain.index(("wait", 1, (2, 8))), 3)
+        self.assertEqual(sim.unit_in(load(FIX / "prestep-repair-inf.before.json"), 1).hp, 15)
 
 
 class TestWhatTheCpuDidNotDo(unittest.TestCase):

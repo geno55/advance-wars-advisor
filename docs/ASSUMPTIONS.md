@@ -447,13 +447,18 @@ written.
   its battle, so the battle's own two draws are the first it makes.
   `engine/cpu.py` `AI_STRIKE_DRAW`.
 - **The CPU's predictor covers what the traces exercised** (DERIVATION
-  45, 47): the foot, direct, indirect, transport and supply passes,
-  movement mode 4, the power predicates, and now building -- the five
-  choosers, the mode roll, the factory ranking -- on twelve build traces.
-  Still raising NotImplementedError with the ROM address: movement modes
-  2, 3, 5, 6, 7, the Lander pass, the TCopter, the loaded transport's
-  move, the join and retreat pre-steps, firing a power, campaign
-  profiles, and within building the TCopter and Lander purchases.
+  45, 47, 48): the foot, direct, indirect, transport and supply passes,
+  movement mode 4, the power predicates, building -- the five choosers,
+  the mode roll, the factory ranking -- on twelve build traces, and the
+  condition byte's classifier and pre-step -- the join with a weak
+  neighbour, the supply and repair retreats -- on eight traces. Still
+  raising NotImplementedError with the ROM address: movement modes 2, 3,
+  5, 6, 7, the Lander pass, the TCopter, the loaded transport's move, the
+  retreat-after-move check (`0x0806636C`) a conditioned unit's move rolls
+  into `profile[type][1]` percent of the time, firing a power, campaign
+  profiles, and within building the TCopter and Lander purchases. Read
+  but untraced: the foot pass's join onto a capturer (`0x080650B8`), and
+  a join clearing the survivor's condition bits (one trace).
 - **Income is a cached sum.** The walker that fills army `+0x08` (and
   the per-type counters `+0xC..+0xF`) does not run at turn start; the
   payer pays `+0x08` as it stands (DERIVATION 47, measured: a written

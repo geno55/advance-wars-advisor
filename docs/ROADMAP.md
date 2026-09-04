@@ -106,12 +106,16 @@ Three decisions, made once so they do not get re-argued:
    (DERIVATION 47): the CPU buys at the end of its turn through five
    choosers over the profile's own bytes, and twelve build traces --
    a factory inserted into the game's property list -- reproduce purchase
-   for purchase, mode for mode and draw for draw. Not yet: movement modes
-   2, 3, 5, 6, 7, the Lander, the TCopter, the loaded transport's move,
-   the join and retreat pre-steps, firing a power, the TCopter and Lander
-   purchases -- each raises NotImplementedError naming its routine, and
-   each needs a trace that enters it (an air or sea side, a damaged or
-   dry unit) before it is ported.
+   for purchase, mode for mode and draw for draw. **The condition byte is
+   read** (DERIVATION 48): the turn-start classifier that flags a unit low
+   on hp, fuel or ammo, and the pre-step it earns -- a join with a weak
+   neighbour, a retreat to a supplier or a repairing property -- on eight
+   traces, the first of them requested by the sparring harness's first
+   abort. Not yet: movement modes 2, 3, 5, 6, 7, the Lander, the TCopter,
+   the loaded transport's move, the retreat-after-move check, firing a
+   power, the TCopter and Lander purchases -- each raises
+   NotImplementedError naming its routine, and each needs a trace that
+   enters it (an air or sea side) before it is ported.
 
 4. **The enemy reply.** The planner's lookahead scores against a modelled
    reply instead of worst-case focus fire: `cpu.py` when the opponent is the
@@ -161,6 +165,22 @@ Three decisions, made once so they do not get re-argued:
    thresholds, so a set tuned against the VS profiles could miss a
    mission's personality. That read is one table, not a project. Steps 4
    and 5 are one iteration loop.
+
+   *Begun: the harness.* `tools/sparring.py` plays the planner against the
+   port from a dump to an HQ, a rout or a day cap and reports the outcome,
+   the days, the value each side lost, the properties held and a per-day
+   log; an abort writes the board as a dump both readers load, the trace
+   request. Its first two games said two things. Playing P1 on the step 3
+   fixture it aborted on day 2 at the join pre-step for a damaged foot
+   unit (`0x080650B8`) -- the first entry in the trace queue, traced and
+   ported the same day (DERIVATION 48); replayed, that game is a rout on
+   day 8, and the queue's next entry is `0x08064D6A`, a foot unit with no
+   property left to walk to, from the P2 game's day 10. Playing P2
+   it LOST its HQ on day 13: every foot unit was away capturing cities
+   while one enemy Infantry walked onto the HQ, and nothing in the
+   proposals pulls a unit back to defend a property -- the reply sees the
+   loss two plies out, when no unit is left in range to stop it. That is a
+   shape to fix in the objective term before any weight is tuned.
 
 6. **Acceptance.** A whole-turn driver built on the single-action one, and
    one headless run per mission from a parked savestate, once per release.

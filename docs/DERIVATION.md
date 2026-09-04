@@ -3155,3 +3155,96 @@ build action (`tests/test_cpu.py`).
 Not exercised: the TCopter and Lander purchases (the profile in play
 weighs them 0 and no trace had both the flag and the ratio), a nonzero
 army-record-0 divisor, and campaign profiles.
+
+## 48. The condition byte: what a damaged or dry CPU unit does first
+
+The sparring harness (ROADMAP step 5) aborted its first game on day 2 at
+`0x080650B8`, the join pass for a damaged foot unit, which the port had
+never read. Eight traces on the `vs15_p2` state with P1 as the CPU and one
+unit written damaged, dry or empty (`tests/fixtures/cpu/prestep-*`) read
+the branch, and the port reproduces all eight command for command and draw
+for draw.
+
+**The condition.** Record byte `+9` bits 0..2 are set once per turn by
+state 0 of the AI driver (`0x08068910`, called from `0x08068368` after the
+profile copy and the side flags) through a three-entry table at
+`0x0811A920` indexed by the current bits:
+
+- bits 0 (`0x08068848`): hp under `profile[type][3]` -> 2 (needs repair);
+  else a unit with an ammo gauge (stats `+0xD` nonzero) and no ammo -> 1
+  (needs supply); else fuel x 100 / max fuel (stats `+0x12`) under
+  `profile[type][2]` -> 1. Andy's row on map 38 puts the hp bar at 20 and
+  the fuel bar at 10% for foot units, 20% for a Tank.
+- bits 1 (`0x080688CC`): cleared once fuel is above max - 5, and only
+  then -- an empty gauge keeps a unit at 1 until its fuel reads full.
+- bits 2 (`0x080688F8`): cleared once hp is above 91.
+- anything above 2 is cleared.
+
+The after-dumps carry the byte: 15 hp reads 2, fuel 5 of 70 reads 1, a
+retyped Mech with Infantry's zero ammo reads 1 (`prestep-join-sum-over`),
+and the port's context ends every traced turn with the same bits on every
+CPU unit (`tests/test_cpu.py TestThePreStep`).
+
+**The pre-step.** Decide (`0x080642C8`) runs `0x08065590` for a unit at
+condition 1 or 2 with no capture in progress (`+5 & 0xF8` clear), before
+the sub-phase's behaviour: it sets `0x03005008` bit 1, calls the join
+`0x08065608`, then the condition's routine from the two-entry table at
+`0x0811A918`. Whatever issues a record ends the unit's decision; the
+behaviour runs only when nothing did (the 15 hp Infantry with no own city
+walked its ordinary capture walk, fourth in the turn; with a city written
+it moved toward the city as the first command).
+
+- **The join** (`0x08065608`): a unit at 50 hp or less joins the same-type
+  friendly with the most hp within its move grid (`0x0801D968`, the
+  partner's tile at a positive cost), when the two together stay within
+  100 hp, neither carries anything, and the partner's `+1` bit 3 is clear
+  -- record id 9 onto the partner's tile. Mech #1 at 40 beside Mech #4 at
+  50 joined (`prestep-join-mech`, 90 hp after); beside Mech #4 at 100 it
+  did not (`prestep-join-sum-over`). The survivor's condition bits read 0
+  after the join; the port clears them on every join until a trace says
+  otherwise.
+- **Condition 1, supply** (`0x08065438`): the unit's move grid, its `0x79`
+  ring, and `0x0806138C`'s list -- own suppliers (`0x08282EE5`: the APC
+  and vestigial type 9) on reached tiles, for a type the table
+  `0x08282ECC` lets be supplied; for a BCopter or TCopter an own Cruiser
+  with its second bay empty instead. `0x08060A34` picks the cheapest
+  (later entries winning ties). A copter boards a Cruiser it reaches this
+  turn (record 6, the Cruiser's `+9` bits 6..7 incremented); anything else
+  moves toward the pick (`0x08060078`), which puts it on the tile beside
+  the supplier -- the Tank at fuel 5 stopped at (6,3) next to the APC at
+  (6,2) (`prestep-fuel-tank`). With nothing in reach, a whole-map grid
+  (`0x78`, enemies blocking) and `0x080614A8`'s list: own suppliers
+  anywhere, and own properties whose class (`0x083B7E3B` by terrain) is
+  the one the type is served at (`0x083B7E22`, 1 ground / 2 air / 3 sea);
+  the Infantry at fuel 5 went straight to the HQ (`prestep-fuel-inf`), the
+  ammo-less Mech toward it (`prestep-join-sum-over`).
+- **Condition 2, repair** (`0x08065338`): a whole-map grid and
+  `0x0806121C`'s list -- own properties whose class (`0x083B7DDC`) is the
+  one that repairs the type (`0x083B7DF0`: 2 ground, 4 air, 6 sea), empty
+  or under the unit itself. The HQ codes 0 in `0x083B7DDC`, so it is not a
+  repair point here, which is why 15 hp with only the HQ owned changed
+  nothing (`prestep-hp-inf`, `prestep-hp-tank`) and a written own city
+  drew the Tank onto it (`prestep-repair-tank`, reached this turn: a Wait
+  onto the tile) and the Infantry one step from it
+  (`prestep-repair-inf`). The routine runs its search with the profile's
+  threat-avoidance byte set to 100, and again with it at 0 when the first
+  pass issued nothing.
+
+**The foot pass's own join** (`0x080650B8`, first in `0x08064C94`, for a
+foot unit at 50 hp or less): the first same-type friendly in scan order
+that stands on a capturable tile within reach, the two together within
+120 hp -- a reinforcement for a capturer. Read, not traced: no parked
+state puts a damaged foot unit within reach of a friendly on a property,
+and position writes are refused by the rig. The ROM does not exclude the
+unit's own tile; the port does.
+
+**Not read:** `0x0806636C`, the check a move made with `0x03005008` bit 1
+set rolls into with probability `profile[type][1]` (10% on these rows) --
+none of the eight traces rolled under it. The port raises there.
+
+**Rig notes.** A unit's type is written by name (`{"unit": 1, "type":
+"Mech"}`); the retyped Mech kept Infantry's zero ammo, which is what made
+the join traces double as the empty-gauge case. An own city written onto
+the terrain needs the cached income bumped (`raw` write on army `+8`,
+DERIVATION 47) or the after-dump's funds disagree with the model by one
+property's rate.

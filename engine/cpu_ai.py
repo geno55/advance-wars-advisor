@@ -46,7 +46,7 @@ from typing import Dict, List, Optional, Tuple
 
 try:
     from . import actions, co as co_mod, cpu as cpu_mod, damage, pathing
-    from . import production, rng as rng_mod, sim
+    from . import production, rng as rng_mod, sim, supply as supply_mod
     from .cpu import Command
 except ImportError:                     # engine/ on the path
     import actions
@@ -57,6 +57,7 @@ except ImportError:                     # engine/ on the path
     import production
     import rng as rng_mod
     import sim
+    import supply as supply_mod
     from cpu import Command
 
 Coord = Tuple[int, int]
@@ -66,6 +67,11 @@ RANGE_MARK = 0x79          # 0x0801D2EC's ring marker: "one step past reach"
 WHOLE_MAP = 0x78
 NO_TILE = 0x270F
 HQ, CITY, PORT, SHOAL, BASE = 8, 6, 11, 13, 14
+CRUISER, BCOPTER, TCOPTER = 22, 19, 20
+# 0x08282EE5[type]: the unit types that resupply a neighbour (APC, and the
+# vestigial type 9); 0x08282ECC[type]: the types a supplier can serve
+SUPPLIERS = (7, 9)
+NOT_SUPPLIABLE = (0, 12)
 
 _tables = None
 
@@ -949,9 +955,25 @@ class Turn:
             return
 
     def join_pass(self, unit):                                   # 0x080650B8
+        """A foot unit at 50 hp or less reinforces a capturer: the first
+        same-type friendly in scan order that stands on a capturable tile
+        within reach, the two together within 120 hp. (The ROM does not
+        exclude the unit's own tile; it is excluded here.)"""
         if unit.hp > 0x32:
             return
-        raise NotImplementedError("0x080650B8 join for a damaged foot unit")
+        g = self.own_reach(unit)
+        for x, y in self.scan():
+            if g.get((x, y), UNREACHABLE) < 0:
+                continue
+            e = self.unit_at(x, y)
+            if e is None or e.player != self.player or e.slot == unit.slot:
+                continue
+            if not self.capturable(x, y) or e.type != unit.type:
+                continue
+            if e.hp + unit.hp > 0x78:
+                continue
+            self.emit(unit, 9, (x, y))
+            return
 
     def transport_pass(self, unit):                              # 0x08064980
         if self.ai(unit)[0] & 0xC0:
@@ -1185,10 +1207,221 @@ class Turn:
         self.log.append(f"{unit.type}#{unit.slot} at ({unit.x},{unit.y}) random {self.ai(unit)[1]}")
         cond = self.ai(unit)[0] & 7
         if cond in (1, 2) and unit.capture == 0:
-            raise NotImplementedError(f"0x08065590 pre-step for condition {cond}")
-        behaviour(unit)
+            self.pre_step(unit, cond)
+        if not self.command_issued(unit):
+            behaviour(unit)
         if self._issued_for == unit.slot and self.commands and self.commands[-1].slot == unit.slot:
             self.execute(self.commands[-1])
+
+    # -- the condition byte and the pre-step (DERIVATION 48) --------------------
+    #
+    # Record byte +9 bits 0..2 are the unit's CONDITION: 1 needs supply, 2
+    # needs repair. State 0 classifies every own unit at the turn's start
+    # (0x08068910 through the table at 0x0811A920), and decide runs a
+    # pre-step (0x08065590) for a conditioned unit that is not capturing:
+    # a join with a weak same-type neighbour, then the retreat the
+    # condition names -- to a supplier or a resupplying property, or to a
+    # property that repairs the type. Six traces (prestep-*) read it.
+
+    def classify(self) -> None:                                  # 0x08068910
+        """State 0: each own unit's condition. A fresh unit (0) is flagged
+        2 when its hp is under profile[type][3], else 1 when it has an
+        ammo gauge and it is empty, else 1 when fuel x 100 / max fuel is
+        under profile[type][2]. A unit already at 1 is cleared once its
+        fuel is above max - 5 (0x080688CC); one at 2 once its hp is above
+        91 (0x080688F8); anything above 2 is cleared."""
+        for u in sorted(self.board.units_of(self.player), key=lambda u: u.slot):
+            a = self.ai(u)
+            row = self.profile_unit(u)
+            cond = a[0] & 7
+            if cond > 2:
+                a[0] &= ~7
+                cond = 0
+            max_fuel, max_ammo = supply_mod.resupply_caps(u.type)
+            if cond == 0:                                        # 0x08068848
+                if u.hp < row[3]:
+                    a[0] = (a[0] & ~7) | 2
+                elif max_ammo and u.ammo == 0:
+                    a[0] = (a[0] & ~7) | 1
+                elif (div(u.fuel * 100, max_fuel) & 0xFF) < row[2]:
+                    a[0] = (a[0] & ~7) | 1
+            elif cond == 1:                                      # 0x080688CC
+                if not (max_fuel - 5 >= u.fuel):
+                    a[0] &= ~7
+            elif cond == 2:                                      # 0x080688F8
+                if u.hp > 0x5B:
+                    a[0] &= ~7
+            if (a[0] & 7) != cond:
+                self.log.append(f"  classify {u.type}#{u.slot}: condition {cond} -> {a[0] & 7}")
+
+    def pre_step(self, unit, cond: int) -> None:                 # 0x08065590
+        self.goal_grid = {}
+        self.flags_5008 |= 2
+        self.join_weak(unit)                                     # 0x08065608
+        if self.command_issued(unit):
+            return
+        if cond == 1:
+            self.seek_supply(unit)                               # 0x08065438
+        else:
+            self.seek_repair(unit)                               # 0x08065338
+
+    @staticmethod
+    def pick_min(lst):
+        """0x08060A34 over a (tile, score) list: the lowest score, later
+        entries winning ties; None when the list is empty."""
+        goal, best = None, 0x7FFF
+        for tile, val in lst:
+            if val <= best:
+                goal, best = tile, val
+        return goal
+
+    def join_weak(self, unit) -> None:                           # 0x08065608
+        """A unit at 50 hp or less joins the same-type friendly with the
+        most hp that it can reach, when the two together stay within 100
+        and neither carries anything; the partner's +1 bit 3 must be
+        clear. (The ROM does not skip loaded records; a passenger's tile
+        is its ride's, so they are skipped here.)"""
+        if unit.hp > 0x32:
+            return
+        g = self.own_reach(unit)
+        best, best_hp = None, 0
+        for e in sorted(self.board.units_of(self.player), key=lambda u: u.slot):
+            if e.type != unit.type or e.slot == unit.slot or e.loaded:
+                continue
+            if unit.hp + e.hp > 100 or e.cargo or unit.cargo:
+                continue
+            if e.state & 8 or e.hp <= best_hp:
+                continue
+            if g.get((e.x, e.y), UNREACHABLE) <= 0:
+                continue
+            best, best_hp = e, e.hp
+        if best is not None:
+            self.ai(unit)[0] &= ~8
+            self.emit(unit, 9, (best.x, best.y))
+
+    def is_copter(self, unit) -> bool:
+        return type_id(unit.type) in (BCOPTER, TCOPTER)
+
+    def suppliers_in_reach(self, unit, g) -> list:               # 0x0806138C
+        """Own suppliers (0x08282EE5) on tiles the grid reached, when the
+        unit can be supplied (0x08282ECC); for a copter, an own Cruiser
+        with its second bay empty instead."""
+        out = []
+        copter = self.is_copter(unit)
+        for e in sorted(self.board.units_of(self.player), key=lambda u: u.slot):
+            if e.loaded:
+                continue
+            c = g.get((e.x, e.y), UNREACHABLE)
+            if c < 0:
+                continue
+            if not copter and type_id(e.type) in SUPPLIERS \
+                    and type_id(unit.type) not in NOT_SUPPLIABLE and not (e.state & 8):
+                out.append(((e.x, e.y), c))
+            elif copter and type_id(e.type) == CRUISER and e.cargo2 == 0:
+                out.append(((e.x, e.y), c))
+        return out
+
+    def supply_points(self, unit, g) -> list:                    # 0x080614A8
+        """Over the whole map in scan order: own suppliers (a Cruiser with
+        its first bay empty for a copter) and own properties whose class
+        (0x083B7E3B) is the one the unit's type is served at (0x083B7E22)."""
+        t = tables()
+        want = t["t7E22"][type_id(unit.type)]
+        copter = self.is_copter(unit)
+        out = []
+        for x, y in self.scan():
+            c = g.get((x, y), UNREACHABLE)
+            if c < 0:
+                continue
+            e = self.unit_at(x, y)
+            if e is not None:
+                if e.player != self.player:
+                    continue
+                if not copter:
+                    if type_id(e.type) in SUPPLIERS and type_id(unit.type) not in NOT_SUPPLIABLE:
+                        out.append(((x, y), c))
+                elif type_id(e.type) == CRUISER and e.cargo == 0:
+                    out.append(((x, y), c))
+                continue
+            terr = self.board.terrain[y][x]
+            if t["t7E3B"][terr & 0x1F] == want and self.board.owner[y][x] == self.player:
+                out.append(((x, y), c))
+        return out
+
+    def seek_supply(self, unit) -> None:                         # 0x08065438
+        """Condition 1: a supplier within reach first -- a copter boards
+        a reachable Cruiser, anything else walks up to it -- else the
+        nearest supplier or resupplying property anywhere on the map."""
+        g = self.own_reach(unit)
+        self.expand(g)
+        goal = self.pick_min(self.suppliers_in_reach(unit, g))
+        if goal is None:
+            g2 = self.fill(unit.x, unit.y, type_id(unit.type), WHOLE_MAP, True)
+            goal = self.pick_min(self.supply_points(unit, g2))
+            self.log.append(f"  supply: no supplier in reach; nearest point {goal}")
+            if goal is not None:
+                self.move_toward(unit, goal)
+            return
+        e = self.unit_at(*goal)
+        self.log.append(f"  supply: supplier in reach at {goal}")
+        if e is not None and g.get(goal, UNREACHABLE) <= self.eff_move(unit) \
+                and type_id(e.type) == CRUISER and self.is_copter(unit):
+            self.ai(e)[0] = (self.ai(e)[0] & 0x3F) | ((((self.ai(e)[0] >> 6) + 1) & 3) << 6)
+            self.ai(unit)[0] &= ~0x39
+            self.ai(unit)[0] &= ~8
+            self.emit(unit, 6, goal)
+            return
+        self.move_toward(unit, goal)
+
+    def repair_points(self, unit, g) -> list:                    # 0x0806121C
+        """Own properties whose class (0x083B7DDC) repairs this type
+        (0x083B7DF0), empty or under the unit itself, scored by the grid."""
+        t = tables()
+        want = t["repair_class"][type_id(unit.type)]
+        out = []
+        for x, y in self.scan():
+            c = g.get((x, y), UNREACHABLE)
+            if c < 0:
+                continue
+            if self.board.owner[y][x] != self.player:
+                continue
+            if t["capture_bonus"][self.board.terrain[y][x] & 0x1F] != want:
+                continue
+            e = self.unit_at(x, y)
+            if e is not None and e.slot != unit.slot:
+                continue
+            if e is not None and self.ai(unit)[2] == 5:
+                continue
+            out.append(((x, y), c))
+        return out
+
+    def seek_repair(self, unit) -> None:                         # 0x08065338
+        """Condition 2: the nearest own property that repairs the type --
+        reached this turn, a Wait onto it; else a move toward it. The
+        first pass avoids every threatened tile (the profile's avoidance
+        is set to 100 for it); when that pass issues nothing, a second
+        pass runs with avoidance 0."""
+        row = self.profile_unit(unit)
+        saved = row[1]
+        try:
+            for avoidance in (100, 0):
+                row[1] = avoidance
+                g = self.fill(unit.x, unit.y, type_id(unit.type), WHOLE_MAP, True)
+                goal = self.pick_min(self.repair_points(unit, g))
+                if goal is None:
+                    self.log.append("  repair: no own property repairs this unit")
+                    return
+                row[1] = saved
+                if g.get(goal, UNREACHABLE) <= self.eff_move(unit):
+                    self.log.append(f"  repair: {goal} reached this turn")
+                    self.emit(unit, 2, goal)
+                else:
+                    self.log.append(f"  repair: toward {goal}")
+                    self.move_toward(unit, goal)
+                if self.command_issued(unit):
+                    return
+        finally:
+            row[1] = saved
 
     def execute(self, cmd: Command):
         act = cpu_mod.to_action(self.board, cmd, self.warnings, fog=False)
@@ -1201,8 +1434,15 @@ class Turn:
         if act.kind == "attack":
             for _ in range(rng_mod.BATTLE_DRAWS_NO_COUNTER):
                 self.draw("battle")
+        if act.kind == "join":
+            # the surviving record's condition bits read 0 after the join
+            # on the prestep-join-mech trace (the mover was at condition 1
+            # for an empty gauge; the merge filled it) -- one trace, so a
+            # clear on every join is the model until one contradicts it
+            self.ai(act.unit)[0] &= ~7
 
     def run(self):
+        self.classify()
         self.build_prop_grid()
         phases = tables()["subphases"]["fog" if self.ctx.fog else "clear"]
         for i, name in enumerate(phases):
@@ -1641,11 +1881,18 @@ class Turn:
 # (0x080649B0, 0x0805FC94), the supply pass (0x08065034, 0x08061710); the
 # path builder's tie draws (0x0801DC38); the power predicates (0x0806490C).
 #
+# The condition byte and the pre-step (DERIVATION 48, six prestep-*
+# traces): the turn-start classifier (0x08068910), the join with a weak
+# neighbour (0x08065608), the supply retreat (0x08065438) and the repair
+# retreat (0x08065338), and the foot pass's join onto a capturer
+# (0x080650B8).
+#
 # What raises NotImplementedError with its address: movement modes 2, 3,
 # 5, 6, 7 and the sea variant of mode 1; the Lander pass (0x08064DF4); the
 # TCopter (0x08060670); the loaded transport's move (0x08060708,
-# 0x080607C4); the join and retreat pre-steps (0x08065590, 0x080650B8);
-# the "nothing to do" fallbacks (0x0806606C); firing a power (0x0801C120);
+# 0x080607C4); the retreat-after-move check a conditioned unit's move
+# rolls into (0x0806636C, profile[type][1] percent of the time); the
+# "nothing to do" fallbacks (0x0806606C); firing a power (0x0801C120);
 # campaign profiles (0x080683B0).
 #
 # Building (driver state 4, 0x08066EC8, run once at the turn's end) is

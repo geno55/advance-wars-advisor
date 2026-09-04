@@ -137,6 +137,10 @@ def extract(rom: bytes) -> dict:
         # terrain's factory class >> 1 (0x080689A8, DERIVATION 47); bit 0
         # makes foot soldiers ask for TCopters, bit 1 gates the Lander buy
         "side_flags": list(rom[0x11A92C:0x11A92C + 5]),
+        # 0x3B7DF0 [25]: per unit type, the property class (as capture_bonus
+        # codes it per terrain) that repairs the type -- 2 ground, 4 air,
+        # 6 sea; the repair retreat (0x0806121C, DERIVATION 48) matches it
+        "repair_class": list(rom[0x3B7DF0:0x3B7DF0 + 25]),
         "terrain_value": [s8(rom, 0x08284314 + i) for i in range(32)],
         "counter_weight": list(struct.unpack_from("<6i", rom, 0x11A8E8)),
         "hunt_multiplier": list(rom[0x11A900:0x11A905]),

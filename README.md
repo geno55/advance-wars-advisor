@@ -486,6 +486,15 @@ purchase, mode and RNG draw. Two things the rig learned on the way: the
 list's tile-to-record index has to move with an inserted record, and income
 is a cached sum the turn-start payer does not recompute.
 
+**The condition byte (DERIVATION 48).** The sparring harness's first
+abort was a trace request, and eight traces answered it: at the start of
+its turn the AI flags each unit low on hp, out of ammo or low on fuel
+against its profile row, and a flagged unit acts before its pass -- it
+joins a weak same-type neighbour if the two fit in 100 hp, else walks to
+the nearest supplier or resupplying property, or onto the nearest own city
+or base that repairs its type (the HQ is not one). `engine/cpu_ai.py`
+reproduces all eight.
+
 **The enemy reply (ROADMAP step 4).** The planner's plan is now a
 proposal. It and a few variants -- at its closest calls, the same unit's
 next-best action committed and the rest of the turn re-planned -- are each
@@ -639,6 +648,9 @@ tools/threat_report.py    exposure, per-unit safety, and the coverage grid
 tools/action_report.py    every action a unit has this turn, facts attached
 tools/advise.py           a turn's plan: facts quoted, weights labelled heuristic,
                           the opponent's modelled reply under it
+tools/sparring.py         the planner against the CPU port to the end: the
+                          result a weight set is judged by (ROADMAP step 5)
+tests/test_sparring.py    4 tests: the rout, the day cap, the abort's dump, the HQ
 tests/test_advisor.py     30 tests: the arithmetic, invariance, scenarios, the reply
 engine/cpu.py             the CPU's command record decoded, replayed and
                           PREDICTED (ROADMAP step 3)
@@ -821,6 +833,23 @@ variants are proposed, `--weight name=value` overrides one weight for a
 run, `--luck max` plans in the kindest world instead of the worst, `--board`
 prints the board the plan leaves behind. Read `docs/ADVISOR.md` for where
 the planner is naive before trusting it.
+
+## Sparring
+
+```bash
+python tools/sparring.py state.json --both-sides --days 20 --aborts aborts/
+```
+
+The planner against the game's own AI, ported, from a dumped state to an
+HQ falling, a rout or the day cap — in Python, no emulator. Prints who won
+and how, the days it took, the value each side lost, the properties held;
+`--json` keeps the per-day log, `--weight name=value` tries a weight set,
+`-v` prints each turn's attacks, captures and purchases. Every game is
+deterministic (the port draws from the dump's RNG state), so compare weight
+sets across states rather than by repetition. Where the port meets a branch
+it has not read the game stops as an abort and `--aborts DIR` writes the
+board as a dump the step 3 rig can trace from. A win here is a win over the
+port, not yet over the game: see ROADMAP step 5 for the two caveats.
 
 ## Re-extracting from the ROM
 
