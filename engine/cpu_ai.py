@@ -645,6 +645,23 @@ class Turn:
         if tile is not None:
             self.emit(unit, 2, tile)
 
+    def fallback(self, unit):
+        """0x0806606C, the "nothing to do" routine (DERIVATION 49). Without
+        a Port on the map (side flag bit 1 clear), or for a type a Lander
+        cannot carry (0x083B7D9C), it is settle() -- and settle ends the
+        unit's decision through 0x080796B4 rather than returning, so the
+        Lander pickup written below those two calls is never reached. That
+        pickup -- pickup state 3, board an adjacent Lander, the list of
+        Landers with room (0x08061808), then the nearest Port or Shoal a
+        Lander reaches by mark plus move cost -- is read only as far as the
+        listing goes and raises here."""
+        if (not (self.side_flags() & 2)
+                or not tables()["t7D9C"][type_id(unit.type) - 1]):
+            self.settle(unit)
+            return
+        raise NotImplementedError("0x080660A6 (the Lander pickup for a unit "
+                                  "with nothing to do)")
+
     # -- commands ------------------------------------------------------------
     def command_issued(self, unit) -> bool:
         return bool(self.commands) and self.commands[-1].slot == unit.slot \
@@ -795,7 +812,8 @@ class Turn:
             if 0 <= d < best:
                 best, goal = d, hq
         if goal is None:
-            raise NotImplementedError("0x0806606C (no enemy HQ reachable)")
+            self.fallback(unit)
+            return
         self.move_toward(unit, goal)
 
     def hunt_list(self, unit, g: Dict[Coord, int]) -> List[Tuple[Coord, int]]:
@@ -842,7 +860,8 @@ class Turn:
             if val <= best:
                 goal, best = tile, val
         if goal is None:
-            raise NotImplementedError("0x0806606C (nothing to hunt)")
+            self.fallback(unit)
+            return
         if g.get(goal, 0) <= RANGE_MARK:
             self.move_toward(unit, goal)
         else:
@@ -883,7 +902,12 @@ class Turn:
                 return
             self.move_toward(unit, goal)
             return
-        raise NotImplementedError("0x08064D6A (foot unit with no property to walk to)")
+        # 0x08064D6A: nothing to walk to. With an Airport on the map (side
+        # flag bit 0) the unit asks for a TCopter ride instead -- unread.
+        if self.ctx_flag_air():
+            raise NotImplementedError("0x08064D76 (a TCopter ride for a foot unit "
+                                      "with no property to walk to)")
+        self.fallback(unit)
 
     def count_class(self, cls: int) -> int:                     # 0x0805F000
         return sum(1 for u in self.board.units_of(self.player)
@@ -1887,13 +1911,20 @@ class Turn:
 # retreat (0x08065338), and the foot pass's join onto a capturer
 # (0x080650B8).
 #
+# The "nothing to do" fallback (DERIVATION 49, the two noprop-* traces): a
+# foot unit with no property left to walk to (0x08064D6A), and the mode 1
+# and mode 4 movers with nothing reachable, all fall into 0x0806606C, which
+# on a map without a Port is settle() -- a unit that may stay where it is
+# issues nothing.
+#
 # What raises NotImplementedError with its address: movement modes 2, 3,
 # 5, 6, 7 and the sea variant of mode 1; the Lander pass (0x08064DF4); the
 # TCopter (0x08060670); the loaded transport's move (0x08060708,
 # 0x080607C4); the retreat-after-move check a conditioned unit's move
 # rolls into (0x0806636C, profile[type][1] percent of the time); the
-# "nothing to do" fallbacks (0x0806606C); firing a power (0x0801C120);
-# campaign profiles (0x080683B0).
+# fallback's Lander pickup (0x080660A6) and the foot unit's TCopter ride
+# (0x08064D76), both behind a side flag no traced map sets; firing a power
+# (0x0801C120); campaign profiles (0x080683B0).
 #
 # Building (driver state 4, 0x08066EC8, run once at the turn's end) is
 # ported above and reproduces the eleven build traces (DERIVATION 47):

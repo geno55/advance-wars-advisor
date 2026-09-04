@@ -37,6 +37,10 @@ BUILDS = ["build-b1-base", "build-b2-two-bases", "build-b3-broke",
 PRESTEP = ["prestep-join-mech", "prestep-join-sum-over", "prestep-hp-inf",
            "prestep-hp-tank", "prestep-fuel-tank", "prestep-fuel-inf",
            "prestep-repair-inf", "prestep-repair-tank"]
+# The "nothing to do" fallback (DERIVATION 49): neutral cities written to
+# the CPU's side on vs15_p2 so that its foot units outnumber the properties
+# left to walk to -- four written and the APC removed, then all six.
+NOPROP = ["noprop-foot", "noprop-apc"]
 
 
 def trace(name):
@@ -119,7 +123,7 @@ class TestTheReplay(unittest.TestCase):
 
 class TestThePrediction(unittest.TestCase):
     """engine/cpu.predict against every trace (tools/cpu_trace.py predict)."""
-    ALL = EXACT + ["vs15-p1-cpu-fog"] + BUILDS + PRESTEP
+    ALL = EXACT + ["vs15-p1-cpu-fog"] + BUILDS + PRESTEP + NOPROP
 
     def test_every_trace_is_predicted_record_for_record(self):
         for name in self.ALL:
@@ -333,3 +337,35 @@ class TestBuilding(unittest.TestCase):
             with self.subTest(name=name):
                 t = trace(name)
                 self.assertEqual(t["builds"][0]["mode"], mode)
+
+
+class TestTheFallback(unittest.TestCase):
+    """DERIVATION 49: a foot unit with no property left to walk to
+    (0x08064D6A) falls into the AI's "nothing to do" routine (0x0806606C),
+    which on a map without a Port is settle -- a unit that may stay where
+    it stands issues nothing."""
+
+    def cmds(self, name):
+        return [(c["name"], c["slot"], (c["x"], c["y"])) for c in trace(name)["commands"]]
+
+    def test_the_foot_unit_left_over_issues_nothing(self):
+        # four cities written to P1: three properties for four foot units,
+        # and Mech #4, last in slot order, gets none -- no record at all
+        slots = [c[1] for c in self.cmds("noprop-foot")]
+        self.assertEqual([s for s in slots if s in (1, 2, 3, 4)], [1, 2, 3])
+        # all six written: the HQ alone is left, Infantry #1 takes it and
+        # Infantry #2 and Mech #4 issue nothing (Mech #3 rolled its attack)
+        slots = [c[1] for c in self.cmds("noprop-apc")]
+        self.assertNotIn(2, slots)
+        self.assertNotIn(4, slots)
+        self.assertIn(("wait", 1, (2, 4)), self.cmds("noprop-apc"))
+
+    def test_the_port_reaches_the_fallback_and_issues_nothing_there(self):
+        for name, silent in (("noprop-foot", {4}), ("noprop-apc", {2, 4})):
+            with self.subTest(name=name):
+                r = cpu_trace.predict(trace(name))
+                log = "\n".join(r["log"])
+                self.assertEqual(log.count("goal None"), len(silent))
+                self.assertFalse(silent & {c.slot for c in r["turn"].commands})
+                self.assertEqual(r["predicted"], r["traced"])
+

@@ -495,6 +495,17 @@ the nearest supplier or resupplying property, or onto the nearest own city
 or base that repairs its type (the HQ is not one). `engine/cpu_ai.py`
 reproduces all eight.
 
+**Nothing to do (DERIVATION 49).** The harness's second abort, a foot
+unit with no property left to walk to, was traced by writing neutral cities
+to the CPU's side until its foot units outnumbered the properties. The
+leftover unit falls into the AI's general "nothing to do" routine, which on
+a map without a Port is settle: a unit that may stay where it stands
+issues no command at all. Settle hands control straight back to the AI
+driver rather than returning, which is why the game can call it three
+times in a row. Two traces, reproduced draw for draw; the Lander pickup
+behind the Port flag and the TCopter ride behind the Airport flag remain
+read only as far as the listing goes.
+
 **The enemy reply (ROADMAP step 4).** The planner's plan is now a
 proposal. It and a few variants -- at its closest calls, the same unit's
 next-best action committed and the rest of the turn re-planned -- are each
@@ -673,9 +684,11 @@ data/aw1_ai.json          every table the AI reads, 89 profiles included
                           (tools/extract_ai.py)
 tools/cpu_trace.py        let the game's CPU play a turn, trace its commands
                           and RNG draws, replay them, predict them
-tests/fixtures/cpu/       seven traced CPU turns with their boards and draws
-tests/test_cpu.py         the traces replayed and predicted: seven exact,
-                          record for record and draw for draw
+tests/fixtures/cpu/       29 traced CPU turns with their boards and draws:
+                          seven turns, twelve builds, eight pre-steps, two
+                          fallbacks
+tests/test_cpu.py         the traces replayed and predicted, record for
+                          record and draw for draw
 tools/sim_diff.py         the differential test: dump, apply(), drive one
                           action, dump, diff every field (dump / compile /
                           run / check / report)

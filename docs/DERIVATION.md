@@ -3248,3 +3248,63 @@ the join traces double as the empty-gauge case. An own city written onto
 the terrain needs the cached income bumped (`raw` write on army `+8`,
 DERIVATION 47) or the after-dump's funds disagree with the model by one
 property's rate.
+
+## 49. Nothing to do: the foot unit with no property left, and the fallback
+
+The sparring harness's second trace request (ROADMAP step 5): playing P2
+against the port on the step 3 fixture, the port aborted on day 10 at
+`0x08064D6A` -- P1's four foot units against three properties not P1's,
+with the profile's header byte 9 at 5 putting the per-property target
+limit at 4 / 5 = 0, one unit per property, so the fourth Mech had nowhere
+to walk. Two traces on `vs15_p2` with P1 as the CPU reproduce the shape
+by writing neutral cities to P1 (`tests/fixtures/cpu/noprop-*`):
+`noprop-foot` writes four of the six and removes the APC, leaving two
+cities and the enemy HQ for four foot units; `noprop-apc` writes all six
+and keeps the APC, leaving the HQ alone. The port reproduces both record
+for record and draw for draw (18 and 25 draws).
+
+**The tail of the foot pass** (`0x08064D6A`): with no goal, side flag
+bit 0 (`0x030050E4`, an Airport somewhere on the map) decides. Set, the
+unit takes pickup state 2 (`+9` bits 3..5), boards an adjacent transport
+(`0x080665B8`), lists the TCopters with room (`0x08060858`) and walks
+toward the nearest (`0x08063188`, `0x08060078`) -- unread beyond the
+listing, no traced map has an Airport, the port raises at `0x08064D76`.
+Clear, it falls into `0x0806606C`.
+
+**The fallback** (`0x0806606C`), which the mode 1 mover with no enemy HQ
+reachable and the mode 4 mover with nothing to hunt also call: with side
+flag bit 1 clear (no Port on the map) it calls `0x08066248`, settle; so
+does a unit whose type the Lander cannot carry (`0x083B7D9C`, the table
+DERIVATION 47's factory ranking reads). Otherwise: pickup state 3, board
+an adjacent transport, the list of own Landers with fewer than two
+passengers (`0x08061808`: type 0x17, `+9` bits 6..7 at most 1), then over
+the unit's whole-map grid the Port (11) or Shoal (13) tile whose mark byte
+is not 0x7F with the least mark plus move cost -- a walk toward it when
+the cost exceeds the unit's effective move (`0x0805F22C`), a Wait onto it
+when not (`0x0806198C` allowing). That pickup is read only this far and
+raises at `0x080660A6`.
+
+**Settle does not return.** Every path through `0x08066248` -- the unit
+may stop where it stands (`0x080604D0`), or the best-valued reachable tile
+it may stop on gets a Wait -- ends at `0x0806635A`, `0x080796B4(0x030050B0,
+1)`, which hands control back to the AI driver; the `bl` never comes back
+to its caller. That is why the fallback can call settle three times in a
+row without checking what it did, and why the port returns after each
+`settle()`. On these traces the unit could stop where it stood, so the
+record is nothing at all: `noprop-foot`'s Mech #4 and `noprop-apc`'s
+Infantry #2 and Mech #4 are absent from the command list, and the port
+issues nothing for them. The abort dump from day 10 now plays through.
+
+**The grids the fallback walks**, for whoever reads the pickup: the unit's
+move grid is row pointers at `0x03003600` (signed bytes, negative
+unreached); the map struct at `[0x08282CB4]` holds width at `+0`, height
+at `+2`, per-row offsets at `+18050`, the terrain bytes at `+5170` (low
+five bits the id) and the mark bytes at `+15474`.
+
+**Rig notes.** Four written cities put P1's cached income at 5 x 9500 =
+47500, six at 66500 (`raw` write on army `+8`, `0x0201ABA4`); `{"unit":
+5, "remove": true}` takes the APC off the board. Removing the APC changed
+nothing about the fallback: the units with nothing to do stayed put with
+or without a transport to board, since boarding is only reached behind
+the Port flag.
+
