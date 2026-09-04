@@ -246,6 +246,19 @@ M.CMD = 0x030050F0
 M.CMD_DISPATCH = 0x080669A0
 M.MATCH_PHASE = 0x0300357C
 M.trace = nil
+M.draws = nil
+-- Every draw from the RNG (0x08010A84, the step the record's +8 state is
+-- restored by 0x08010A78) while the CPU plays: the state before the draw,
+-- the caller, the unit being decided (0x030041F8). The AI's forecast rolls
+-- luck through the same RNG, so a predictor has to replay every draw.
+M.RNG_DRAW = 0x08010A84
+emu.addMemoryCallback(function()
+  if not M.draws then return end
+  local ok, st = pcall(emu.getState)
+  local lr = -1
+  if ok then lr = tonumber(st["cpu.r14"]) or -1 end
+  M.draws[#M.draws + 1] = { rng = M.r32(0x03001D30), lr = lr, unit = M.r8(0x030041F8) }
+end, emu.callbackType.exec, M.RNG_DRAW, M.RNG_DRAW, emu.cpuType.gba, emu.memType.gbaMemory)
 emu.addMemoryCallback(function()
   if not M.trace then return end
   local c = M.CMD
@@ -261,7 +274,9 @@ emu.addMemoryCallback(function()
   local u = M.unit(rec.slot)
   if u then
     rec.unit = u.name; rec.ux, rec.uy = u.x, u.y; rec.uhp = u.hp
+    rec.ai = { u.ai9, u.ai10, u.ai11 }
   end
+  rec.draws = M.draws and #M.draws or 0
   M.trace[#M.trace + 1] = rec
   -- the CPU is playing: every other side goes back to human NOW, so the
   -- next-player search at the CPU's End Turn hands to a human (a CPU turn
@@ -302,6 +317,7 @@ function M.cpu_turn(s)
   if not M.goto_tile(s.empty.x, s.empty.y) then r.why = "cursor never reached the empty tile"; return r end
   local before = M.active_player()
   M.trace = {}
+  M.draws = {}
   M.cpu_side = s.cpu
   -- each side's byte AS RELOADED is what comes back (M.control_orig, read
   -- in run_case before any write): a 0 (no controller, the empty P3/P4
@@ -334,7 +350,9 @@ function M.cpu_turn(s)
     if ph ~= 5 then M.tap("a", 4, 6) else M.wait(10) end
   end
   r.commands = M.trace
+  r.draws = M.draws
   M.trace = nil
+  M.draws = nil
   M.cpu_side = nil
   for p = 1, 4 do M.w8(M.army_addr(p) + 0x1B, M.control_orig[p]) end
   if not back then r.why = string.format("P%d never handed the turn back (%s)", cpu, last); return r end
@@ -513,6 +531,7 @@ function M.run_case(c, states)
       result.target_note = r.target_note
       result.drop_note = r.drop_note
       result.commands = r.commands
+      result.draws = r.draws
       result.cpu_player = r.cpu_player
       if r.ok then
         M.wait(60)

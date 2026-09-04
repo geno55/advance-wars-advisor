@@ -84,17 +84,22 @@ Three decisions, made once so they do not get re-argued:
    driver replaced by End Turn. The CPU's build logic falls out of the same
    read and informs the planner's build term.
 
-   *Begun* (DERIVATION 44). The rig exists: army byte `+0x1B` = 2 hands the
-   turn to the AI, `mesen_drive.lua`'s `cpu_turn` step lets it play and
-   traces every 20-byte command record it dispatches, `tools/cpu_trace.py`
-   runs and replays a trace, and `engine/cpu.py` decodes the record into
-   engine Actions. Eight turns are traced (`tests/fixtures/cpu/`); seven
-   replay through `sim.apply` field for field, which also measured that
-   the AI's strike takes the first RNG draw. What is read: the phase
-   machines, the profile copy, the sub-phase lists that fix the unit
-   order, the per-unit random. What is not: the decision routine at
-   `0x08061A64` and the build and power logic -- `predict()` does not
-   exist yet, and `tests/test_cpu.py` pins everything that does.
+   *Delivered for what the traces exercise* (DERIVATION 44, 45). The rig:
+   army byte `+0x1B` = 2 hands the turn to the AI, `mesen_drive.lua`'s
+   `cpu_turn` step lets it play and traces every 20-byte command record it
+   dispatches and every RNG draw it makes, `tools/cpu_trace.py` runs,
+   replays and now `predict`s a trace. The predictor: `engine/cpu.predict`
+   over `engine/cpu_ai.py`, the AI ported routine by routine -- the
+   nineteen sub-phases, the capture, attack, move, drop and supply passes,
+   the forecast with its luck draws, the mover, the threat grid, the
+   profile (`data/aw1_ai.json`, `tools/extract_ai.py`) -- reproduces all
+   seven traced turns record for record and draw for draw and leaves the
+   game's board (`tests/test_cpu.py`). Not yet: movement modes 2, 3, 5, 6,
+   7, the Lander, the TCopter, the loaded transport's move, the join and
+   retreat pre-steps, firing a power, building -- each raises
+   NotImplementedError naming its routine, and each needs a trace that
+   enters it (a map with a factory, an air or sea side, a damaged or dry
+   unit) before it is ported.
 
 4. **The enemy reply.** The planner's lookahead scores against a modelled
    reply instead of worst-case focus fire: `cpu.py` when the opponent is the
@@ -138,7 +143,7 @@ Three decisions, made once so they do not get re-argued:
 |---|---|---|---|
 | 1 | `engine/advisor.py`, `tools/advise.py`, `docs/ADVISOR.md` (delivered) | -- | invariance and scenario tests (`tests/test_advisor.py`, delivered) |
 | 2 | `harness/mesen_state.lua`, `harness/mesen_drive.lua`, `tools/sim_diff.py` (delivered) | `tests/fixtures/sim_diff/`: the corpus, both parked states, 126 before/after dumps, the result log (delivered) | `sim_diff` clean: 63/63 (`tests/test_sim_diff.py`, delivered) |
-| 3 | `engine/cpu.py` | DERIVATION: the CPU's rules, and the turns it played | prediction vs played turn |
+| 3 | `engine/cpu.py` | DERIVATION: the CPU's rules, and the turns it played | prediction vs played turn -- seven traces, record for record and draw for draw (DERIVATION 45) |
 | 4 | the reply lookahead in `advisor.py` | -- | scenario tests |
 | 5 | `tools/selfplay.py` | weight sets and their relative results | -- |
 | 6 | the whole-turn driver, `tools/campaign_run.py` | a result per mission per release | the win |

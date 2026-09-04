@@ -2739,9 +2739,227 @@ every property-holding army agrees and otherwise takes the dumped cell.
 
 ### What is not done
 
-The predictor. Reading `0x08061A64` and the sub-phases behind the order
-list is the work of the next sessions; the rig, the record format, eight
-traced turns and an exact replay are what they start from. Open and
-listed: the drop directions 2..4 (assumed east/south/west), why the full
-meter went unfired, the profile table's meaning, and whether the fog
-lists ever differ in a way the traces can see.
+The predictor -- which DERIVATION 45 delivers: `0x08061A64` is a
+classifier, the decision is the sub-phases' behaviours, and
+`engine/cpu_ai.py` reproduces every traced turn draw for draw. Settled
+there too: the drop directions, the unfired meter (Andy's predicate wants
+a damaged unit), the profile's shape and meaning, and the fog list (the
+same passes, four of them repeated at the end).
+
+
+## 45. The CPU, read: nineteen sub-phases, one mover, one scorer, and a predictor that matches seven turns draw for draw
+
+DERIVATION 44 left the decision routine `0x08061A64` unread. It turned out
+to be a classifier of a dozen instructions (a per-type byte from
+`0x083B7DF0` into `0x030050DC`, transports with nothing to carry demoted
+to 0); the decision itself is spread over the nineteen **sub-phase**
+functions and the **behaviours** they install, all of which
+`engine/cpu_ai.py` now ports routine by routine. `engine/cpu.predict`
+reproduces all seven traced turns record for record, and -- because the
+trace now logs every RNG draw with its caller (an exec hook on
+`0x08010A84`, `harness/mesen_drive.lua`) -- draw for draw
+(`tests/test_cpu.py`, `tools/cpu_trace.py predict`).
+
+### The shape of a turn
+
+State 1 of the AI driver (`0x08068584`) steps through a list of function
+pointers, `0x083B7CEC` with fog off (19 entries) and `0x083B7D38` with fog
+on (25: the same, then indirect-fire, air, direct and indirect-move
+passes repeated twice more). Each **sub-phase function** builds the order
+list at `0x03005020` from the side's unacted units of one AI class
+(unit-stats byte `+0x15`: 1 foot, 2 transport, 4 indirect, 5 direct, 6
+Lander), sorts it by the type's move descending (`0x080641CC`, a stable
+bubble sort, so ties keep slot order), and stores the behaviour in
+`0x030051A8`. In list order, fog off:
+
+```
+ 0 power            0x0806490C   fire the CO power if meter and predicate allow
+ 1 foot_capture     0x080646B0   class 1: capture, else walk to a property
+ 2 class3           0x08064820   (no unit type has class 3)
+ 3 indirect_fire    0x080648A8   class 4: shoot from where it stands
+ 4 air_strike       0x080648EC   Fighter and Bomber: attack, else move by mode
+ 5 direct           0x080648EC   class 5: attack, else move by mode
+ 6 direct           (again: whoever issued nothing)
+ 7 clear_targeted   0x08064900   zero the per-unit "targeted" counters 0x03005160
+ 8 foot             0x08064C94   class 1 again: join, capture, sometimes shoot, walk
+ 9 transport_empty  0x08064980   APC/TCopter with no AI-loaded cargo: fetch a rider
+10 transport        0x080649B0   loaded: drop beside a property
+11 transport_loaded 0x08064C58   loaded: move (0x08060708 / 0x080607C4, unread)
+12 indirect_move    0x08064C88   class 4: move by mode
+13 lander           0x08064DF4   class 6 (unread)
+14 lander           (again)
+15 apc_supply       0x08065034   APC: supply a low-fuel neighbour, else go to one
+16 power            (again, for the COs whose predicate fires at turn end)
+17 direct           (again)
+18 end              0x080641C0   driver state 5
+```
+
+State 2 (`0x080642C8`) takes each listed unit in turn: draws the unit's
+random into record `+0xA` (`draw % 100`), runs the classifier, runs the
+behaviour. The behaviour writes at most one record through `0x080644D8`,
+and that writer **drops a Wait whose destination is the unit's own tile**
+-- a unit that decides to stay issues nothing and is listed again by the
+next sub-phase of its class, drawing a fresh random each time. The
+writer also converts a Sub's Wait to Dive or Rise (enemies in reach and
+not dived: Dive; dived and none: Rise), and builds the path from the unit
+to its destination (`0x0801DC38`) walking back over the move grid: where
+two, three or four predecessors tie on cost it draws the RNG to choose
+(bit 14; mod 3; the low two bits). Those path draws are why the Recon's
+record followed its random directly and the Infantry's came two draws
+later, and the predictor replays them.
+
+### Grids
+
+Everything moves on one flood fill, `0x0801CD00` (through the pointer
+`0x03000D8C`): from a tile, for a unit type, within a budget, the cost so
+far to every tile (start 0, -1 unreached). With its flag set it will not
+enter a tile holding a unit of a side in the moving side's enemy mask
+(`0x03004870`, the active player except while the threat builder walks an
+enemy). The unit's own reach is `0x0801D968`: budget `min(fuel, move + CO
+bonus)`, flag set. `0x0801D2EC` marks every unreached neighbour of a
+reached tile with `0x79`, the "one step past reach" ring; `0x08060938`
+rings once per point of attack range. Indirect units use the plain
+distance ring `0x0801DAE0`. The scan order everywhere is rows outer,
+columns inner.
+
+### Attacking
+
+`0x0805F71C` picks the coverage (direct: own reach ringed once; indirect:
+the range ring from where it stands), `0x0805F7E0` walks it for enemy
+units, and for each: the tile to shoot from (`0x0805FB08`, direct only:
+the four neighbours W, E, N, S that are reachable and empty, scored by the
+terrain value at `0x08284314` plus 100 if no enemy threatens the tile,
+later neighbours winning ties), then the game's own **forecast**
+(`0x08023888` / `0x08023550`). The forecast is the battle code: each side's
+value is base damage through the CO's per-type attack, all-units
+multipliers and the defender's per-type defence (`0x08022BFC`, weapon by
+the DERIVATION 32 rule), scaled by hp bars, and **each side that can
+deal damage draws the RNG for luck** (`0x080232C8`, attacker first);
+damage taken is value times (100 - terrain defence times bars / 10) over
+100, and the defender's counter is recomputed from its hp after, with no
+luck. `0x0805F948` scores the shot:
+
+```
+  taken   = counter damage, +50 if the attacker would die
+  reject if taken >= profile[type][0]
+  worth   = foot soldier on a property it could capture:
+              1 (32 on an HQ, x8 on a Base/Airport/Port)
+              x (((hp-1)/10 + capture points + 1) / 5 + 1) x 100
+            else 10 x (target cost class + 9) x (10 direct / 15 indirect)
+            transports: x2 with the second cargo slot empty
+  dealt   = damage dealt, at least 50 if the target would die
+  score   = dealt x (worth >> 4) - taken x weight[attacker cost class]
+            (weights 0x0811A8E8: 0, 31, 34, 37, 41, 44)
+```
+
+Negative scores count as 0; `0x0805F778` takes the strictly highest, so a
+turn with nothing positive fires nothing. The Max trace's Mech went for
+the Tank because Max's per-type attack changed the two scores' order;
+the Andy trace's went for the Infantry (3968 to 3417).
+
+### Moving
+
+Every move is `0x08060078`: a cost map from the goal for the unit's type
+over the whole map, the unit's own reach, and the reachable tile whose
+goal cost is lowest -- strictly lower than the unit's own tile's unless
+the profile's threat byte is 100 -- among tiles the unit may stop on
+(`0x080604D0`: empty or its own; not a neutral property; own factories
+only for the matching behaviour; enemy properties only for foot soldiers
+or within two of an enemy HQ) and, with probability `profile[type][1]`
+percent, tiles no enemy threatens. Later tiles win ties. Land units never
+stop on a Port. The threat grid (`0x08068F68`) is every enemy that can hit
+this unit's class and is within reach, flood-filled from where it stands
+(direct: its base move, ringed once; indirect: its range) -- built once
+per unit, at the first attack evaluation. A unit that cannot stay where it
+stands and issued nothing falls to `0x08066248`: the reachable tile with
+the best terrain value less its cost.
+
+Vehicles move by **mode** (record byte `+0xB`, table `0x083B7EB8`): every
+vehicle in the traces sat in mode 4, `0x08065B30`, which lists every enemy
+it can damage (`0x08060A90`, worth = base damage times a fuel-band
+multiplier), takes the lowest and moves toward it -- so the Recon's
+"wait (3,2)" is the first step of a hunt. Foot soldiers sit in mode 0
+(nothing) and move only through their own pass. Modes 1 (toward the
+nearest enemy HQ, `0x08065870`), 2, 3, 5, 6, 7 are read only as far as
+this listing goes; nothing in a trace entered them.
+
+### The foot soldiers
+
+Pass 1 (`0x080646B0`): if standing on an own non-factory property with an
+enemy Infantry within an Infantry's walk, stay (`0x080651AC`, the guard);
+if standing on a capturable property, capture; else capture the reachable
+empty property with the highest move cost plus 8 for an HQ or 4 for the
+rest -- first in scan order on ties. Pass 2 (`0x08064C94`): a damaged
+unit's join check (`0x080650B8`, unread: no trace had one under 50 hp);
+pass 1 again; **an attack only when the unit's random exceeds
+`profile[type][0]`** (90 for Infantry and Mech: a 9% chance) **or the CO
+power is running** -- which is why Mech #3's kill on the Andy trace came
+with a random of 95; then the property to walk to: every capturable
+property in reach (`0x08025DFC`), the nearest whose "taken" counter
+(`0x08282CC4 +3`, per property) is at most the side's foot count over
+profile header byte 9 (`0x0805F150`), counter bumped. `0x080630B8` then
+asks whether an APC (or a TCopter, if the side has one) would get it there
+faster -- `4 x foot cost / move` against `3 x tread cost / 6` -- and if so
+sets the unit's pickup flag (`+9` bits 3..5 = 1) and boards an adjacent
+transport with room (`0x080665B8`), else walks.
+
+### Transports
+
+An empty APC (`0x080605AC`) floods the map from where it stands, finds
+the flagged foot soldier with the shortest cost and a tile beside it the
+APC can stand on (`0x08061AB0`), and drives there -- the APC on the Andy
+trace went to (2,4) because Mech #4, four tiles from its city, had asked.
+A loaded one (`0x080649B0`) drops beside the reachable capturable
+property with the highest move-grid value (the `0x79` ring beats every
+cost, so a property one step past reach is the favourite), from the
+last of its W, E, N, S neighbours the APC can reach and stand on
+(`0x0805FC94`), the direction encoded as the a15 trace read it. The
+supply pass (`0x08065034`) serves the neediest unit flagged low on fuel
+(`+9` bits 0..2 = 1, set at turn start when fuel is under
+`profile[type][2]` percent), else goes to it. TCopter (`0x08060670`) and
+the loaded transport's move (`0x08060708`, `0x080607C4`) are unread.
+
+### The profile
+
+`0x0806826C` copies 0x130 bytes to `0x020235DC` (DERIVATION 44 counted
+60): sixteen header bytes then a twelve-byte record per unit type at
+`+4 + 12 x type`. A VS mission's record (`0x08287478 + 60 x map`, `+0x22`
+= 0xFF) names a row, and `0x082872C8[12 x row + co]` names one of 89
+profiles at `0x0811A97C`. Map 38 is row 1; Andy takes profile 4, and the
+live copy in the after-dumps is that profile byte for byte
+(`tests/test_cpu.py`). The bytes the port reads: `[0]` the attack
+threshold (a foot soldier's shooting chance, an indirect's, and the
+counter cap in the score), `[1]` the threat-avoidance chance, `[2]` the
+low-fuel percentage, `[3]` the low-hp threshold, header `[9]` the
+property share. `data/aw1_ai.json` carries all 89 and every other table
+the AI reads (`tools/extract_ai.py`).
+
+### The RNG, accounted for
+
+Per unit visit one draw; per forecast one per side that can damage; per
+path tie one; per battle two (the strike is the first -- DERIVATION 44's
+`AI_STRIKE_DRAW = 1` is now explained: the AI path has no forecast screen
+before its battle, so the battle's own pair is the first it draws). The
+hook's callers on the Andy trace: `0x080643A1` twelve times (eight units,
+four of them visited twice), `0x0802333F` ten (three forecasts and two
+battles), `0x0801DD77` six (path ties). Seven traces, 169 draws, none
+unaccounted for.
+
+### The power, explained
+
+`0x0806490C` fires the power when the meter is at its threshold
+(`0x0801C07C`) and the CO's predicate (`0x08284A0C + 0x124 x co + 0x14`)
+says so. Most COs' (`0x08063298`) fires at the turn's first power
+sub-phase; **Andy's (`0x080632C4`) only with a unit at 90 hp or less**;
+co 8's at the second pass; co 3's under a settings weather. The full
+meter on `vs15-p1-cpu-power` sat on an army at full health. What the
+activation does to the RNG and the record is untraced.
+
+### Not read
+
+Modes 2, 3, 5, 6, 7 and the sea variant of mode 1; the Lander pass; the
+loaded transport's move; the TCopter; the join and retreat pre-steps
+(`0x08065590` -> `0x08065438` / `0x08065338`, `0x080650B8`); the "nothing
+to do" fallbacks `0x0806606C`; firing the power; building (driver states
+4/5); campaign profiles (`0x080683B0`). Each raises NotImplementedError
+with its address in `engine/cpu_ai.py`.

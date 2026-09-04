@@ -120,6 +120,7 @@ function M.unit(slot)
     loaded = (math.floor(st / 2) % 2 == 1 and math.floor(st / 8) % 2 == 1),
     dived = math.floor(st / 32) % 2 == 1,
     cargo = M.r8(a + 7), cargo2 = M.r8(a + 8),
+    ai9 = M.r8(a + 9), ai10 = M.r8(a + 10), ai11 = M.r8(a + 11),
   }
 end
 
@@ -131,6 +132,8 @@ function M.army(player)
     power_active = M.r8(a + 0x1E) ~= 0, power_ready = M.r8(a + 0x24) ~= 0,
     power_uses = M.r8(a + 0x25), control = M.r8(a + 0x1B),
     flag14 = M.r16(a + 0x14), flag1C = M.r8(a + 0x1C),
+    team = M.r8(a + 0x26), enemies = M.r8(a + 0x28),
+    hqx = M.r8(a + 0x29), hqy = M.r8(a + 0x2A),
   }
 end
 
@@ -165,6 +168,14 @@ function M.state_json(opts)
   w_(string.format('  "funds_per_property": %d,', M.r32(M.RATE)))
   w_(string.format('  "rng": %d,', M.r32(M.RNG)))
   w_(string.format('  "cursor": [%d, %d],', M.r8(M.CURX), M.r8(M.CURY)))
+  -- what the AI reads (DERIVATION 45): the mission id that picks its
+  -- profile, the two settings bytes the forecast and move tables switch
+  -- on, and the 0x130-byte profile copy the AI's state 0 leaves in EWRAM
+  w_(string.format('  "map_id": %d, "settings_6": %d, "settings_8": %d,',
+    M.r8(0x03004310 + 2), M.r8(0x03004310 + 6), M.r8(0x03004310 + 8)))
+  local prof = {}
+  for i = 0, 0x12F do prof[#prof + 1] = string.format("%02x", M.r8(0x020235DC + i)) end
+  w_(string.format('  "ai_profile": "%s",', table.concat(prof)))
 
   w_('  "armies": [')
   local rows, funds = {}, {}
@@ -173,9 +184,11 @@ function M.state_json(opts)
     funds[p] = a.funds
     rows[#rows + 1] = string.format(
       '    {"player": %d, "funds": %d, "income": %d, "power": %d, "co_id": %d, '
-      .. '"power_active": %s, "power_ready": %s, "power_uses": %d, "control": %d, "flag14": %d, "flag1C": %d}',
+      .. '"power_active": %s, "power_ready": %s, "power_uses": %d, "control": %d, "flag14": %d, "flag1C": %d, '
+      .. '"team": %d, "enemies": %d, "hq": [%d, %d]}',
       p, a.funds, a.income, a.power, a.co_id, b(a.power_active),
-      b(a.power_ready), a.power_uses, a.control, a.flag14, a.flag1C)
+      b(a.power_ready), a.power_uses, a.control, a.flag14, a.flag1C,
+      a.team, a.enemies, a.hqx, a.hqy)
   end
   w_(table.concat(rows, ",\n"))
   w_("  ],")
@@ -190,9 +203,10 @@ function M.state_json(opts)
         '    {"slot": %d, "player": %d, "type": %s, "x": %d, "y": %d, '
         .. '"hp": %d, "ammo": %d, "capture": %d, "fuel": %d, '
         .. '"acted": %s, "carrying": %s, "loaded": %s, "state": %d, "cargo": %d, '
-        .. '"cargo2": %d}',
+        .. '"cargo2": %d, "ai": [%d, %d, %d]}',
         u.slot, u.player, q(u.name), u.x, u.y, u.hp, u.ammo, u.capture, u.fuel,
-        b(u.acted), b(u.carrying), b(u.loaded), u.state, u.cargo, u.cargo2)
+        b(u.acted), b(u.carrying), b(u.loaded), u.state, u.cargo, u.cargo2,
+        u.ai9, u.ai10, u.ai11)
       if u.x < w and u.y < h then
         local cell = M.r8(M.MAP + u.y * w + u.x) % 32
         if not M.TERRAIN[cell] then unknown[cell] = true end

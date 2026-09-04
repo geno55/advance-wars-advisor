@@ -17,11 +17,12 @@ WHAT EXISTS HERE
     against the game's after-dump: a third differential check on sim.py,
     and the proof that the record fields are read correctly.
 
-WHAT DOES NOT EXIST YET
-
-  * `predict(board, player)`: the turn the CPU WILL take. That is the step's
-    deliverable and it is not here; this module is the format it will
-    produce and the harness that will check it. Nothing here guesses.
+  * `predict`: the turn the CPU WILL take, from engine/cpu_ai.py -- the
+    game's AI ported routine by routine (DERIVATION 45). It returns the
+    commands in order, the board they leave, and every RNG draw the AI
+    makes on the way, and it reproduces all seven traced turns record for
+    record and draw for draw (tests/test_cpu.py). What it does not port
+    raises NotImplementedError naming the ROM routine.
 
 Command ids, as the dispatcher's jump table at 0x08066A04 orders them and
 as the traces confirmed them: 2 wait, 3 capture, 4 fire (target slot at
@@ -31,11 +32,12 @@ the routines the arms call), 12 build and 1/13 moves (from the arms; not
 yet seen in a trace), 5/8/14/15/16/17 unread.
 
 Seven traces replay exactly through this module and sim.apply
-(tests/test_cpu.py); the eighth, under fog, does not -- not because the
-CPU differs (its commands were identical to the clear-weather turn: the AI
-does not look at fog) but because actions_for offers no shot at an enemy
+(tests/test_cpu.py); the eighth, under fog, needs `to_action(..., fog=False)`
+-- the CPU's commands were identical to the clear-weather turn (the AI does
+not look at fog), and actions_for under fog offers no shot at an enemy
 that only becomes visible once the unit has moved. That is an action-layer
-gap, listed in ASSUMPTIONS.
+gap, listed in ASSUMPTIONS; the predictor enumerates fog-off to apply what
+the CPU does.
 """
 from __future__ import annotations
 
@@ -90,14 +92,18 @@ def from_record(rec: dict) -> Command:
                    rng=rec["rng"], fuel=rec["fuel"])
 
 
-def to_action(board, cmd: Command, warnings: Optional[list] = None):
-    """The Action this record names on `board`, or None with a warning."""
+def to_action(board, cmd: Command, warnings: Optional[list] = None,
+              fog: Optional[bool] = None):
+    """The Action this record names on `board`, or None with a warning.
+    `fog=False` enumerates as if fog were off -- the CPU plays that way
+    (DERIVATION 44), and its predicted shots at units the mover cannot yet
+    see need the Action the fog-on enumeration withholds."""
     warnings = warnings if warnings is not None else []
     unit = sim.unit_in(board, cmd.slot)
     if unit is None:
         warnings.append(f"{cmd.name} #{cmd.slot}: no such unit on the board")
         return None
-    every = actions.actions_for(board, unit, warnings=warnings)
+    every = actions.actions_for(board, unit, warnings=warnings, fog=fog)
     kind = {"move": "wait", "wait": "wait", "capture": "capture", "fire": "attack",
             "load": "load", "drop": "drop", "join": "join", "dive": "dive",
             "rise": "rise"}.get(cmd.name)
@@ -124,6 +130,22 @@ def to_action(board, cmd: Command, warnings: Optional[list] = None):
                         f"matching action(s) among {len(every)}")
         return found[0] if found else None
     return found[0]
+
+
+def predict(board, player: int, ctx, *, rng: Optional[int] = None):
+    """The turn the CPU will take from `board` for `player` (engine/cpu_ai).
+
+    `ctx` is a cpu_ai.Context: the per-unit AI bytes, the sides' team and
+    HQ bytes, the mission's profile and the settings bytes, all from a dump
+    (`cpu_ai.Context.from_dump`). `board` is the board the CPU starts its
+    turn on -- hand the human's End Turn over with sim.end_turn first --
+    and `rng` the RNG state at that moment (the dump's). Returns the
+    cpu_ai.Turn: `.commands`, `.board`, `.draws`."""
+    try:
+        from . import cpu_ai
+    except ImportError:
+        import cpu_ai
+    return cpu_ai.predict(board, player, ctx, rng=rng)
 
 
 def replay(board, cmds: List[Command], *, warnings: Optional[list] = None,

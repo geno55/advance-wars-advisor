@@ -1,13 +1,14 @@
-"""The CPU's traced turns, replayed through engine/cpu.py (ROADMAP step 3,
-begun -- DERIVATION 44).
+"""The CPU's traced turns, replayed and PREDICTED through engine/cpu.py
+(ROADMAP step 3 -- DERIVATION 44 and 45).
 
 tools/cpu_trace.py let the game's own AI play a turn from a parked state
-and recorded every command record it dispatched, with the boards either
-side. These tests pin what that measured: the record decoding, the drop
-direction, the AI's strike on the first RNG draw, and that seven of the
-eight traces replay to the game's after-board field for field through the
-same forward model the differential corpus certified. The eighth (fog) is
-pinned as the action-layer gap it is.
+and recorded every command record it dispatched, every RNG draw it made,
+and the boards either side. These tests pin what that measured -- the
+record decoding, the drop direction, the AI's strike on the first RNG
+draw, the traces replaying to the game's after-board field for field --
+and then the step's deliverable: engine/cpu.predict, the AI ported from
+the ROM, reproduces every traced turn record for record and draw for
+draw, and leaves the board the game left.
 """
 import json
 import pathlib
@@ -19,7 +20,7 @@ sys.path.insert(0, str(ROOT))
 sys.path.insert(0, str(ROOT / "tools"))
 
 import cpu_trace                                              # noqa: E402
-from engine import cpu, sim                                   # noqa: E402
+from engine import cpu, cpu_ai, sim                           # noqa: E402
 from engine.state import load                                 # noqa: E402
 
 FIX = ROOT / "tests" / "fixtures" / "cpu"
@@ -103,6 +104,58 @@ class TestTheReplay(unittest.TestCase):
         unmatched = [w for w in warnings if "0 matching" in w]
         self.assertEqual(len(unmatched), 2)
         self.assertTrue(diffs)
+
+
+class TestThePrediction(unittest.TestCase):
+    """engine/cpu.predict against every trace (tools/cpu_trace.py predict)."""
+    ALL = EXACT + ["vs15-p1-cpu-fog"]
+
+    def test_every_trace_is_predicted_record_for_record(self):
+        for name in self.ALL:
+            with self.subTest(name=name):
+                r = cpu_trace.predict(trace(name))
+                self.assertEqual(r["predicted"], r["traced"], "\n".join(r["log"]))
+
+    def test_every_rng_draw_the_ai_made_is_accounted_for(self):
+        """The trace logs the RNG state before each draw at 0x08010A84;
+        the predictor's draws -- the unit's random, the forecast's luck,
+        the path builder's ties, the battle's two -- line up with it."""
+        for name in self.ALL:
+            with self.subTest(name=name):
+                t = trace(name)
+                self.assertTrue(t["draws"], "re-trace this fixture: no draw log")
+                r = cpu_trace.predict(t)
+                self.assertIsNone(r["first_bad_draw"])
+                self.assertEqual(r["draws"], r["logged_draws"])
+
+    def test_the_predicted_turn_leaves_the_game_board(self):
+        for name in self.ALL:
+            with self.subTest(name=name):
+                t = trace(name)
+                r = cpu_trace.predict(t)
+                board = sim.end_turn(r["turn"].board)
+                after = load(FIX / t["after"])
+                self.assertEqual(cpu_trace.sim_diff.diff_boards(board, after), [])
+
+    def test_the_profile_is_the_missions_row_by_the_co(self):
+        """Map 38 is a VS mission on row 1; Andy (co 1) takes profile 4,
+        and the after-dump's live copy at 0x020235DC is byte for byte
+        that profile (DERIVATION 45)."""
+        raw = json.loads((FIX / "vs15-p1-cpu.after.json").read_text(encoding="utf-8"))
+        prof = cpu_ai.profile_for(raw["map_id"], {1: 1, 2: 1}, 1)
+        live = bytes.fromhex(raw["ai_profile"])
+        self.assertEqual(prof["header"], list(live[:16]))
+        self.assertEqual(prof["units"]["Infantry"], list(live[16:28]))
+        self.assertEqual(prof["units"]["Infantry"][:4], [90, 10, 10, 20])
+
+    def test_andys_power_predicate_wants_a_damaged_unit(self):
+        """The full meter on vs15-p1-cpu-power went unfired because Andy's
+        AI predicate (0x080632C4) fires only with a unit at 90 hp or less
+        -- the predictor runs that turn through its power sub-phase and
+        issues nothing."""
+        r = cpu_trace.predict(trace("vs15-p1-cpu-power"))
+        self.assertTrue(r["agree"])
+        self.assertEqual(cpu_ai.tables()["cos"][1]["power_fn"], "0x080632C4")
 
 
 class TestWhatTheCpuDidNotDo(unittest.TestCase):

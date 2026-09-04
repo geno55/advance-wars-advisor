@@ -432,15 +432,24 @@ A16, both born the day action enumeration was written.
   destination. Kill by: a destination-vision pass in `actions_for` (the
   fog rules already exist in `engine/fog.py`), then the fog trace replays.
 - **The CPU's Fire resolves its strike on the first RNG draw.** Measured
-  on one trace (`vs15-p1-cpu-max`, 55 dealt = draw 1, draw 3 would be 57);
-  the two other AI battles agree under either draw. `engine/cpu.py`
-  `AI_STRIKE_DRAW`. Kill by: more AI battles where the draws disagree.
-- **The CPU did not fire a full meter and did not build on a written
-  Base** (DERIVATION 44). The first is unread (a profile byte, a latch the
-  AI reads, or a rule); the second is explained -- the build phase walks
-  the property list, which a terrain write never joins -- but the AI's
-  build logic itself is untraced until a fixture with a real factory
-  exists. Kill by: a parked state on a map with a Base, both sides human.
+  on one trace (`vs15-p1-cpu-max`, 55 dealt = draw 1, draw 3 would be 57)
+  and now read (DERIVATION 45): the AI path has no forecast screen before
+  its battle, so the battle's own two draws are the first it makes.
+  `engine/cpu.py` `AI_STRIKE_DRAW`.
+- **The CPU's predictor covers what the seven traces exercised**
+  (DERIVATION 45): the foot, direct, indirect, empty-APC, loaded-APC drop
+  and supply passes, movement mode 4, the power predicates. Modes 2, 3,
+  5, 6, 7, the Lander, the TCopter, the loaded transport's move, the join
+  and retreat pre-steps, firing a power and building raise
+  NotImplementedError naming the routine. Kill by: traces that enter
+  them -- a damaged foot unit, a low-fuel unit, an air or sea side, a
+  map with a factory -- then the port.
+- **The CPU did not build on a written Base** (DERIVATION 44): the build
+  phase walks the property list, which a terrain write never joins, and
+  the AI's build logic (driver states 4/5) is untraced until a fixture
+  with a real factory exists. Kill by: a parked state on a map with a
+  Base, both sides human. The unfired meter is explained: Andy's AI
+  predicate wants a damaged unit (DERIVATION 45).
 - **The funds-rate cell is a mirror, not the payer's source.** Writing 200
   into `0x03004338` and ending the turn paid 9500 (DERIVATION 43,
   `end-turn-repair-broke`), though DERIVATION 39 read the paying body as a
