@@ -132,9 +132,11 @@ function brief(path)
       local pstate = ""
       if emu:read8(a + 0x1E) ~= 0 then pstate = "  POWER ACTIVE"
       elseif meter >= threshold then pstate = "  power READY" end
-      w_(string.format("P%d %-6s  funds %-6d  units %-2d  meter %d/%d%s%s",
+      -- +0x1B: 2 = the game's AI plays this side (DERIVATION 44)
+      local ctrl = (emu:read8(a + 0x1B) == 2) and "  CPU" or ""
+      w_(string.format("P%d %-6s  funds %-6d  units %-2d  meter %d/%d%s%s%s",
         p, CO_NAME[co] or ("co" .. co), funds, ucount[p], meter, threshold,
-        uses > 0 and string.format("  (uses %d)", uses) or "", pstate))
+        uses > 0 and string.format("  (uses %d)", uses) or "", pstate, ctrl))
     end
   end
   w_("")

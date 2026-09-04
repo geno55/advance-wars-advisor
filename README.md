@@ -486,6 +486,22 @@ purchase, mode and RNG draw. Two things the rig learned on the way: the
 list's tile-to-record index has to move with an inserted record, and income
 is a cached sum the turn-start payer does not recompute.
 
+**The enemy reply (ROADMAP step 4).** The planner's plan is now a
+proposal. It and a few variants -- at its closest calls, the same unit's
+next-best action committed and the rest of the turn re-planned -- are each
+followed by the opponent's whole turn: the game's own AI, ported
+(`engine/cpu_ai`), when the opponent is the CPU; the planner itself, one
+ply deep, when it is not or where the port has not been read. The board at
+your next turn start is scored from your side as terms -- material,
+treasury, income over the horizon, captures in hand, the HQ, the rout --
+and the proposal whose reply scores best is the plan, printed with what the
+opponent did under it and every proposal's score beside it. The worst case
+used to charge a tile for every enemy that could reach it; the reply
+charges it for what the modelled enemy does, and sees the captures and
+builds the worst case could not. Nine tests, one of them the scenario where
+the reply overturns the worst case's choice; `docs/ADVISOR.md` says where
+it is naive.
+
 ## Layout
 
 ```
@@ -498,7 +514,8 @@ engine/actions.py         every legal action a unit has this turn  <- the adviso
 engine/sim.py             the forward model: apply(board, action) -> board,
                           battle(), end_turn() -- what a plan's next step stands on
 engine/advisor.py         THE OPINION: a greedy one-turn planner, weights in
-                          one table, every term quoting the fact it reads
+                          one table, every term quoting the fact it reads;
+                          its proposals arbitrated by a modelled reply
 engine/supply.py          supply, property repair, daily fuel burn -- the
                           turn-start rules, replayed from DERIVATION 33
 engine/join.py            the merge: pair rule, bar sum, refund, caps
@@ -620,8 +637,9 @@ harness/fixtures/         mGBA save states parked at target-select, so a sweep
                           is reproducible rather than re-played by hand
 tools/threat_report.py    exposure, per-unit safety, and the coverage grid
 tools/action_report.py    every action a unit has this turn, facts attached
-tools/advise.py           a turn's plan: facts quoted, weights labelled heuristic
-tests/test_advisor.py     21 tests: the arithmetic, invariance, scenarios
+tools/advise.py           a turn's plan: facts quoted, weights labelled heuristic,
+                          the opponent's modelled reply under it
+tests/test_advisor.py     30 tests: the arithmetic, invariance, scenarios, the reply
 engine/cpu.py             the CPU's command record decoded, replayed and
                           PREDICTED (ROADMAP step 3)
 engine/cpu_ai.py          the game's AI ported routine by routine: sub-phases,
@@ -794,10 +812,15 @@ The one tool that crosses the line, and it says so on every line it prints.
 A turn for the active player, greedy with sequential commit: each step is
 scored on the board the step before leaves behind, and printed with its
 terms — `weight (heuristic) x quantity <- the fact it read`. The runner-up on
-each board is printed too, so a close call is visible. `--weight name=value`
-overrides one weight for a run, `--luck max` plans in the kindest world
-instead of the worst, `--board` prints the board the plan leaves behind.
-Read `docs/ADVISOR.md` for where the planner is naive before trusting it.
+each board is printed too, so a close call is visible. After End Turn comes
+the opponent's modelled reply — the CPU port when the dump says the opponent
+is the CPU, the planner itself otherwise — and the board at your next turn
+start as terms, with every proposal the reply judged and its score.
+`--reply cpu|planner|none` forces the model, `--branches N` how many
+variants are proposed, `--weight name=value` overrides one weight for a
+run, `--luck max` plans in the kindest world instead of the worst, `--board`
+prints the board the plan leaves behind. Read `docs/ADVISOR.md` for where
+the planner is naive before trusting it.
 
 ## Re-extracting from the ROM
 

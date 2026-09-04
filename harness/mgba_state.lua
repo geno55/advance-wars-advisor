@@ -218,6 +218,9 @@ function state(path, probe)
   -- also derive it from any army that owns property, and cross-checks the
   -- two.
   w_(string.format('  "funds_per_property": %d,', emu:read32(0x03004338)))
+  -- the RNG state (0x03001D30, engine/rng.py): the CPU's turn draws from
+  -- it, so the advisor's modelled reply starts from it (ROADMAP step 4)
+  w_(string.format('  "rng": %d,', emu:read32(0x03001D30)))
 
   -- armies: 1-indexed, record 0 is a dummy
   w_('  "armies": [')
@@ -237,14 +240,16 @@ function state(path, probe)
     -- activation count that scales the threshold. The map-menu Power item
     -- is gated on the METER against that threshold, not on the latch
     -- (DERIVATION 37) -- all four ship so the advisor can say which.
+    -- +0x1B is the controller: 1 a human, 2 the game's AI (DERIVATION 44).
+    -- The advisor models the enemy's reply with the CPU port when it is 2.
     rows[#rows + 1] = string.format(
       '    {"player": %d, "funds": %d, "income": %d, "power": %d, "co_id": %d, '
-      .. '"power_active": %s, "power_ready": %s, "power_uses": %d}',
+      .. '"power_active": %s, "power_ready": %s, "power_uses": %d, "control": %d}',
       p, emu:read32(a), emu:read32(a + 8), emu:read32(a + 0x20),
       emu:read8(a + 0x1D),
       (emu:read8(a + 0x1E) ~= 0) and "true" or "false",
       (emu:read8(a + 0x24) ~= 0) and "true" or "false",
-      emu:read8(a + 0x25))
+      emu:read8(a + 0x25), emu:read8(a + 0x1B))
   end
   w_(table.concat(rows, ",\n"))
   w_("  ],")

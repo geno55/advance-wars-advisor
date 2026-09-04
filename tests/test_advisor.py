@@ -11,6 +11,13 @@ when it can be, the power fired when it heals). And that the arithmetic is
 honest: every Term's weight is the table's, the terms sum to the score, and
 the rendering labels every weight heuristic.
 
+The reply (ROADMAP step 4) is tested the same way: that a modelled
+opponent's turn follows each proposal and the board at our next turn start
+is what is scored, that the evaluation is weights times quoted facts, that
+the CPU port plays the reply on a dumped board and the planner stands in
+where the port cannot, and one scenario where the reply overturns a call
+the worst case made.
+
 Boards are built by hand, one rule per test, the same way test_sim.py and
 test_actions.py do it.
 """
@@ -23,8 +30,11 @@ ROOT = pathlib.Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT / "engine"))
 
 import advisor                                                # noqa: E402
+import cpu_ai                                                 # noqa: E402
 import sim                                                    # noqa: E402
-from state import Army, Board, Unit                           # noqa: E402
+from state import Army, Board, Unit, load                     # noqa: E402
+
+CPU_FIX = ROOT / "tests" / "fixtures" / "cpu"
 
 PLAIN, MOUNTAIN, WOOD, ROAD, CITY, SEA, HQ, BASE = 1, 3, 4, 5, 6, 7, 8, 14
 VOID = 0                    # out-of-bounds terrain: 255 for every move type
@@ -402,6 +412,196 @@ class TestScenarios(unittest.TestCase):
         ctx = advisor.Context(b, 1)
         self.assertFalse(any(c.action.kind == "trap"
                              for c in advisor.candidates(b, 1, ctx)))
+
+
+# --------------------------------------------------------------------------
+# the reply (ROADMAP step 4)
+# --------------------------------------------------------------------------
+
+class TestReply(unittest.TestCase):
+    def two_cities(self):
+        """An Infantry between two neutral cities; an enemy Infantry beside
+        the right one. The worst case sends ours to the safe left city;
+        the reply shows the enemy then takes the right one."""
+        rows = [[CITY, PLAIN, PLAIN, CITY, PLAIN, PLAIN]]
+        return board(rows, [unit("Infantry", 1, 0, slot=1),
+                            unit("Infantry", 5, 0, player=2, slot=70)],
+                     armies=two_armies(0))
+
+    def test_without_a_reply_the_plan_is_the_greedy_one(self):
+        p = advisor.plan(self.two_cities())
+        self.assertIsNone(p.reply)
+        self.assertEqual(p.candidates, [])
+        self.assertEqual(p.baseline, ())
+        self.assertEqual(p.steps[0].action.tile, (0, 0))
+
+    def test_the_model_must_be_known_and_the_cpu_needs_its_context(self):
+        b = self.two_cities()
+        with self.assertRaises(ValueError):
+            advisor.plan(b, reply="oracle")
+        with self.assertRaises(ValueError):
+            advisor.plan(b, reply="cpu")
+
+    def test_the_reply_overturns_a_call_the_worst_case_made(self):
+        """Greedy: capture the left city, out of the enemy's reach (the
+        right one is charged next turn's focus fire). With the reply the
+        left plan lets the enemy start on the right city and evaluates to
+        nothing; standing on the right city denies it and keeps our 10/20,
+        so that proposal is chosen although its own score is lower."""
+        b = self.two_cities()
+        p = advisor.plan(b, reply="planner", branches=1)
+        self.assertEqual(p.steps[0].action.tile, (3, 0))
+        self.assertEqual(p.steps[0].action.kind, "capture")
+        self.assertEqual(p.reply.model, "planner")
+        self.assertEqual(p.reply.opponents, (2,))
+        self.assertEqual(len(p.candidates), 2)
+        greedy, variant = p.candidates
+        self.assertEqual(greedy.label, "the greedy plan")
+        self.assertEqual(greedy.steps[0].action.tile, (0, 0))
+        self.assertFalse(greedy.chosen)
+        self.assertTrue(variant.chosen)
+        self.assertLess(variant.score, greedy.score)          # the proposal's own view
+        self.assertGreater(variant.reply.score, greedy.reply.score)
+        self.assertEqual(p.reply, variant.reply)
+        self.assertEqual(p.board_after, variant.board_after)
+        # the greedy plan's reply: the enemy captures the right city
+        self.assertTrue(any("CAPTURE" in line for line in greedy.reply.described))
+        held = [t for t in greedy.reply.terms if t.name == "capture"]
+        self.assertEqual(len(held), 1)
+        self.assertIn("P2 Infantry #70 at (3,0) 10/20", held[0].fact)
+
+    def test_the_variant_is_the_same_actors_next_best_action(self):
+        """The alternative a variant commits is the winner's own unit's
+        next-best action -- not the overall runner-up, which is usually
+        another unit's move and only reorders the plan."""
+        rows = [[PLAIN] * 8,
+                [PLAIN, CITY, PLAIN, PLAIN, PLAIN, PLAIN, CITY, PLAIN],
+                [BASE] + [PLAIN] * 6 + [HQ]]
+        owner = [[0] * 8, [0] * 8, [1] + [0] * 6 + [2]]
+        b = board(rows, [unit("Tank", 0, 0, slot=1),
+                         unit("Infantry", 1, 1, slot=2, capture=10),
+                         unit("Infantry", 6, 0, player=2, slot=70, hp=30),
+                         unit("Tank", 5, 2, player=2, slot=71)],
+                  owner=owner, armies=two_armies(9000))
+        p = advisor.plan(b)
+        with_alt = [s for s in p.steps if s.alternative is not None]
+        self.assertTrue(with_alt)
+        for s in with_alt:
+            a, w = s.alternative.action, s.action
+            if w.unit is not None:
+                self.assertEqual(a.unit.slot, w.unit.slot)
+            else:
+                self.assertIsNone(a.unit)
+                self.assertEqual(a.kind, w.kind)
+            self.assertLessEqual(s.alternative.score, s.scored.score)
+
+    def test_the_board_scored_is_the_one_at_our_next_turn_start(self):
+        """End Turn, the opponent's turn, End Turn: the reply's board has
+        us active again on the next day, with both sides' acted bits
+        clear, and our finished capture paying income."""
+        rows = [[CITY, PLAIN, PLAIN, PLAIN, PLAIN, PLAIN, CITY]]
+        b = board(rows, [unit("Infantry", 0, 0, slot=1, capture=10),
+                         unit("Infantry", 5, 0, player=2, slot=70)],
+                  armies=two_armies(0), day=3)
+        p = advisor.plan(b, reply="planner", branches=0)
+        after = p.reply.board_after
+        self.assertEqual(after.active_player, 1)
+        self.assertEqual(after.day, 4)
+        self.assertEqual(after.owner[0][0], 1)
+        self.assertTrue(all(not u.acted for u in after.units))
+        self.assertEqual(after.army(1).funds, 1000)          # one day's income
+        inc = [t for t in p.reply.terms if t.name == "income"][0]
+        self.assertGreater(inc.value, 0)
+        self.assertIn("income 1000 a day", inc.fact)
+        # the enemy walked onto the far city and started on it
+        self.assertTrue(any("CAPTURE" in line for line in p.reply.described))
+        held = [t for t in p.reply.terms if t.name == "capture"][0]
+        self.assertLess(held.value, 0)
+
+    def test_the_evaluation_is_weights_times_quoted_facts(self):
+        b = self.two_cities()
+        p = advisor.plan(b, reply="planner", branches=1)
+        for c in p.candidates:
+            for t in c.reply.terms:
+                self.assertIn(t.name, advisor.WEIGHTS)
+                self.assertEqual(t.weight, advisor.WEIGHTS[t.name])
+                self.assertTrue(t.fact.strip())
+            self.assertAlmostEqual(sum(t.value for t in c.reply.terms),
+                                   c.reply.score)
+        names = [t.name for t in p.baseline]
+        self.assertEqual(names[:3], ["material", "treasury", "income"])
+        self.assertAlmostEqual(p.baseline_score, 0.0)         # a level start
+        text = advisor.render(p)
+        self.assertIn("then P2's reply", text)
+        self.assertIn("proposals, by the reply's score", text)
+        for ln in text.splitlines():
+            if " <- " in ln:
+                self.assertIn("(heuristic)", ln)
+        q = advisor.plan(b, reply="planner", branches=1,
+                         weights={"material": 2.0})
+        for t in q.reply.terms:
+            if t.name == "material":
+                self.assertEqual(t.weight, 2.0)
+
+    def test_the_hq_and_the_rout_score_the_win(self):
+        rows = [[HQ, PLAIN, PLAIN, HQ]]
+        owner = [[1, 0, 0, 2]]
+        start = board(rows, [unit("Infantry", 1, 0, slot=1),
+                             unit("Infantry", 2, 0, player=2, slot=70)],
+                      owner=owner, armies=two_armies(0))
+        taken = dataclasses.replace(start, owner=[[1, 0, 0, 1]])
+        won = [t for t in advisor.evaluate(taken, 1, start=start) if t.name == "win"]
+        self.assertEqual([t.value for t in won], [advisor.WEIGHTS["win"]])
+        self.assertIn("the enemy HQ at (3,0) is ours", won[0].fact)
+        lost = dataclasses.replace(start, owner=[[2, 0, 0, 2]])
+        self.assertEqual([t.value for t in advisor.evaluate(lost, 1, start=start)
+                          if t.name == "win"], [-advisor.WEIGHTS["win"]])
+        routed = dataclasses.replace(start, units=[start.units[0]])
+        rout = [t for t in advisor.evaluate(routed, 1, start=start) if t.name == "win"]
+        self.assertEqual([t.value for t in rout], [advisor.WEIGHTS["win"]])
+        self.assertIn("P2 has lost its last unit", rout[0].fact)
+        self.assertEqual([t.name for t in advisor.evaluate(start, 1, start=start)],
+                         ["material", "treasury", "income"])
+
+    def test_the_cpu_port_plays_the_reply_on_a_dumped_board(self):
+        """The step 3 fixture with P2 as the CPU: the reply is the port's
+        turn, its commands are described, every proposal gets a reply and
+        the chosen one scores best. The caller's Context is not written
+        into."""
+        path = CPU_FIX / "vs15-p2-cpu.before.json"
+        b = load(path)
+        ctx = cpu_ai.Context.from_dump(path, player=2)
+        snapshot = {k: list(v) for k, v in ctx.ai.items()}
+        p = advisor.plan(b, 1, reply="cpu", cpu_ctx=ctx, branches=1)
+        self.assertEqual(p.reply.model, "cpu")
+        self.assertEqual(p.reply.note, "")
+        self.assertTrue(any(line.startswith("P2:") for line in p.reply.described))
+        self.assertEqual(p.reply.board_after.active_player, 1)
+        self.assertEqual(len(p.candidates), 2)
+        for c in p.candidates:
+            self.assertIsNotNone(c.reply)
+            self.assertTrue(c.reply.terms)
+        best = max(c.reply.score for c in p.candidates)
+        self.assertEqual(p.reply.score, best)
+        self.assertEqual(ctx.ai, snapshot)
+
+    def test_the_planner_stands_in_where_the_port_cannot_play(self):
+        """A Bomber puts the CPU into the air-strike sub-phase the port
+        has not read: the reply is the planner's, and the note says why."""
+        b = board([[PLAIN] * 6], [unit("Tank", 0, 0, slot=1),
+                                  unit("Bomber", 5, 0, player=2, slot=70)],
+                  armies=two_armies(0))
+        prof = cpu_ai.profile_for(38, {1: ANDY, 2: ANDY}, 2)
+        ctx = cpu_ai.Context(ai={}, sides={1: cpu_ai.Side(0, 0b10, None),
+                                          2: cpu_ai.Side(1, 0b01, None)},
+                             profile=prof)
+        warnings = []
+        p = advisor.plan(b, reply="cpu", cpu_ctx=ctx, branches=0,
+                         warnings=warnings)
+        self.assertEqual(p.reply.model, "planner")
+        self.assertIn("could not play P2's turn", p.reply.note)
+        self.assertIn("sub-phase", p.reply.note)
+        self.assertTrue(any("no RNG state" in w for w in warnings))
 
 
 if __name__ == "__main__":

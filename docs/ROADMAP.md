@@ -112,6 +112,22 @@ Three decisions, made once so they do not get re-argued:
    itself. Built after step 3 on purpose: a lookahead tuned against the
    wrong opponent would need retuning.
 
+   *Delivered.* `advisor.plan(..., reply=)`: the greedy plan becomes a
+   proposal, and with it up to `branches` variants -- at the closest calls
+   the same actor's next-best action committed and the rest of the turn
+   re-planned. Each proposal is followed by End Turn, the opponent's whole
+   turn and End Turn again: `engine/cpu_ai.predict` when the opponent is
+   the CPU, this planner one ply deep when not (and wherever the port meets
+   a branch it has not read, saying so). The board at our next turn start
+   is evaluated from our side as named terms (`advisor.evaluate`: material,
+   treasury, income over the horizon, captures in hand, the HQ, the rout)
+   and the proposal whose reply scores best is the plan; the plan carries
+   the reply and every proposal's score. `tools/advise.py` models the reply
+   by default, choosing the CPU port when the dump's controller byte says
+   the opponent is the CPU. Nine tests in `tests/test_advisor.py`; the
+   naiveties -- one alternative per close call, two plies, a static
+   evaluation, the model's own errors -- are in `docs/ADVISOR.md`.
+
 5. **Self-play.** Planner against planner in Python for weight tuning, then
    rollout search over `sim.apply` if greedy plus reply is not enough.
    Relative rankings only; the shared-delusion caveat (a bug in `apply()`
@@ -148,7 +164,7 @@ Three decisions, made once so they do not get re-argued:
 | 1 | `engine/advisor.py`, `tools/advise.py`, `docs/ADVISOR.md` (delivered) | -- | invariance and scenario tests (`tests/test_advisor.py`, delivered) |
 | 2 | `harness/mesen_state.lua`, `harness/mesen_drive.lua`, `tools/sim_diff.py` (delivered) | `tests/fixtures/sim_diff/`: the corpus, both parked states, 126 before/after dumps, the result log (delivered) | `sim_diff` clean: 63/63 (`tests/test_sim_diff.py`, delivered) |
 | 3 | `engine/cpu.py` | DERIVATION: the CPU's rules, and the turns it played | prediction vs played turn -- seven traces, record for record and draw for draw (DERIVATION 45) |
-| 4 | the reply lookahead in `advisor.py` | -- | scenario tests |
+| 4 | the reply lookahead in `advisor.py` (delivered: `reply=`, `evaluate`, `Reply`, `Candidate`; `tools/advise.py --reply`) | -- | scenario tests: the reply overturns a worst-case call; the CPU port plays the step 3 fixture's reply; the planner stands in where it cannot (`tests/test_advisor.py`, delivered) |
 | 5 | `tools/selfplay.py` | weight sets and their relative results | -- |
 | 6 | the whole-turn driver, `tools/campaign_run.py` | a result per mission per release | the win |
 | 7 | `data/missions/*.json` | one dump per mission read | -- |

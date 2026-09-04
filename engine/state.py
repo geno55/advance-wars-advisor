@@ -119,6 +119,10 @@ class Army:
     # meter reaches the threshold. Informational: the map-menu Power item is
     # gated on the meter, not on this byte (DERIVATION 37).
     power_ready: Optional[bool] = None
+    # Army +0x1B: who plays this side -- 1 a human, 2 the game's AI
+    # (DERIVATION 44: writing 2 hands the turn to the CPU). None means the
+    # dump predates the field, not that nobody plays it.
+    control: Optional[int] = None
 
 
 @dataclass
@@ -172,6 +176,11 @@ class Board:
     # built by hand or the dump predates the list, and the terrain grid is
     # the only witness.
     listed_properties: Optional[frozenset] = None
+    # The RNG state at 0x03001D30 when the dump was taken (engine/rng.py).
+    # The CPU's turn draws from it (engine/cpu_ai), so a modelled reply
+    # starts here; None when the dump predates the field. sim.apply does
+    # not advance it -- a plan's own battles leave it where the dump had it.
+    rng: Optional[int] = None
     warnings: list = field(default_factory=list)
 
     @property
@@ -280,7 +289,8 @@ def load(path) -> Board:
                for u in raw["units"]],
         armies=[Army(a["player"], a["funds"], a["income"], a.get("power", 0),
                      a.get("co_id"), a.get("power_active", False),
-                     a.get("power_uses"), a.get("power_ready"))
+                     a.get("power_uses"), a.get("power_ready"),
+                     a.get("control"))
                 for a in raw["armies"]],
         terrain=[r["t"] for r in rows],
         owner=[r["owner"] for r in rows],
@@ -294,6 +304,7 @@ def load(path) -> Board:
         funds_per_property=raw.get("funds_per_property"),
         listed_properties=(frozenset((p["x"], p["y"]) for p in raw["properties"])
                            if raw.get("properties") else None),
+        rng=raw.get("rng"),
     )
     if raw.get("vision_copies_agree") is False:
         board.warnings.append(

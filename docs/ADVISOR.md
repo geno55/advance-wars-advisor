@@ -41,6 +41,51 @@ Ties break on the filing order -- kind, the actor's tile, the ending tile,
 the target's tile, the build type -- and never on slot numbers, which is what
 makes the invariance tests below hold.
 
+## The reply
+
+The loop scores every action against the action layer's worst case: every
+enemy that can reach the ending tile does, and none is weakened on the way.
+ROADMAP step 4 puts a modelled opponent in its place. With `reply` set (the
+default in `tools/advise.py`), the loop becomes the proposer and the reply
+the arbiter:
+
+1. **propose**: the greedy plan, and up to `branches` (default 3) variants.
+   A variant is made at a close call -- a step whose winner's own actor had
+   a next-best action scoring near it -- by committing that alternative and
+   re-planning the rest of the turn greedily. The alternative is the *same
+   actor's* next-best, not the overall runner-up: the runner-up is usually
+   another unit's best move, and forcing it first only reorders the plan
+   onto the same board. Close calls where the worst case had a say (a
+   damage, kill, loss or capture term differs between winner and
+   alternative) are tried first, then the rest by margin.
+2. **reply**: after each proposal, End Turn (`sim.end_turn`), the
+   opponent's whole turn, End Turn again -- so the board scored is the one
+   at *our* next turn start, both sides having taken one income. The
+   opponent is played by `engine/cpu_ai.predict`, the game's own AI ported
+   routine by routine, when the opponent is the CPU (`reply="cpu"`, with a
+   `cpu_ai.Context` from the dump); by this planner, one ply deep, when it
+   is not (`reply="planner"`). Its battles roll at `reply_luck` ("max":
+   high against us) under the planner model; under the CPU model the port
+   draws from the dump's RNG state as the game would. Where the port meets
+   a branch it has not read (it raises `NotImplementedError` naming the
+   routine) the planner stands in for that turn and the reply says so.
+   Two proposals that leave the same board share one reply.
+3. **evaluate**: `advisor.evaluate` scores that board from our side, in
+   funds, as named terms -- the same `weight x quantity <- fact` lines as a
+   step's: material (our units' value less the enemy's), treasury, income
+   over the horizon, captures in hand, and against the start board an HQ
+   that changed hands or a side that lost its last unit, at `win`.
+4. **choose** the proposal whose reply scores best. Ties keep the greedy
+   plan. The plan carries the reply (what the opponent did, line by line;
+   the board; the terms), every proposal with its reply score, and the
+   start board evaluated the same way, so the reply's score reads as a
+   change.
+
+What this fixes: a proposal is charged for what the modelled opponent
+*does*, not for every enemy converging at once, and the opponent's captures
+and builds count -- the worst case cannot see an enemy Infantry finishing
+a city. What it does not: see "Where it is naive".
+
 ## The weights, and what each reads
 
 | weight | value | multiplies | read from |
@@ -66,6 +111,14 @@ makes the invariance tests below hold.
 | `build_bias` | 1.0 | `BUILD_BIAS[type]`, the fixed early table | -- |
 | `power_refresh` | 0.3 | a unit's price per unit Eagle refreshes | `Activation.refreshes` |
 | `power_block` | 0.5 | the army's value x (attack% - 100) / 100 | `Activation.universal` |
+| `material` | 1.0 | (reply) our units' value less the enemy's, on the board after the reply | `unit_worth` over the board |
+| `treasury` | 0.7 | (reply) our funds less the enemy's | `Army.funds` |
+| `income` | 1.0 | (reply) (our income - the enemy's) x `capture_horizon` | `economy.income` |
+
+The reply's evaluation also reuses `capture` (captures in hand, ours less
+theirs, each as worth x points / 20), `capture_horizon` and `win` (an HQ
+that changed hands against the start board; a side that had units and has
+none -- the rout, stated in ASSUMPTIONS).
 
 `BUILD_BIAS` is the one place in the module that names a unit type: Infantry
 +500, APC -1500, TCopter -2000, Lander -4000. Transports are held back
@@ -98,6 +151,22 @@ ignored.
   act on the healed board; the objective pull moves an idle unit; the
   morning's repair and a crash both score; a trap is never a candidate.
 
+- **The reply**: without `reply` the plan is the greedy one and carries no
+  reply; the model must be named and the CPU model needs its context; the
+  board scored is the one at our next turn start (the next day, both
+  sides' acted bits clear, our finished capture paying); the evaluation's
+  terms are the table's weights times quoted facts and sum to the score,
+  the rendering labels them heuristic, and the start board's evaluation is
+  the baseline; the HQ and the rout score `win` in both directions; a
+  variant commits the same actor's next-best action; the CPU port plays
+  the reply on the step 3 fixture (P2 as the CPU) without writing into the
+  caller's context, and the planner stands in, saying why, when the port
+  meets a sub-phase it has not read; and one scenario -- an Infantry
+  between two neutral cities with an enemy Infantry beside the right one
+  -- where the greedy plan takes the safe left city and the reply, seeing
+  the enemy then start on the right one, chooses to stand on the right
+  city instead, against the proposal's own score.
+
 None of this says the plans are good. It says the planner is the function
 its docstring describes.
 
@@ -114,9 +183,28 @@ Written down so nobody tunes a weight to fix a shape problem.
   kill it sets up is committed only if it scores best alone. Sequential
   commit does let the second attacker see the softened target -- that much
   composes -- but nothing looks ahead to prefer it.
-- **One turn, worst case.** Nothing past the enemy's reply, and the reply
-  is the action layer's worst case (every enemy converges, none is weakened
-  by counters), not a modelled opponent. ROADMAP steps 3 and 4 replace it.
+- **One turn, worst case, in the proposals.** Each step is still scored
+  against the action layer's worst case; the modelled reply only arbitrates
+  between the greedy plan and one alternative per close call. A plan the
+  worst case ranks fourth at some step is never proposed, so the reply
+  cannot choose it. The variants are the same actor's next-best action;
+  "do nothing with this unit" is proposed only when a wait in place is that
+  next-best.
+- **Two plies.** The reply is the opponent's next turn and nothing after
+  it: a capture the reply starts counts as points in hand, a unit it leaves
+  exposed to us counts as material, and our own next turn is never
+  planned. The evaluation is static -- material at price, funds at 0.7 of
+  it, income over the horizon -- and every one of those numbers is a
+  weight.
+- **The reply is the model's.** Under the CPU model it is exactly the
+  port's turn: right wherever the port has been traced (`docs/DERIVATION.md`
+  45, 47), and the planner's own greed wherever it has not, which the
+  reply names. Its luck draws start from the dump's RNG state, which
+  `sim.apply` does not advance -- so after a battle of ours the port's
+  draws are those of a turn in which we fought none. Under the planner
+  model the opponent is this same greedy loop, one ply, with its battles
+  rolled high against us: a pessimistic stand-in, not a prediction. A
+  human opponent is neither.
 - **Builds see one turn.** The matchup term reads the enemy's current
   composition, the capture term counts properties, and nothing saves for
   next turn; `build_spend` at 0.3 is the whole notion of money having a
@@ -140,6 +228,14 @@ The action layer re-enumerates every remaining unit after each commit, so a
 turn costs about (units^2 / 2) unit enumerations. On the fogged 15x10
 fixture that is tens of seconds; on the hand-built test boards it is
 instant. The emulator is never in this path.
+
+The reply multiplies that: each variant re-plans the rest of the turn from
+its close call, and each proposal is followed by the opponent's turn -- the
+CPU port plays one in under a second, the planner model in about the cost
+of one more plan. On the sixteen-unit step 3 fixture a plan with the CPU
+reply and three variants takes about fifteen seconds; with the planner
+reply about a minute. `--branches 0` puts only the greedy plan to the
+reply; `--reply none` is the step 1 planner.
 
 ## The differential corpus
 
@@ -190,3 +286,29 @@ The number after `<-` is the fact; the number after `=` is the weight;
 `--weight name=value` overrides a weight for one run; `--luck max` plans in
 the kindest world instead of the worst; `--board` prints the board the plan
 leaves behind.
+
+After End Turn comes the reply: who modelled it, what the opponent did,
+the board at our next turn start as terms, and every proposal with its
+reply score:
+
+```
+ 9. END TURN
+    then P2's reply, modelled by the CPU port (engine/cpu_ai):
+      P2: Mech #68 (11,3) -> (11,2) CAPTURE
+      P2: Tank #71 (9,7) -> (8,6) FIRE at Mech #3 (9,6)
+    the board at P1's next turn start, from P1's side   [+11050, from +6650 now]
+      material           +4400  = 1 (heuristic) x +4400  <- P1's units are worth 28800, the enemy's 24400
+      treasury           +6650  = 0.7 (heuristic) x +9500  <- funds 38000 against the enemy's 28500
+      income                +0  = 1 (heuristic) x +0  <- income 9500 a day against the enemy's 9500, over 6 days
+      capture               +0  = 1 (heuristic) x +0  <- captures in hand: P1 Infantry #2 at (5,1) 10/20 (+28500); P2 Mech #68 at (11,2) 10/20 (-28500)
+    proposals, by the reply's score:
+         +11050  the greedy plan (proposal +30555)   [chosen]
+          +8750  step 2: Mech #3 (7,6) -> (8,7) FIRE at Tank #71 (9,7) instead (proposal +28395)
+         -17450  step 1: Infantry #2 (6,3) -> (5,1) WAIT on City instead (proposal +2055)
+```
+
+`--reply` picks the model: `auto` (default) uses the CPU port when the
+dump says the opponent is CPU-controlled (army `+0x1B` = 2) or, when the
+dump does not say, whenever a CPU context can be built from it, and the
+planner otherwise; `cpu`, `planner` and `none` force one. `--branches N`
+is how many variants are proposed.

@@ -239,4 +239,10 @@ demands them), is `docs/ROADMAP.md`. The list below is the inventory.
 - Step 3's last piece, the CPU's building, is read and ported (DERIVATION
   47): `engine/cpu_ai.py` build section, `tests/fixtures/cpu/build-b*`,
   `harness/mesen_drive.lua`'s `proplist` write and purchase hook.
+- Step 4, the enemy reply: `advisor.plan(reply=)` proposes the greedy plan
+  and its close-call variants, follows each with the opponent's turn (the
+  CPU port, or the planner one ply deep) and chooses by `advisor.evaluate`
+  on the board at our next turn start; `tools/advise.py` does it by
+  default. The dumps now carry the RNG state and the controller byte
+  (`Board.rng`, `Army.control`) so the tool can pick the model.
 - Single-sentence-finding commit subjects, straight to main, push.

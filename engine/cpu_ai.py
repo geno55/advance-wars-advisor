@@ -45,12 +45,13 @@ from dataclasses import dataclass, field
 from typing import Dict, List, Optional, Tuple
 
 try:
-    from . import actions, co as co_mod, damage, pathing, production
-    from . import rng as rng_mod, sim
+    from . import actions, co as co_mod, cpu as cpu_mod, damage, pathing
+    from . import production, rng as rng_mod, sim
     from .cpu import Command
 except ImportError:                     # engine/ on the path
     import actions
     import co as co_mod
+    import cpu as cpu_mod
     import damage
     import pathing
     import production
@@ -1190,7 +1191,6 @@ class Turn:
             self.execute(self.commands[-1])
 
     def execute(self, cmd: Command):
-        from . import cpu as cpu_mod
         act = cpu_mod.to_action(self.board, cmd, self.warnings, fog=False)
         if act is None:
             raise RuntimeError(f"predicted {cmd} names no engine Action")

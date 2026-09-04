@@ -23,6 +23,43 @@ THE LOOP (ROADMAP step 1)
   4. stop when no unit can act and no build or power scores above zero.
      The plan is the committed sequence, in order, ending with End Turn.
 
+THE REPLY (ROADMAP step 4)
+
+  The loop above scores each action against the action layer's worst case:
+  every enemy converges on the ending tile and none is weakened on the
+  way. With `reply` set, the loop becomes the PROPOSER and a modelled
+  opponent the ARBITER:
+
+  1. propose: the greedy plan, and then `branches` variants -- at each of
+     the closest calls (the steps where the same actor's next-best action
+     scored nearest the winner; those where the worst case had a say -- a
+     damage, kill, loss or capture term differs between the two -- first)
+     that alternative is committed instead and the rest of the turn
+     re-planned greedily from there. The SAME actor's, not the overall
+     runner-up: that is usually another unit's best move, and forcing it
+     first only reorders the plan onto the same board;
+  2. reply: for each candidate, End Turn (sim.end_turn), then the
+     opponent's whole turn -- engine/cpu_ai.predict, the game's own AI
+     ported routine by routine, when the opponent is the CPU
+     (reply="cpu", needs a cpu_ai.Context from the dump); this planner,
+     one ply and worst case for its own actor, when it is not
+     (reply="planner"); the planner stands in whenever the port meets a
+     branch it has not read (NotImplementedError), and says so -- then
+     End Turn again, so the board is the one at OUR next turn start;
+  3. evaluate: that board from our side, as named terms in funds
+     (`evaluate`): material, treasury, income over the horizon, captures
+     in hand, the HQ and the rout;
+  4. choose the candidate whose reply scores best; ties keep the greedy
+     plan. The Plan carries the reply (what the opponent did, the board,
+     the terms) and every candidate with its reply score.
+
+  What this does and does not fix: the exposure a candidate is charged is
+  now what the modelled opponent DOES, not what every enemy could do at
+  once, and the opponent's captures and builds count -- but only the
+  runner-up at a close call is ever tried, the lookahead is two plies, and
+  the reply is only as right as the model: the CPU port where it has been
+  traced, this planner's own worst-case greed elsewhere.
+
 WHAT THE TERMS READ (facts) AND WHAT THEY ASSUME (weights)
 
   damage_dealt    the worst-case strike (Outcome.min_damage) in display bars
@@ -85,8 +122,9 @@ WHERE THIS IS NAIVE, on purpose (docs/ADVISOR.md says more)
   * greedy: the best first action, then the best second -- never the pair
     that is best together. A unit that could kill after a softener commits
     the softener only if it scores best on its own;
-  * one turn: nothing past the enemy's reply, which is itself the worst
-    case rather than a modelled opponent (ROADMAP steps 3-4);
+  * one turn, unless `reply` is set: then two plies, the second the
+    modelled opponent's, and only one alternative per close call is
+    tried against it;
   * traps (kind "trap") are never chosen: walking into a known ambush is
     not a plan, and the stop tile is available as a plain wait.
 
@@ -105,11 +143,13 @@ from typing import Dict, List, Optional, Tuple
 try:                                    # imported as engine.advisor
     from . import actions as actions_mod
     from . import co as co_mod
+    from . import cpu_ai
     from . import damage, economy, pathing, sim as sim_mod
     from . import supply as supply_mod, threat
 except ImportError:                     # imported as advisor, engine/ on path
     import actions as actions_mod
     import co as co_mod
+    import cpu_ai
     import damage
     import economy
     import pathing
@@ -146,6 +186,11 @@ WEIGHTS: Dict[str, float] = {
     "build_bias": 1.0,        # x BUILD_BIAS[type]
     "power_refresh": 0.3,     # x price per unit Eagle refreshes
     "power_block": 0.5,       # x army value x (attack% - 100)/100
+    # -- the reply's evaluation (ROADMAP step 4): the board at our next
+    # -- turn start, from our side, after the modelled opponent has moved
+    "material": 1.0,          # x (our units' value - the enemy's)
+    "treasury": 0.7,          # x (our funds - the enemy's)
+    "income": 1.0,            # x (our income - the enemy's) x capture_horizon
 }
 
 # The fixed early table the roadmap asked for: funds added to a build's
@@ -199,10 +244,45 @@ class Step:
     board_before: object
     board_after: object
     runner_up: Optional[Scored] = None    # the next best candidate, if any
+    # the same actor's next-best action on that board (another build for a
+    # build, nothing for the power): what a variant proposal commits instead
+    alternative: Optional[Scored] = None
 
     @property
     def action(self):
         return self.scored.action
+
+
+@dataclass(frozen=True)
+class Reply:
+    """The opponents' modelled turns after a candidate plan, and the board
+    they leave -- at the planner's NEXT turn start -- evaluated from the
+    planner's side (ROADMAP step 4)."""
+    opponents: Tuple[int, ...]
+    model: str                  # "cpu" (engine/cpu_ai), "planner" (this
+                                # module, one ply), or "mixed"
+    described: Tuple[str, ...]  # what the opponents did, one line each
+    board_after: object
+    terms: Tuple[Term, ...]     # evaluate() on board_after
+    note: str = ""              # why the asked-for model was not used
+
+    @property
+    def score(self) -> float:
+        return sum(t.value for t in self.terms)
+
+
+@dataclass
+class Candidate:
+    """One proposed turn and the reply it drew."""
+    label: str
+    steps: List[Step]
+    board_after: object
+    reply: Optional[Reply] = None
+    chosen: bool = False
+
+    @property
+    def score(self) -> float:          # the proposal's own total
+        return sum(s.scored.score for s in self.steps)
 
 
 @dataclass
@@ -212,6 +292,16 @@ class Plan:
     board_after: object       # the board once every step is committed
     warnings: List[str] = field(default_factory=list)
     weights: Dict[str, float] = field(default_factory=dict)
+    # with `reply` set: the modelled reply to the chosen plan, every
+    # candidate that was proposed with its own reply, and the start board
+    # evaluated the same way so the reply's score can be read as a change
+    reply: Optional[Reply] = None
+    candidates: List[Candidate] = field(default_factory=list)
+    baseline: Tuple[Term, ...] = ()
+
+    @property
+    def baseline_score(self) -> float:
+        return sum(t.value for t in self.baseline)
 
     @property
     def score(self) -> float:
@@ -758,50 +848,285 @@ def candidates(board, player: int, ctx: Context) -> List[Scored]:
     return out
 
 
-def plan(board, player: Optional[int] = None, *, weights=None,
-         co_ids=None, weather=None, fog=None, fog_rules=None,
-         luck="min", max_steps: int = 200,
-         warnings: Optional[list] = None) -> Plan:
-    """A turn for `player` (default: the active player), greedy with
-    sequential commit. Each step is scored on the board the previous step
-    left behind (sim.apply at `luck`, "min" being the worst case for the
-    actor). A unit that can act always gets an action -- a wait in place
-    is a legal one -- while builds and the power are taken only when they
-    score above zero."""
-    warnings = warnings if warnings is not None else []
-    player = player or board.active_player
-    if not player:
-        raise ValueError("no active player on this board and none given")
+def _greedy(board, player: int, *, weights, co_ids, weather, fog, fog_rules,
+            luck, warnings, max_steps: int, forced: Optional[Scored] = None,
+            index_from: int = 1) -> Tuple[List[Step], object]:
+    """The greedy loop: steps from `board` until the turn is spent, and the
+    board they leave. `forced` commits that candidate (scored on `board`)
+    as the first step instead of the best one -- how a variant plan is
+    proposed -- and the greedy choice it displaces is filed as its
+    runner-up."""
     steps: List[Step] = []
     cur = board
-    for i in range(max_steps):
+    for _ in range(max_steps):
         ctx = Context(cur, player, weights=weights, co_ids=co_ids,
                       weather=weather, fog=fog, fog_rules=fog_rules,
                       warnings=warnings)
         ranked = candidates(cur, player, ctx)
         if not ranked:
             break
-        best = ranked[0]
-        if best.action.unit is None and best.score <= 0:
-            # an army action that does not pay: is any unit still waiting?
-            unit_acts = [s for s in ranked if s.action.unit is not None]
-            if not unit_acts:
-                break
-            best = unit_acts[0]
-        runner = next((s for s in ranked[1:] if s is not best), None)
+        if forced is not None:
+            best, forced = forced, None
+            runner = alt = ranked[0]
+        else:
+            best = ranked[0]
+            if best.action.unit is None and best.score <= 0:
+                # an army action that does not pay: is any unit still waiting?
+                unit_acts = [s for s in ranked if s.action.unit is not None]
+                if not unit_acts:
+                    break
+                best = unit_acts[0]
+            runner = next((s for s in ranked[1:] if s is not best), None)
+            alt = next((s for s in ranked if s is not best
+                        and _same_actor(s.action, best.action)), None)
         nxt = sim_mod.apply(cur, best.action, luck=luck, co_ids=co_ids,
                             warnings=warnings)
-        steps.append(Step(index=len(steps) + 1, scored=best,
+        steps.append(Step(index=index_from + len(steps), scored=best,
                           board_before=cur, board_after=nxt,
-                          runner_up=runner))
+                          runner_up=runner, alternative=alt))
         cur = nxt
     else:
         warnings.append(f"the planner stopped after {max_steps} steps")
+    return steps, cur
+
+
+def _same_actor(a, b) -> bool:
+    """Two candidates for the same decision: the same unit's actions, or
+    two army actions of the same kind (one build against another)."""
+    if a.unit is not None and b.unit is not None:
+        return a.unit.slot == b.unit.slot
+    return a.unit is None and b.unit is None and a.kind == b.kind
+
+
+REPLY_MODELS = ("cpu", "planner")
+
+# The terms the worst case has a say in: a step whose winner and runner-up
+# differ in one of these is a call the modelled reply may overturn.
+STAKE_TERMS = ("damage_dealt", "kill", "damage_taken", "loss", "capture", "win")
+
+
+def _stake(s: Step) -> float:
+    """How much of the gap between a step's winner and its alternative the
+    worst case decided: the summed difference of their STAKE_TERMS."""
+    def by_name(sc: Scored) -> Dict[str, float]:
+        out: Dict[str, float] = {}
+        for t in sc.terms:
+            out[t.name] = out.get(t.name, 0.0) + t.value
+        return out
+    a, b = by_name(s.scored), by_name(s.alternative)
+    return sum(abs(a.get(n, 0.0) - b.get(n, 0.0)) for n in STAKE_TERMS)
+
+
+def plan(board, player: Optional[int] = None, *, weights=None,
+         co_ids=None, weather=None, fog=None, fog_rules=None,
+         luck="min", max_steps: int = 200,
+         warnings: Optional[list] = None,
+         reply: Optional[str] = None, cpu_ctx=None, branches: int = 3,
+         reply_luck="max") -> Plan:
+    """A turn for `player` (default: the active player), greedy with
+    sequential commit. Each step is scored on the board the previous step
+    left behind (sim.apply at `luck`, "min" being the worst case for the
+    actor). A unit that can act always gets an action -- a wait in place
+    is a legal one -- while builds and the power are taken only when they
+    score above zero.
+
+    With `reply` the greedy plan is a proposal: it and up to `branches`
+    variants (the runner-up committed at the closest calls) are each
+    followed by the opponent's modelled turn -- "cpu" for engine/cpu_ai
+    over `cpu_ctx` (cpu_ai.Context.from_dump), "planner" for this planner
+    one ply deep, its battles rolled at `reply_luck` ("max": high against
+    us) -- and the candidate whose board at our next turn start evaluates
+    best is the plan. Ties keep the greedy proposal."""
+    warnings = warnings if warnings is not None else []
+    player = player or board.active_player
+    if not player:
+        raise ValueError("no active player on this board and none given")
+    if reply is not None and reply not in REPLY_MODELS:
+        raise ValueError(f"reply must be one of {REPLY_MODELS} or None, "
+                         f"not {reply!r}")
+    if reply == "cpu" and cpu_ctx is None:
+        raise ValueError("reply='cpu' needs cpu_ctx, a cpu_ai.Context "
+                         "(cpu_ai.Context.from_dump(path, player=opponent))")
+    kw = dict(weights=weights, co_ids=co_ids, weather=weather, fog=fog,
+              fog_rules=fog_rules, luck=luck, warnings=warnings)
+    steps, cur = _greedy(board, player, max_steps=max_steps, **kw)
     out = Plan(player=player, steps=steps, board_after=cur,
                warnings=warnings, weights=dict(WEIGHTS))
     if weights:
         out.weights.update(weights)
+    if reply is None:
+        return out
+
+    # -- the proposals: the greedy plan, then the same actor's alternative
+    # -- at each of the closest calls, the rest of the turn re-planned
+    cands = [Candidate("the greedy plan", steps, cur)]
+    close = sorted((s for s in steps if s.alternative is not None),
+                   key=lambda s: (_stake(s) == 0,
+                                  s.scored.score - s.alternative.score, s.index))
+    for s in close[:max(0, branches)]:
+        rest, after = _greedy(s.board_before, player, forced=s.alternative,
+                              index_from=s.index,
+                              max_steps=max_steps - (s.index - 1), **kw)
+        cands.append(Candidate(
+            f"step {s.index}: {describe_action(s.alternative.action)} instead",
+            steps[:s.index - 1] + rest, after))
+    # -- the arbiter; two proposals that leave the same board share a reply
+    for c in cands:
+        twin = next((d for d in cands if d.reply is not None
+                     and d.board_after == c.board_after), None)
+        if twin is not None:
+            c.reply = twin.reply
+            continue
+        c.reply = _reply(c.board_after, player, reply, cpu_ctx,
+                         weights=out.weights, co_ids=co_ids, weather=weather,
+                         fog=fog, fog_rules=fog_rules, luck=reply_luck,
+                         warnings=warnings, start=board)
+    best = max(cands, key=lambda c: c.reply.score)     # max keeps the first tie
+    best.chosen = True
+    out.steps, out.board_after = best.steps, best.board_after
+    out.reply, out.candidates = best.reply, cands
+    out.baseline = evaluate(board, player, out.weights, co_ids, start=board)
     return out
+
+
+# --------------------------------------------------------------------------
+# the reply: the opponents' modelled turns, then the board from our side
+# --------------------------------------------------------------------------
+
+def _fresh_ctx(ctx):
+    """A cpu_ai.Context the predictor may write into (it keeps per-unit
+    bytes and adds the units it builds) without touching the caller's."""
+    return dataclasses.replace(ctx, ai={k: list(v) for k, v in ctx.ai.items()})
+
+
+def _describe_command(cmd, board) -> str:
+    u = sim_mod.unit_in(board, cmd.slot)
+    who = f"{u.type} #{u.slot} ({u.x},{u.y})" if u is not None else f"#{cmd.slot}"
+    at = f"({cmd.tile[0]},{cmd.tile[1]})"
+    if cmd.name == "fire":
+        t = sim_mod.unit_in(board, cmd.arg)
+        tgt = (f"{t.type} #{t.slot} ({t.x},{t.y})" if t is not None
+               else f"#{cmd.arg}")
+        return f"{who} -> {at} FIRE at {tgt}"
+    return f"{who} -> {at} {cmd.name.upper()}"
+
+
+def _reply(board, player: int, model: str, cpu_ctx, *, weights, co_ids,
+           weather, fog, fog_rules, luck, warnings, start) -> Reply:
+    """End Turn after `board`, then every opponent's turn as `model` plays
+    it until the turn comes back to `player`, then that turn's start; the
+    board is evaluated from `player`'s side against `start`."""
+    described: List[str] = []
+    notes: List[str] = []
+    used: List[str] = []
+    opponents: List[int] = []
+    cur = sim_mod.end_turn(board, warnings=warnings)
+    while cur.active_player != player and len(opponents) < 4:
+        opp = cur.active_player
+        opponents.append(opp)
+        played = False
+        if model == "cpu":
+            rng = cur.rng
+            if rng is None:
+                rng = 0
+                note = ("no RNG state on this board: the CPU's luck draws "
+                        "are taken from state 0")
+                if note not in warnings:
+                    warnings.append(note)
+            try:
+                turn = cpu_ai.predict(cur, opp, _fresh_ctx(cpu_ctx), rng=rng)
+            except (NotImplementedError, RuntimeError) as e:
+                notes.append(f"the CPU port could not play P{opp}'s turn "
+                             f"({e}); this planner stood in for it")
+            else:
+                lines = [f"P{opp}: {_describe_command(c, cur)}" for c in turn.commands]
+                lines += [f"P{opp} buys {b['name']} at ({b['x']},{b['y']}) "
+                          f"for {b['price']}" for b in turn.builds]
+                described += lines or [f"P{opp} does nothing"]
+                cur = turn.board
+                used.append("cpu")
+                played = True
+        if not played:
+            p = plan(cur, opp, weights=weights, co_ids=co_ids, weather=weather,
+                     fog=fog, fog_rules=fog_rules, luck=luck, warnings=warnings)
+            described += ([f"P{opp}: {describe_action(s.action)}" for s in p.steps]
+                          or [f"P{opp} does nothing"])
+            cur = p.board_after
+            used.append("planner")
+        cur = sim_mod.end_turn(cur, warnings=warnings)
+    kinds = set(used)
+    return Reply(opponents=tuple(opponents),
+                 model=(kinds.pop() if len(kinds) == 1 else "mixed"),
+                 described=tuple(described), board_after=cur,
+                 terms=evaluate(cur, player, weights, co_ids, start=start),
+                 note="; ".join(notes))
+
+
+def evaluate(board, player: int, weights=None, co_ids=None, *,
+             start=None) -> Tuple[Term, ...]:
+    """The static opinion on `board` from `player`'s side, in funds, as
+    named terms: material (unit value, ours less theirs), treasury, income
+    over the horizon, captures in hand, and -- against `start` -- an HQ
+    that changed hands or a side that lost its last unit, at `win`."""
+    w = dict(WEIGHTS)
+    if weights:
+        w.update(weights)
+    start = start if start is not None else board
+    others = sorted({p for b in (start, board)
+                     for p in sim_mod.players_in_order(b) if p != player})
+    out: List[Term] = []
+
+    def funds_of(b, p):
+        try:
+            return b.army(p).funds
+        except (StopIteration, AttributeError):
+            return 0
+
+    own = army_worth(board, player, co_ids)
+    foe = sum(army_worth(board, p, co_ids) for p in others)
+    out.append(Term("material", w["material"], own - foe,
+                    f"P{player}'s units are worth {own}, the enemy's {foe}"))
+    own_f = funds_of(board, player)
+    foe_f = sum(funds_of(board, p) for p in others)
+    out.append(Term("treasury", w["treasury"], own_f - foe_f,
+                    f"funds {own_f} against the enemy's {foe_f}"))
+    own_i = economy.income(board, player).amount
+    foe_i = sum(economy.income(board, p).amount for p in others)
+    out.append(Term("income", w["income"],
+                    (own_i - foe_i) * w["capture_horizon"],
+                    f"income {own_i} a day against the enemy's {foe_i}, over "
+                    f"{w['capture_horizon']} days"))
+    held, facts = 0.0, []
+    for u in sorted(board.units, key=lambda u: (u.player != player, u.slot)):
+        if not u.capture:
+            continue
+        worth = property_worth(board, u.x, u.y, u.player, w) * u.capture / 20
+        sign = 1 if u.player == player else -1
+        held += sign * worth
+        facts.append(f"P{u.player} {u.type} #{u.slot} at ({u.x},{u.y}) "
+                     f"{u.capture}/20 ({sign * worth:+.0f})")
+    if facts:
+        out.append(Term("capture", w["capture"], held,
+                        "captures in hand: " + "; ".join(facts)))
+    for y in range(board.height):
+        for x in range(board.width):
+            if board.terrain[y][x] != TERRAIN_HQ:
+                continue
+            was, now = start.owner[y][x], board.owner[y][x]
+            if was == now:
+                continue
+            if now == player and was in others:
+                out.append(Term("win", w["win"], 1,
+                                f"the enemy HQ at ({x},{y}) is ours"))
+            elif was == player and now in others:
+                out.append(Term("win", w["win"], -1,
+                                f"our HQ at ({x},{y}) is the enemy's"))
+    for p in [player] + others:
+        if start.units_of(p) and not board.units_of(p):
+            out.append(Term("win", w["win"], -1 if p == player else 1,
+                            f"P{p} has lost its last unit (the rout -- "
+                            f"stated, not measured)"))
+    return tuple(out)
 
 
 # --------------------------------------------------------------------------
@@ -845,9 +1170,15 @@ def render(p: Plan, *, terms: bool = True) -> str:
     """The plan as text: one line per step with its score, and under it
     the terms -- each a weight, a quantity, and the fact it was read from.
     Weights are marked heuristic on every line they appear on."""
-    out = [f"P{p.player}'s turn -- {len(p.steps)} step"
-           f"{'s' if len(p.steps) != 1 else ''}, greedy, worst case "
-           f"throughout (heuristic total {p.score:+.0f})"]
+    n = f"{len(p.steps)} step{'s' if len(p.steps) != 1 else ''}"
+    if p.reply is None:
+        out = [f"P{p.player}'s turn -- {n}, greedy, worst case throughout "
+               f"(heuristic total {p.score:+.0f})"]
+    else:
+        out = [f"P{p.player}'s turn -- {n}, the proposal of "
+               f"{len(p.candidates)} that the modelled reply scores best "
+               f"(heuristic total {p.score:+.0f}; the board after the reply "
+               f"{p.reply.score:+.0f}, from {p.baseline_score:+.0f} now)"]
     for s in p.steps:
         out.append(f"{s.index:2d}. {describe_action(s.action)}   "
                    f"[{s.scored.score:+.0f}]")
@@ -863,4 +1194,28 @@ def render(p: Plan, *, terms: bool = True) -> str:
                 out.append(f"      next best: {describe_action(s.runner_up.action)} "
                            f"[{s.runner_up.score:+.0f}]")
     out.append(f"{len(p.steps) + 1:2d}. END TURN")
+    if p.reply is not None:
+        r = p.reply
+        who = " and ".join(f"P{o}" for o in r.opponents)
+        by = {"cpu": "the CPU port (engine/cpu_ai)",
+              "planner": "this planner, one ply, its battles rolled against us",
+              "mixed": "the CPU port where it could play and this planner where not"}[r.model]
+        out.append(f"    then {who}'s reply, modelled by {by}:")
+        for line in r.described:
+            out.append(f"      {line}")
+        if r.note:
+            out.append(f"      !! {r.note}")
+        out.append(f"    the board at P{p.player}'s next turn start, from "
+                   f"P{p.player}'s side   [{r.score:+.0f}, from "
+                   f"{p.baseline_score:+.0f} now]")
+        if terms:
+            for t in r.terms:
+                out.append(f"      {t.name:14s} {t.value:+9.0f}  = "
+                           f"{t.weight:g} (heuristic) x {t.quantity:+.0f}  "
+                           f"<- {t.fact}")
+        out.append("    proposals, by the reply's score:")
+        for c in p.candidates:
+            out.append(f"      {c.reply.score:+9.0f}  {c.label} "
+                       f"(proposal {c.score:+.0f})"
+                       + ("   [chosen]" if c.chosen else ""))
     return "\n".join(out)

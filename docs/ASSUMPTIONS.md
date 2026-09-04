@@ -350,11 +350,20 @@ fixtures, and in this file's git history.
 
 ## Assumed — these are the ones that will bite
 
-Nothing, currently. Every assumption this file has carried is either in
-Established above or in the Retired ledger below, each killed by a
-measurement or a read with its account named. The section stays, because the
-next composed feature will refill it — that is what happened with A15 and
-A16, both born the day action enumeration was written.
+- **The rout ends the match.** The advisor's reply evaluation
+  (`advisor.evaluate`, ROADMAP step 4) scores a side that had units and
+  has none as beaten, at the same weight as its HQ falling. That a side's
+  last unit dying ends the match at once -- rather than at its next turn,
+  or not while it still holds a factory and funds -- is the game's
+  standard rule as remembered, not read. Kill by: a drive that destroys a
+  side's last unit while it holds a Base and funds, and the match state
+  after (the turn block, the result screen).
+
+Everything else this file has carried is either in Established above or in
+the Retired ledger below, each killed by a measurement or a read with its
+account named. The section refills with each composed feature — that is
+what happened with A15 and A16, both born the day action enumeration was
+written.
 
 ## Unknown — not modelled
 
