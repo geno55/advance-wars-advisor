@@ -231,6 +231,9 @@ def find_empty_tile_for(mss: pathlib.Path, dims) -> tuple:
     probe = ROOT / "harness" / "out" / "play" / "probe"
     probe.mkdir(parents=True, exist_ok=True)
     dump = probe / "start.json"
+    dump.unlink(missing_ok=True)                 # never a stale one from an earlier run
+    if not mss.exists():
+        raise SystemExit(f"no savestate at {mss}")
     w, h = dims if dims else (None, None)
     body = f"""
 local M = AW

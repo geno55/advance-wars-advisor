@@ -133,6 +133,22 @@ function M.find_empty(cfg)
   return { x = bx, y = by }
 end
 
+-- Once the match is decided, let the game finish it: the result screens
+-- and the save of a mission clear happen AFTER the HQ's owner byte flips,
+-- and an emulator stopped at once records nothing (the Field Training
+-- clear, 2026-09-05). Tap A through the sequence for a while, screenshot,
+-- and give the SRAM time to settle before the run ends.
+function M.play_out(tag)
+  M.L("  playing the ending out")
+  for i = 1, 60 do
+    M.tap("a", 6, 84)
+    if i % 20 == 0 then M.shot(string.format("%s-ending-%d", tag, i)) end
+  end
+  M.wait(300)
+  M.shot(tag .. "-ending-final")
+  M.L(string.format("  ending played out: phase %d day %d", M.r16(M.MATCH_PHASE), M.r32(M.TURN)))
+end
+
 function M.play_game(cfg)
   local result = { ok = false, turns = {}, over = nil }
   local fh = assert(io.open(cfg.mss, "rb")); local bytes = fh:read("*a"); fh:close()
@@ -223,6 +239,7 @@ function M.play_game(cfg)
       if f then f:write(st); f:close() end
     end
   end
+  if result.over == "win" or result.over == "loss" then M.play_out(string.format("t%02d", #result.turns)) end
   if result.over == nil then result.over = "turncap" end
   result.ok = result.over ~= "harness" and result.over ~= "stuck"
   result.day = M.r32(M.TURN)
