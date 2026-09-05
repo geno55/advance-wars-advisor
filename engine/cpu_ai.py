@@ -176,14 +176,29 @@ class Context:
 
 
 def profile_for(map_id: int, co_ids: Dict[int, int], player: int) -> dict:
-    """The profile the AI's state 0 copies (0x0806826C): a VS mission's row
-    picks a column of 0x082872C8 by the CO."""
+    """The profile the AI's state 0 copies (0x0806826C). A VS mission
+    (record byte +0x22 = 0xFF): the mission's row (+0x23) picks a column
+    of 0x082872C8 by the CO, a profile of 0x0811A97C. A campaign mission
+    (DERIVATION 53, 0x080683B0): the 16 header bytes are the mission's
+    OWN profile, row +0x22 of the same table, and each unit's 12 bytes are
+    that row's plus the CO's VS profile's, byte by byte, mod 256. Maps
+    past the 164-entry table take a row from 0x083B7EE8 by the side flags
+    -- the design room, unread."""
     t = tables()
+    if map_id >= len(t["missions"]):
+        raise NotImplementedError("0x080682F8 (a map past the mission table: "
+                                  "the profile row comes from 0x083B7EE8 by the "
+                                  "side flags)")
     m = t["missions"][map_id]
-    if not m["vs"]:
-        raise NotImplementedError("campaign profiles (0x080683B0) are not read")
     k = t["profile_index"][m["row"]][co_ids[player]]
-    return t["profiles"][k]
+    co = t["profiles"][k]
+    if m["vs"]:
+        return co
+    own = t["profiles"][m["b22"]]
+    return {"header": list(own["header"]),
+            "units": {name: [(a + b) & 0xFF for a, b in zip(own["units"][name],
+                                                          co["units"][name])]
+                      for name in own["units"]}}
 
 
 @dataclass
@@ -1993,8 +2008,10 @@ class Turn:
 # TCopter (0x08060670); the loaded transport's move (0x08060708,
 # 0x080607C4); the fallback's Lander pickup (0x080660A6) and the foot unit's TCopter ride
 # (0x08064D76), both behind a side flag no traced map sets; Olaf's
-# weather-gated power predicate (0x08063324); campaign profiles
-# (0x080683B0).
+# weather-gated power predicate (0x08063324); the design room's profile
+# row (0x080682F8). Campaign profiles are read (DERIVATION 53,
+# profile_for): the mission's header over the CO's unit rows, unchecked
+# against a live copy until a campaign state is parked.
 #
 # The retreat check (DERIVATION 52, the five retreat-* traces): a
 # conditioned unit's move rolls into 0x0806636C profile[type][1] percent

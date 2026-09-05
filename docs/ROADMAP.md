@@ -177,8 +177,11 @@ Three decisions, made once so they do not get re-argued:
    Before any mission-level tuning, the campaign profile table
    (`0x080683B0`) is read: each mission's CO profile sets the AI's
    thresholds, so a set tuned against the VS profiles could miss a
-   mission's personality. That read is one table, not a project. Steps 4
-   and 5 are one iteration loop.
+   mission's personality. *Read* (DERIVATION 53): a campaign mission's
+   header is its own row of the profile table and its unit rows are that
+   row's bytes added to the CO's; the port builds a context on any
+   campaign dump now, and the first parked campaign state's live profile
+   copy is the check. Steps 4 and 5 are one iteration loop.
 
    *Begun: the harness.* `tools/sparring.py` plays the planner against the
    port from a dump to an HQ, a rout or a day cap and reports the outcome,

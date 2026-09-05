@@ -536,6 +536,12 @@ of them also showed that the APC's supply pass scores its from-tile
 against whatever threat grid the last decision left, so the port now
 keeps that grid across decisions as the game does.
 
+**The campaign profile (DERIVATION 53).** A campaign mission's AI profile
+is the mission's own header bytes over the CO's unit rows, the two added
+byte by byte; the extractor now reads all 133 profile rows and the port
+builds a context on any campaign dump. Read off the ROM, to be checked
+against the live copy the first parked campaign state carries.
+
 **The enemy reply (ROADMAP step 4).** The planner's plan is now a
 proposal. It and a few variants -- at its closest calls, the same unit's
 next-best action committed and the rest of the turn re-planned -- are each

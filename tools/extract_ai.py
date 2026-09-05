@@ -93,7 +93,12 @@ def extract(rom: bytes) -> dict:
         lists[key] = [SUBPHASE_NAMES.get(p, f"0x{p:08X}") for p in ptrs]
     modes = [u32(rom, 0x083B7EB8 + 4 * i) & ~1 for i in range(8)]
     co_rows = [list(rom[0x2872C8 + 12 * i: 0x2872C8 + 12 * i + 12]) for i in range(12)]
-    n_prof = max(max(r) for r in co_rows) + 1
+    # the profile table at 0x0811A97C (0x130 a row) holds the VS profiles
+    # the CO rows index AND, from 116 on, one row per campaign mission --
+    # mission record byte +0x22 names it (0x0806826C; DERIVATION 53)
+    mission_rows = [rom[0x287478 + 60 * m + 0x22] for m in range(0xA4)]
+    n_prof = max(max(max(r) for r in co_rows),
+                 max(b for b in mission_rows if b != 0xFF)) + 1
     profiles = []
     for k in range(n_prof):
         p = rom[0x11A97C + 0x130 * k: 0x11A97C + 0x130 * (k + 1)]

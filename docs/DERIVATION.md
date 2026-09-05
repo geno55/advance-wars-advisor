@@ -3453,3 +3453,33 @@ port finds the seed: with the check raising, run it over seeds until the
 raise names the unit you want; with the check ported, patch it to raise
 when the unit stands threatened.
 
+## 53. The campaign profile: the mission's header over the CO's rows
+
+ROADMAP step 5 asked for this read before any mission-level tuning, and
+step 6 needs it before the port can build a context on a campaign
+state. State 0's profile copy (`0x0806826C`) branches on the mission
+record's byte `+0x22` (`0x08287478 + 60 x map_id`): 0xFF is a VS mission,
+whose row `+0x23` picks a column of `0x082872C8` by the CO and so a
+profile of the table at `0x0811A97C` (DERIVATION 45). Anything else is a
+campaign mission and calls `0x080683B0(dest, +0x22, +0x23, player)`:
+
+- the 16 header bytes -- the thresholds and counts the choosers read --
+  are copied from **the mission's own profile**, row `+0x22` of the same
+  table (116 to 132 for the eighteen campaign records; map 0 names row
+  0);
+- each of the 24 unit rows, 12 bytes, is the mission row's byte **plus**
+  the CO's VS profile row's byte, `strb` truncated -- a per-mission
+  adjustment on top of the CO's personality, all zero on the rows
+  sampled.
+
+Maps past the 164-entry table (`0x080682F8`, the design room) take a row
+from `0x083B7EE8` by the side flags, 4 when those exceed 3, and are not
+modelled; `profile_for` raises there with the address.
+
+`tools/extract_ai.py` now reads 133 profiles (it had stopped at the 89
+the CO rows index); `cpu_ai.profile_for` merges as above. Read off the
+ROM and checked against nothing yet: the dump carries the live copy at
+`0x020235DC` as `ai_profile`, so the first parked campaign state will
+confirm or refute the merge byte for byte, the way `vs15-p1-cpu.after`
+confirms the VS path.
+

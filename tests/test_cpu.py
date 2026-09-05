@@ -178,6 +178,28 @@ class TestThePrediction(unittest.TestCase):
         self.assertEqual(prof["units"]["Infantry"], list(live[16:28]))
         self.assertEqual(prof["units"]["Infantry"][:4], [90, 10, 10, 20])
 
+    def test_a_campaign_missions_profile_is_its_own_header_over_the_cos_rows(self):
+        """DERIVATION 53 (0x080683B0): a mission whose record byte +0x22 is
+        not 0xFF takes its 16 header bytes from profile row +0x22 of the
+        same table and adds that row's unit bytes to the CO's VS profile's,
+        byte by byte mod 256. Read off the ROM; the live copy on a campaign
+        dump (`ai_profile`) is the check, once one is parked."""
+        t = cpu_ai.tables()
+        m = t["missions"][1]
+        self.assertFalse(m["vs"])
+        self.assertEqual((m["b22"], m["row"]), (116, 1))
+        own = t["profiles"][116]
+        co = t["profiles"][t["profile_index"][1][1]]           # Andy, row 1
+        prof = cpu_ai.profile_for(1, {1: 1, 2: 1}, 2)
+        self.assertEqual(prof["header"], own["header"])
+        for name in ("Infantry", "Tank", "Artillery"):
+            self.assertEqual(prof["units"][name],
+                             [(a + b) & 0xFF for a, b in zip(own["units"][name], co["units"][name])])
+        # mission 4 sets thresholds of its own in the header
+        self.assertNotEqual(cpu_ai.profile_for(4, {1: 1, 2: 1}, 2)["header"], co["header"])
+        with self.assertRaises(NotImplementedError):
+            cpu_ai.profile_for(0xA4, {1: 1, 2: 1}, 2)          # the design room
+
     def test_andys_power_predicate_wants_a_damaged_unit(self):
         """The full meter on vs15-p1-cpu-power went unfired because Andy's
         AI predicate (0x080632C4) fires only with a unit at 90 hp or less
