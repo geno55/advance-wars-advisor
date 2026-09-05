@@ -50,6 +50,11 @@ POWER = ["power-andy", "power-max", "power-eagle"]
 # written dry on vs15_p2, so the APC's supply pass has a needy unit to
 # drive to -- the Tank able to reach the APC, then unable to move at all.
 SUPPLY = ["supply-apc", "supply-apc-move"]
+# The retreat-after-move check (DERIVATION 52): the pre-step fixtures'
+# dry unit with the RNG written so that its random rolls under the
+# profile's ten percent -- standing safe, nothing changes.
+RETREAT = ["retreat-roll-inf", "retreat-roll-inf2", "retreat-roll-tank",
+           "retreat-mech", "retreat-mech2"]
 
 
 def trace(name):
@@ -132,7 +137,8 @@ class TestTheReplay(unittest.TestCase):
 
 class TestThePrediction(unittest.TestCase):
     """engine/cpu.predict against every trace (tools/cpu_trace.py predict)."""
-    ALL = EXACT + ["vs15-p1-cpu-fog"] + BUILDS + PRESTEP + NOPROP + POWER + SUPPLY
+    ALL = (EXACT + ["vs15-p1-cpu-fog"] + BUILDS + PRESTEP + NOPROP + POWER + SUPPLY
+           + RETREAT)
 
     def test_every_trace_is_predicted_record_for_record(self):
         for name in self.ALL:
@@ -455,4 +461,51 @@ class TestTheSupply(unittest.TestCase):
         self.assertEqual(cmds[-2:], [("supply", 5), ("fire", 7)])
         r = cpu_trace.predict(trace("supply-apc-move"))
         self.assertEqual(r["predicted"], r["traced"])
+
+
+class TestTheRetreatCheck(unittest.TestCase):
+    """DERIVATION 52: a conditioned unit's move rolls into 0x0806636C
+    profile[type][1] percent of the time; standing safe it changes
+    nothing, and the RNG write is what puts the roll under ten."""
+
+    def test_the_roll_lands_and_a_safe_unit_keeps_its_move(self):
+        for name, slot, tile in (("retreat-roll-inf", 1, (0, 8)),
+                                 ("retreat-roll-inf2", 1, (0, 8)),
+                                 ("retreat-roll-tank", 7, (6, 3))):
+            with self.subTest(name=name):
+                t = trace(name)
+                self.assertIn({"rng": t["writes"][-1]["rng"]}, t["writes"])
+                r = cpu_trace.predict(t)
+                log = "\n".join(r["log"])
+                self.assertIn("retreat check, standing safe", log)
+                cmds = [(c["name"], c["slot"], (c["x"], c["y"])) for c in t["commands"]]
+                self.assertIn(("wait", slot, tile), cmds)
+                self.assertEqual(r["predicted"], r["traced"])
+
+    def test_the_supply_pass_reads_the_last_units_threat_grid(self):
+        """retreat-roll-tank: the APC supplied the Tank from where it stood,
+        (6,2) at score 100, because the grid the Artillery's decision left
+        marked (6,4) threatened -- a grid the supply pass reads but never
+        builds. Cleared per decision, the port chose (6,4) at 110."""
+        cmds = [(cpu.from_record(c).name, c["slot"], (c["x"], c["y"]))
+                for c in trace("retreat-roll-tank")["commands"]]
+        self.assertIn(("supply", 5, (6, 2)), cmds)
+
+    def test_a_threatened_unit_loses_its_command_and_is_decided_again(self):
+        """retreat-mech: the dry Mech at (7,6), in reach of an Infantry and a
+        Tank, rolls the check at its first visit; the game issued nothing
+        for it there, decided it again at the foot pass with a fresh
+        random, and it walked to (6,5) -- three draws more than a single
+        decision. Both seeds, record for record and draw for draw."""
+        for name in ("retreat-mech", "retreat-mech2"):
+            with self.subTest(name=name):
+                t = trace(name)
+                r = cpu_trace.predict(t)
+                log = r["log"]
+                self.assertTrue(any("command voided by the retreat check" in l for l in log))
+                self.assertEqual(sum("Mech#3 at (7,6) random" in l for l in log), 2)
+                cmds = [(c["name"], c["slot"], (c["x"], c["y"])) for c in t["commands"]]
+                self.assertIn(("wait", 3, (6, 5)), cmds)
+                self.assertEqual(r["predicted"], r["traced"])
+                self.assertEqual(r["draws"], r["logged_draws"])
 

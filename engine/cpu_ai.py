@@ -623,9 +623,54 @@ class Turn:
         if tile is not None:
             self.emit(unit, 2, tile)
         if self.flags_5008 & 2 and prof[1] > self.ai(unit)[1] % 100:
-            raise NotImplementedError("0x0806636C (drop after moving)")
+            self.retreat_check(unit)
         self.settle(unit)
         return tile
+
+    def retreat_check(self, unit):
+        """0x0806636C (DERIVATION 52): after a conditioned unit's move is
+        chosen, profile[type][1] percent of the time. The threat grid is
+        built and the unit's OWN tile tested against it; standing safe,
+        nothing happens (the retreat-roll-* traces). Standing threatened,
+        the move is replaced by a Wait onto the cheapest reachable tile the
+        grid does not cover that the unit may stop on (later tiles winning
+        ties); then, only with 0x03005008 bit 1 clear, a second scan by
+        terrain value -- unreachable from here, where bit 1 is always set."""
+        self.build_threat(unit)
+        if not self.threatened(unit, unit.x, unit.y):
+            self.log.append(f"  {unit.type}#{unit.slot}: retreat check, standing safe")
+            return
+        reach = self.own_reach(unit)
+        best, pick = 0x7FFF, None
+        for x, y in self.scan():
+            c = reach.get((x, y))
+            if c is None or c < 0:
+                continue
+            if self.threatened(unit, x, y) or c > best:
+                continue
+            if not self.can_stop(unit, x, y):
+                continue
+            best, pick = c, (x, y)
+        self.log.append(f"  {unit.type}#{unit.slot}: retreat check, threatened at "
+                        f"({unit.x},{unit.y}) -> safe tile {pick} cost {best}")
+        if pick is not None:
+            self.void_command(unit)
+        if self.flags_5008 & 2:
+            return
+        raise NotImplementedError("0x080664AC (the retreat check's terrain-value "
+                                  "scan with 0x03005008 bit 1 clear)")
+
+    def void_command(self, unit):
+        """A second 0x080644D8 in one decision -- the retreat check's Wait
+        after the mover's -- leaves the unit with NO command for this pass
+        (retreat-mech, DERIVATION 52): the traced Mech issued nothing at
+        the visit that rolled the check and was decided again at a later
+        sub-phase with a fresh random. The port drops the pending record
+        and lets the unit fall through to its next pass."""
+        if self.commands and self.commands[-1].slot == unit.slot                 and getattr(self, "_issued_for", None) == unit.slot:
+            self.commands.pop()
+        self._issued_for = None
+        self.log.append(f"  {unit.type}#{unit.slot}: command voided by the retreat check")
 
     def settle(self, unit):
         """0x08066248: a unit that may not stay where it stands moves to
@@ -1234,7 +1279,10 @@ class Turn:
         """State 2 (0x080642C8): the unit's random, the classifier, the
         behaviour, then the command executed through the forward model."""
         self.flags_5008 &= ~3
-        self.threat = None
+        # the threat grid is NOT cleared: it lives in the map struct
+        # (+12898) and a pass that reads it without building it -- the
+        # supply pass's from-tile (0x0805FB08 via 0x08064820) -- sees the
+        # last unit's grid, stale (retreat-roll-tank, DERIVATION 52)
         self._issued_for = None
         self.ai(unit)[1] = self.draw(f"unit random {unit.type}#{unit.slot}") % 100
         beh = tables()["behaviour_by_type"][type_id(unit.type)]
@@ -1943,12 +1991,17 @@ class Turn:
 # What raises NotImplementedError with its address: movement modes 2, 3,
 # 5, 6, 7 and the sea variant of mode 1; the Lander pass (0x08064DF4); the
 # TCopter (0x08060670); the loaded transport's move (0x08060708,
-# 0x080607C4); the retreat-after-move check a conditioned unit's move
-# rolls into (0x0806636C, profile[type][1] percent of the time); the
-# fallback's Lander pickup (0x080660A6) and the foot unit's TCopter ride
+# 0x080607C4); the fallback's Lander pickup (0x080660A6) and the foot unit's TCopter ride
 # (0x08064D76), both behind a side flag no traced map sets; Olaf's
 # weather-gated power predicate (0x08063324); campaign profiles
 # (0x080683B0).
+#
+# The retreat check (DERIVATION 52, the five retreat-* traces): a
+# conditioned unit's move rolls into 0x0806636C profile[type][1] percent
+# of the time; standing safe nothing changes, standing threatened the
+# unit's command is voided and it is decided again at a later pass. The
+# threat grid persists across decisions, as the map struct's does, and the
+# supply pass's from-tile reads it stale.
 #
 # The APC's supply (DERIVATION 51, the two supply-* traces): record id 5
 # with the refilled slot in +6, the pass's first appearance in a trace;

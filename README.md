@@ -526,6 +526,16 @@ byte 6 -- and the refilled unit takes its turn in the trailing direct
 pass. The harness now files a port/action-layer disagreement as an abort
 with its dump instead of dying.
 
+**The retreat check (DERIVATION 52).** The sweep's largest queue entry.
+A conditioned unit's move rolls, ten percent of the time, into a check
+that tests where the unit stands against the threat grid: standing safe
+the move goes ahead; standing threatened, the check's own record voids the
+unit's command for that pass and it is decided again later with a fresh
+random. Five traces, the RNG written to seeds the port itself found. One
+of them also showed that the APC's supply pass scores its from-tile
+against whatever threat grid the last decision left, so the port now
+keeps that grid across decisions as the game does.
+
 **The enemy reply (ROADMAP step 4).** The planner's plan is now a
 proposal. It and a few variants -- at its closest calls, the same unit's
 next-best action committed and the rest of the turn re-planned -- are each
@@ -704,9 +714,10 @@ data/aw1_ai.json          every table the AI reads, 89 profiles included
                           (tools/extract_ai.py)
 tools/cpu_trace.py        let the game's CPU play a turn, trace its commands
                           and RNG draws, replay them, predict them
-tests/fixtures/cpu/       34 traced CPU turns with their boards and draws:
+tests/fixtures/cpu/       39 traced CPU turns with their boards and draws:
                           seven turns, twelve builds, eight pre-steps, two
-                          fallbacks, three powers, two supplies
+                          fallbacks, three powers, two supplies, five
+                          retreat checks
 tests/test_cpu.py         the traces replayed and predicted, record for
                           record and draw for draw
 tools/sim_diff.py         the differential test: dump, apply(), drive one

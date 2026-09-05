@@ -118,11 +118,16 @@ Three decisions, made once so they do not get re-argued:
    (DERIVATION 50): the forward model's activation, no command and no
    draw, Eagle's at the end pass with the refreshed units going round
    again -- three traces from the third abort, which also surfaced the CO
-   records' move and range adjustments the model had never read. Not yet:
+   records' move and range adjustments the model had never read. **The
+   retreat check is read** (DERIVATION 52): standing safe the move stands,
+   standing threatened the unit's command is voided and it is decided
+   again later -- five traces with the RNG written to seeds the port
+   found, and the supply pass shown to score against the last decision's
+   threat grid. Not yet:
    movement modes 2, 3, 5, 6, 7, the Lander, the TCopter, the loaded
-   transport's move, the retreat-after-move check, the fallback's Lander
-   pickup and the foot unit's TCopter ride, Olaf's weather-gated power
-   predicate, the TCopter and Lander purchases -- each raises
+   transport's move, the fallback's Lander pickup and the foot unit's
+   TCopter ride, Olaf's weather-gated power predicate, the TCopter and
+   Lander purchases -- each raises
    NotImplementedError naming its routine, and each needs a trace that
    enters it (an air or sea side) before it is ported.
 

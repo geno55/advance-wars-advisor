@@ -3399,3 +3399,57 @@ is now dominated by two routines, the retreat-after-move check
 where the CPU has a factory to build from. The results are in ROADMAP
 step 5.
 
+## 52. The retreat check: a threatened unit's move is voided, and the grid it reads
+
+The sweep's largest queue entry (27 of 58 aborts): `0x0806636C`, the
+check a conditioned unit's move rolls into with probability
+`profile[type][1]` (10 on these rows), first named in DERIVATION 48. Five
+traces on `vs15_p2` with P1 as the CPU, one unit written dry and the RNG
+written so that the port's own arithmetic put that unit's random under
+ten (`tests/fixtures/cpu/retreat-*`; the seeds were found by running the
+port over seeds, which is what a predictor is for). The port reproduces
+all five record for record and draw for draw.
+
+**The mover's tail** (`0x08060078` at `0x0806024C`): the move's Wait is
+written (`0x080644D8`), then with `0x03005008` bit 1 set and
+`profile[type][1] > random % 100` the check is called, then settle
+(`0x08066248`, terminal) on both paths -- the port's reading stands.
+
+**The check** (`0x0806636C`): build the threat grid (`0x08068E78`) and
+test the unit's OWN tile against it with the type's hit mask (stats
+`+0x17`). Standing safe, return -- `retreat-roll-inf`, `-inf2`
+(Infantry #1, fuel 5, seeds 64 and 99) and `-tank` (Tank #7, fuel 5,
+seed 127) rolled it and walked to the HQ and the APC as the untouched
+pre-step traces did. Standing threatened, scan the unit's move grid
+(`0x0801D968`) for the cheapest tile the grid does not cover that the unit
+may stop on (`0x080604D0`), later tiles winning ties, and write a Wait
+onto it; then, only with bit 1 clear (never, from this caller), a second
+scan by terrain value. **A second record in one decision voids the
+unit's command for that pass.** `retreat-mech` and `-mech2` (Mech #3 at
+`(7,6)`, fuel 5, seeds 1 and 141, an Infantry two tiles off and a Tank
+three): at its first visit the Mech rolled a 5, chose `(7,4)`, found
+itself threatened with `(7,5)` the safe tile -- and issued nothing. It
+was decided again at the foot pass, sub-phase 8, with a fresh random (58,
+86) and walked to `(6,5)`: three draws more than one decision, exactly
+the port's count once it drops the pending record and lets the unit fall
+through. How `0x080644D8` voids on the second call is not read; the
+behaviour is measured on two seeds and modelled as the void.
+
+**The grid the supply pass reads.** `retreat-roll-tank` disagreed on one
+record before any of this: the APC supplied the Tank from where it
+stood, `(6,2)`, where the port drove to `(6,4)`. The from-tile chooser
+(`0x0805FB08`, terrain value plus 100 if unthreatened, later neighbours
+winning ties, the unit's own tile allowed) is the port's; the difference
+was the threat grid it scores against. The supply pass (`0x08064820`)
+never builds one, and the game's lives in the map struct at `+12898`
+from whichever decision built it last -- here the Artillery's, which
+marked `(6,4)` threatened and left `(6,2)` clear, 100 against 10. The
+port had been clearing its grid at every decision; it now keeps it, and
+every one of the 39 traces still predicts.
+
+**Rig notes.** `{"rng": N}` writes the RNG state before the dump, and the
+AI's first draw is from that state (the End Turn taps draw nothing). The
+port finds the seed: with the check raising, run it over seeds until the
+raise names the unit you want; with the check ported, patch it to raise
+when the unit stands threatened.
+
