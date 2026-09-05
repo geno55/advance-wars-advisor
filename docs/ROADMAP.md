@@ -289,7 +289,23 @@ Three decisions, made once so they do not get re-argued:
    the loop's own checkpoints while the driver was taught the above, the
    last segment 23 steps for 23 with no re-plan. Material went from 12
    against 9 to 10 against 3 by day 8. That clear is what unlocks the
-   campaign; mission one is next.
+   campaign.
+
+   **Campaign mission one is won.** Map 130, 19x12, no fog, Andy's twelve
+   units against Olaf's seventeen, from the parked Day 1 state to a rout
+   on day 26: twenty-five turns over two segments (the second resumed
+   from the turn-5 checkpoint after the mission's CO-power lesson ran
+   past the settle routine's press budget), 183 steps driven with two
+   failures, one re-plan. The planner shot the two Infantry that reached
+   two tiles from its HQ on day 9 the turn they arrived, ground the army
+   down from seventeen to three, put a Tank on Olaf's HQ by day 25 and
+   killed his last unit the turn after. The ending played out to the
+   campaign map with Grit's mission announced, and the save was written.
+   The same game against the port in Python aborts on day 3 at Olaf's
+   weather-gated power predicate (`0x08063324`), so that predicate is
+   the trace queue's next entry. Mission two needs its Day 1 state parked
+   the same way, or the loop taught to start a mission from the campaign
+   map itself.
 
 7. **Campaign facts, on demand.** A mission that fails acceptance, or ends
    in a way the standard win conditions do not explain, triggers reading its
