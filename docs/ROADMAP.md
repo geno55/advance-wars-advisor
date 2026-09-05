@@ -316,6 +316,33 @@ Three decisions, made once so they do not get re-argued:
    the same way, or the loop taught to start a mission from the campaign
    map itself.
 
+   *The fidelity check (DERIVATION 55).* The port reached the day cap on
+   mission one where the game was routed by day 26, so before any tuning
+   the port was measured against Olaf's twenty-four real turns the loop
+   had saved: `tools/fidelity.py check` replays our driven steps through
+   the forward model (a no-luck match: they land exactly), lets the port
+   play Olaf's reply, and diffs the board it leaves with the after-dump;
+   `tools/fidelity.py trace` re-runs the rig from any turn's checkpoint.
+   Fourteen turns disagreed; four fixes brought it to eight, one of them
+   the loop's own doing. A Wait onto the unit's own tile decides the unit
+   (the port had let it fall through to its behaviour and move; the game
+   kept a 1-HP Tank on its repairing city for five days and a Mech on the
+   city it took for seven). A snow no power made goes at the first new
+   day (a power's still goes with its block). The battle scene seeds
+   128 draws in clear weather too -- whenever settings byte `+9`, the
+   battle animation, is set, which it is on the mission and not on the
+   parked VS states; the rig's new exec watch found the caller, an IWRAM
+   diff of the two states the byte, and writing it onto the VS state
+   brought the draws and moved the AI. And a CPU turn with no command
+   left the human's controller byte at 2, so the game's AI played our
+   next turn as well -- the driver restores the byte the moment the CPU
+   side is up. What remains, each pinned to a turn in
+   `tests/test_fidelity.py`: the hunt's grid choice (an AntiAir went where
+   the flat grid says while two units the same day went by their own
+   grid), a Tank the game marched toward a capturing Mech where the port
+   values a MdTank, a counter four points lighter than the model's, and a
+   Tank the game left standing.
+
 7. **Campaign facts, on demand.** A mission that fails acceptance, or ends
    in a way the standard win conditions do not explain, triggers reading its
    objective and events: victory and loss condition, scripted reinforcements

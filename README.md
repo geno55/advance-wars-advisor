@@ -727,6 +727,14 @@ harness/mesen_play.lua    the loop's Lua half over mesen_drive.lua: dump,
                           checkpoint
 tests/test_campaign_run.py 4 tests: the judge both ways, the rout, the day
                           cap, a plan compiled to driver steps
+tools/fidelity.py         the CPU port against the real CPU's turns of an
+                          acceptance run: our steps replayed, the port's
+                          reply diffed with the after-dump (`check`), and
+                          the rig re-run from a turn's checkpoint (`trace`)
+tests/fixtures/acceptance/ the two mission-one runs, 24 turns: start dumps,
+                          driven steps, after-dumps, logs
+tests/test_fidelity.py    4 tests: the steps file, the step-to-action inverse,
+                          and every turn against its known gaps
 tools/sparring.py         the planner against the CPU port to the end: the
                           result a weight set is judged by (ROADMAP step 5)
 tests/test_sparring.py    4 tests: the rout, the day cap, the abort's dump, the HQ
@@ -740,10 +748,12 @@ data/aw1_ai.json          every table the AI reads, 89 profiles included
                           (tools/extract_ai.py)
 tools/cpu_trace.py        let the game's CPU play a turn, trace its commands
                           and RNG draws, replay them, predict them
-tests/fixtures/cpu/       41 traced CPU turns with their boards and draws:
+tests/fixtures/cpu/       47 traced CPU turns with their boards and draws:
                           seven turns, twelve builds, eight pre-steps, two
                           fallbacks, three powers, two supplies, five
-                          retreat checks, two of Olaf on mission one
+                          retreat checks, two of Olaf on mission one, four
+                          of his real turns from the acceptance run, two
+                          VS turns with settings bytes written
 tests/test_cpu.py         the traces replayed and predicted, record for
                           record and draw for draw
 tools/sim_diff.py         the differential test: dump, apply(), drive one

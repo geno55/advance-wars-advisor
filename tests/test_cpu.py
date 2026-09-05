@@ -57,10 +57,22 @@ RETREAT = ["retreat-roll-inf", "retreat-roll-inf2", "retreat-roll-tank",
            "retreat-mech", "retreat-mech2"]
 # Olaf on campaign mission one (DERIVATION 54): his meter written to the
 # threshold on the m01 state -- fires in clear weather, keeps it under a
-# written snow; the snow-only after-board is the rig's snow expiring at the
-# turn change, which the forward model does not model for a written snow.
+# written snow, which the forward model now expires at the new day as the
+# game did (DERIVATION 55).
 OLAF = ["m01-olaf-power", "m01-olaf-snow"]
-BOARD_EXCEPT = {"m01-olaf-snow"}
+# Real turns of the m01 acceptance run, re-traced from the loop's
+# checkpoints by `tools/fidelity.py trace` (DERIVATION 55): day 4 is Olaf's
+# 1-HP Tank staying on its city (a stay decides the unit) and two battles,
+# 128 scene draws each, 283 draws in all; day 15 is two
+# fires in clear weather, 264 draws, and a counter the forward model
+# prices four points heavier than the game did -- its board is excepted
+# for exactly that, the records and draws agree.
+ACCEPT = ["m01-day4", "m01-day15"]
+BOARD_EXCEPT = {"m01-day15"}
+# The battle animation byte, settings +9, written to 1 on the VS state: the
+# first battle's scene seeds 128 draws and the AI's later randoms shift, so
+# the second fire of vs15-p1-cpu is gone (DERIVATION 55).
+SCENE = ["scene-vs-anim-on"]
 
 
 def trace(name):
@@ -144,7 +156,7 @@ class TestTheReplay(unittest.TestCase):
 class TestThePrediction(unittest.TestCase):
     """engine/cpu.predict against every trace (tools/cpu_trace.py predict)."""
     ALL = (EXACT + ["vs15-p1-cpu-fog"] + BUILDS + PRESTEP + NOPROP + POWER + SUPPLY
-           + RETREAT + OLAF)
+           + RETREAT + OLAF + ACCEPT + SCENE)
 
     def test_every_trace_is_predicted_record_for_record(self):
         for name in self.ALL:
@@ -554,7 +566,7 @@ class TestOlafOnMissionOne(unittest.TestCase):
         self.assertEqual([p["subphase"] for p in r["turn"].powers], [1])
         self.assertEqual(cpu_trace.predict(trace("m01-olaf-snow"))["turn"].powers, [])
 
-    def test_the_snow_scene_draws_128_before_a_battle_and_no_luck_is_rolled(self):
+    def test_the_battle_scene_draws_128_before_a_battle_and_no_luck_is_rolled(self):
         t = trace("m01-olaf-power")
         lrs = [d["lr"] for d in t["draws"]]
         scene = [i for i, x in enumerate(lrs) if 0x08035480 <= x <= 0x080355F0]
@@ -562,7 +574,7 @@ class TestOlafOnMissionOne(unittest.TestCase):
         self.assertEqual(scene[0], 20)                      # right where the battle begins
         r = cpu_trace.predict(t)
         labels = [d["why"] for d in r["turn"].draws]
-        self.assertEqual(labels.count("snow scene"), 128)
+        self.assertEqual(labels.count("battle scene"), 128)
         self.assertNotIn("battle", labels)                  # settings byte +6: no roll
         self.assertEqual(r["draws"], r["logged_draws"])
         # and the damage is the formula's point plus five, as the forecast says

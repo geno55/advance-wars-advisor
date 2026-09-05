@@ -1,0 +1,1 @@
+return {["steps"] = {{["kind"] = "power", ["tag"] = "t05r1-1", ["empty"] = {["x"] = 9, ["y"] = 6}, ["checks"] = {{["what"] = "army", ["player"] = 1, ["active"] = true}}, ["describe"] = "CO POWER -- Andy (meter 30000/30000)"}}, ["note"] = "CO POWER -- Andy (meter 30000/30000)"}

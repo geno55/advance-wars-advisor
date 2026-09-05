@@ -424,6 +424,19 @@ function M.cpu_turn(s)
   M.builds = {}
   M.state_log = {}
   M.cpu_side = s.cpu
+  -- an exec watch: each address in s.watch_pcs logs who called it (r14)
+  -- and when, so a routine's invoker can be read off the run log
+  local watchers = {}
+  for _, pc in ipairs(s.watch_pcs or {}) do
+    local cb = emu.addMemoryCallback(function()
+      local ok, st = pcall(emu.getState)
+      local lr = -1
+      if ok then lr = tonumber(st["cpu.r14"]) or -1 end
+      M.L(string.format("  watch %08X lr %08X phase %d cmds %d draws %d", pc, lr,
+        M.r16(M.MATCH_PHASE), #(M.trace or {}), #(M.draws or {})))
+    end, emu.callbackType.exec, pc, pc, emu.cpuType.gba, emu.memType.gbaMemory)
+    watchers[#watchers + 1] = { cb = cb, pc = pc }
+  end
   -- each side's byte AS RELOADED is what comes back (M.control_orig, read
   -- in run_case before any write): a 0 (no controller, the empty P3/P4
   -- records) written to 1 made the AI's end-of-turn elimination check
@@ -446,17 +459,35 @@ function M.cpu_turn(s)
   local cpu = s.cpu
   r.cpu_player = cpu
   local back, last = false, ""
+  local day0 = M.r32(M.TURN)
+  local handed = false
   for _ = 1, (s.limit or 3000) do
     local ph = M.r16(M.MATCH_PHASE)
+    local idx = M.r16(0x030036AC)
     local sig = string.format("phase %d idx36AC %d control P1=%d P2=%d day %d cmds %d",
-      ph, M.r16(0x030036AC), M.army(1).control, M.army(2).control, M.r32(M.TURN), #M.trace)
+      ph, idx, M.army(1).control, M.army(2).control, M.r32(M.TURN), #M.trace)
     if sig ~= last then M.L("  " .. sig); last = sig end
-    if ph == 5 and M.r16(0x030036AC) == before and #M.trace > 0 then back = true; break end
+    -- The CPU side is up: give every other side its controller byte back
+    -- NOW, not on the CPU's first command. A CPU turn with no command at
+    -- all (every unit settled where it stood -- Olaf on day 20 of the
+    -- m01-2 acceptance run, 2026-09-05) never fires the command hook, so
+    -- the human side's 2 stood and the game's AI played the human's next
+    -- turn as well; the turn is also back when the day has moved on with
+    -- nothing dispatched.
+    if idx ~= before and not handed then
+      handed = true
+      for p = 1, 4 do M.w8(M.army_addr(p) + 0x1B, (p == cpu) and 2 or M.control_orig[p]) end
+      M.L("  cpu side up: the other sides' control bytes restored")
+    end
+    if ph == 5 and idx == before and (#M.trace > 0 or handed or M.r32(M.TURN) ~= day0) then back = true; break end
     if s.watch then                       -- mesen_play: the match decided mid-turn
       local st, why = s.watch()
       if st then r.result, r.result_why = st, why; M.L("  watch: " .. st .. " -- " .. tostring(why)); break end
     end
     if ph ~= 5 then M.tap("a", 4, 6) else M.wait(10) end
+  end
+  for _, w in ipairs(watchers) do
+    pcall(emu.removeMemoryCallback, w.cb, emu.callbackType.exec, w.pc, w.pc, emu.cpuType.gba, emu.memType.gbaMemory)
   end
   r.commands = M.trace
   r.draws = M.draws

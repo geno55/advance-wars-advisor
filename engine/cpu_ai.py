@@ -131,6 +131,18 @@ class Context:
     settings_8: int = 1                 # nonzero: CO-specific stat blocks
     weather_2d: int = 0                 # 0x0300433D, Olaf's predicate (DERIVATION 54)
     ai_order: int = 0                   # 0x030051AC: 1 sorts each sub-phase's units by move ASCENDING
+    map_id: int = 0                     # 0x03004312
+    # settings +9 (0x03004319): the battle animation. With it on, every
+    # battle's scene seeds 128 RNG draws before the battle's own (two loops
+    # of 32 particle slots, an x and a y draw each, 0x08035488/0x080355B4,
+    # from the scene's loader 0x08020E24); with it off, none. 1 on mission
+    # one, 0 on the parked VS states; written to 1 on the VS state it
+    # brought the draws (scene-vs-anim-on, DERIVATION 55).
+    settings_9: int = 0
+
+    @property
+    def scene_draws(self) -> bool:
+        return bool(self.settings_9)
     fog: bool = False
     # The game's own property list, [(terrain id, x, y)] in its y-then-x
     # order (0x03004500): the AI's factory list walks it, not the terrain
@@ -169,9 +181,11 @@ class Context:
                                {a["player"]: a.get("co_id", 1) for a in d["armies"]},
                                player or d.get("active_player", 1))
         props = d.get("properties")
+        mid = int(d.get("map_id", 0))
         return cls(ai=ai, sides=sides, profile=prof,
                    settings_6=d.get("settings_6", 0), settings_8=d.get("settings_8", 1),
                    weather_2d=d.get("weather_2d", 0), ai_order=d.get("ai_order", 0),
+                   map_id=mid, settings_9=int(d.get("settings_9", 0)),
                    fog=bool(d.get("fog", False)),
                    properties=[(p["t"], p["x"], p["y"]) for p in props] if props else None,
                    army0=list(d.get("army0", [0, 0, 0, 0])),
@@ -230,6 +244,7 @@ class Turn:
     counters: Dict[int, List[int]] = field(default_factory=dict)  # 0x08282CC4 +3..
     flags_5008: int = 0
     _side_flags: Optional[int] = None                           # 0x030050E4, computed once
+    _stayed: Optional[int] = None                               # the slot a stay decided
     behaviour: int = 0                                          # 0x030050DC
     subphase: int = 0                                           # 0x030051A0
     threat: Optional[Dict[Coord, int]] = None
@@ -645,8 +660,10 @@ class Turn:
             if not sea and self.board.terrain[y][x] == PORT:
                 continue
             best, tile = d, (x, y)
+        self.log.append(f"  toward {goal}: own d {goal_grid.get((unit.x, unit.y), 255)}"
+                        f"{' avoiding' if avoid else ''} -> {tile} d {best}")
         if tile is not None:
-            self.emit(unit, 2, tile)
+            self.emit(unit, 2, tile, decides=False)
         if self.flags_5008 & 2 and prof[1] > self.ai(unit)[1] % 100:
             self.retreat_check(unit)
         self.settle(unit)
@@ -695,6 +712,7 @@ class Turn:
         if self.commands and self.commands[-1].slot == unit.slot                 and getattr(self, "_issued_for", None) == unit.slot:
             self.commands.pop()
         self._issued_for = None
+        self._stayed = None
         self.log.append(f"  {unit.type}#{unit.slot}: command voided by the retreat check")
 
     def settle(self, unit):
@@ -735,8 +753,12 @@ class Turn:
 
     # -- commands ------------------------------------------------------------
     def command_issued(self, unit) -> bool:
-        return bool(self.commands) and self.commands[-1].slot == unit.slot \
-            and getattr(self, "_issued_for", None) == unit.slot
+        """The unit's decision is made: a record of its own, or a stay."""
+        if getattr(self, "_issued_for", None) != unit.slot:
+            return False
+        if self._stayed == unit.slot:
+            return True
+        return bool(self.commands) and self.commands[-1].slot == unit.slot
 
     def path_draws(self, unit, dest: Coord) -> None:
         """0x0801DC38: the writer's path from the unit to `dest`, walked
@@ -769,13 +791,26 @@ class Turn:
             if grid.get((x, y), 0) == 0:
                 return
 
-    def emit(self, unit, cid: int, tile: Coord, arg: int = 0, arg2: int = 0):
-        """0x080644D8: a Wait onto the unit's own tile is dropped."""
+    def emit(self, unit, cid: int, tile: Coord, arg: int = 0, arg2: int = 0,
+             *, decides: bool = True):
+        """0x080644D8: a Wait onto the unit's own tile is dropped -- no
+        record is dispatched -- but the unit IS decided: it stays where it
+        stands for the turn. The port used to let a stayed unit fall
+        through to its behaviour and move; the game left Olaf's 1-HP Tank
+        on its repairing city for five days (seek_repair's Wait onto the
+        tile it stood on) and his Mech on the city it took for seven
+        (guard's) -- the m01 acceptance run, DERIVATION 55. A move_toward
+        that gets no nearer than the tile the unit stands on is the one
+        exception (`decides=False`): the supply-apc-move trace's Tank
+        walked up to its supplier without moving and then fired in the
+        trailing direct pass."""
         if self.command_issued(unit):
             return
         if cid == 2 and tile == (unit.x, unit.y):
             self._issued_for = unit.slot
-            self.log.append(f"  {unit.type}#{unit.slot}: stays")
+            if decides:
+                self._stayed = unit.slot
+            self.log.append(f"  {unit.type}#{unit.slot}: stays" + ("" if decides else " (undecided)"))
             return
         self.path_draws(unit, tile)
         cmd = Command(id=cid, slot=unit.slot, tile=tile, origin=(unit.x, unit.y),
@@ -930,12 +965,25 @@ class Turn:
         for tile, val, e in lst:
             if val <= best:
                 goal, best = tile, val
+        self.log.append(f"  hunt: {len(lst)} target(s) {[(t, v, e.type + '#' + str(e.slot)) for t, v, e in lst][:6]} -> goal {goal} val {best}")
         if goal is None:
             self.fallback(unit)
             return
-        if g.get(goal, 0) <= RANGE_MARK:
+        d = g.get(goal)
+        if d is not None and 0 <= d <= RANGE_MARK:
+            # the goal is priced by the whole-map grid: the unit's own
+            # grid from the goal. NOT the whole story: on day 1 of mission
+            # one Olaf's AntiAir #67 went to (11,3), the flat grid's pick,
+            # where this branch says (15,5) -- and his AntiAir #68 and
+            # Artillery #70 the same day went where THIS grid says. What
+            # 0x08065B30 tests to pick the grid is still to be read
+            # (m01-day1, DERIVATION 55).
             self.move_toward(unit, goal)
         else:
+            # a goal the grid never priced (the port used to read that as
+            # distance 0 and take the branch above): the flat grid of a
+            # Fighter from the goal, as for a goal past the ring mark.
+            # Not yet met on a trace.
             goal_grid = self.fill(goal[0], goal[1], 16, WHOLE_MAP, False)
             self.move_toward(unit, goal, goal_grid=goal_grid)
 
@@ -1328,6 +1376,7 @@ class Turn:
         # supply pass's from-tile (0x0805FB08 via 0x08064820) -- sees the
         # last unit's grid, stale (retreat-roll-tank, DERIVATION 52)
         self._issued_for = None
+        self._stayed = None
         self.ai(unit)[1] = self.draw(f"unit random {unit.type}#{unit.slot}") % 100
         beh = tables()["behaviour_by_type"][type_id(unit.type)]
         if beh == 4 and (self.ai(unit)[0] & 7) == 0:
@@ -1566,15 +1615,16 @@ class Turn:
                 kw = {"luck": 5}
             else:
                 kw = {"rng_state": cmd.rng, "luck_draw": cpu_mod.AI_STRIKE_DRAW}
-                if self.board.weather_index == 1:
-                    kw["luck_draw"] += 128      # the snow scene's draws come first
-        if act.kind == "attack" and self.board.weather_index == 1:
-            # a battle scene under snow seeds its snow sprites first: two
-            # loops of 32 sprites, an x and a y draw each (0x08035488,
-            # 0x080355B4) -- 128 draws before the battle's own, on both
-            # m01-olaf traces (DERIVATION 54); once per battle is the model
+                if self.ctx.scene_draws:
+                    kw["luck_draw"] += 128      # the scene's draws come first
+        if act.kind == "attack" and self.ctx.scene_draws:
+            # the battle scene seeds its particle slots first: two loops of
+            # 32, an x and a y draw each (0x08035488, 0x080355B4) -- 128
+            # draws before the battle's own, once per battle, on every
+            # mission-one trace whatever the weather (DERIVATION 54, 55);
+            # the weather only picks what the slots show (0x080357D8)
             for _ in range(128):
-                self.draw("snow scene")
+                self.draw("battle scene")
         self.board = sim.apply(self.board, act, warnings=self.warnings, **kw)
         if act.kind == "attack" and not self.ctx.settings_6:
             # the battle's two draws are the luck rolls: none in a no-luck

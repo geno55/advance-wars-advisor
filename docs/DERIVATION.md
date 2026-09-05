@@ -3564,3 +3564,134 @@ in one snowy turn seeds another 128.
 The order-list arrays are `0x03005020` (slots) and `0x03005110` (keys);
 `mesen_drive.lua`'s dispatcher hook logs both with the flag on every
 command now, so the next ordering question is a grep.
+
+## 55. The port against Olaf's real turns: a stay decides the unit, the snow's last day, the battle scene's draws, and what is still wrong
+
+The port played mission one to the day cap where the real game was
+routed by day 26 (DERIVATION 54), and nothing in the port raises when a
+read branch is merely wrong. The acceptance run had saved, for each of
+Olaf's twenty-four turns, the board at our turn start, the steps it
+drove and the board after his reply -- and this is a no-luck match, so
+our steps replay through `sim.apply(luck=5)` to the exact board he saw.
+`tools/fidelity.py check` does that, lets the port play his turn, and
+diffs the board it leaves against the after-dump; `tools/fidelity.py
+trace` re-runs the rig from the turn's checkpoint savestate with our
+steps as setup, for the records and draws. The two runs live under
+`tests/fixtures/acceptance/` (m01a days 1-4, m01b days 5-25) and
+`tests/test_fidelity.py` pins every turn to agree or to a named gap.
+
+Fourteen of the twenty-four turns disagreed. Five traces (`m01-day1`,
+`-day4`, `-day15`, `-day16`, and `scene-vs-noluck` on the VS state) and
+the boards read the following; eight turns still disagree, one of them
+the loop's own fault.
+
+**A Wait onto the unit's own tile decides the unit.** Olaf's Tank #73,
+at 1 HP on his city at (15,2), stood there from day 4 to day 8 and left
+on day 9 at full HP; his Mech #76 stood on the city it took at (8,9)
+from day 6 to day 12. The port moved both every day. Its `emit` already
+dropped a same-tile Wait as the game's writer does (`0x080644D8` writes
+no record), but nothing marked the unit decided, so `decide` went on to
+the behaviour and the behaviour moved it -- after `seek_repair` had
+said "reached this turn" for the Tank, and `guard` "stay put" for the
+Mech. The day-4 trace confirms the game issues no record for the Tank
+at all (nine records, none for #73). A stay now sets the unit decided,
+with ONE exception the supply-apc-move trace insists on: a
+`move_toward` that gets no nearer than the tile the unit stands on --
+the Tank walking up to a supplier it is already beside -- does not
+decide it; that Tank went on to fire in the trailing direct pass. Six
+turns turned to agree.
+
+**The snow's last day.** Two things had looked like one. The day-4
+trace's two battles seeded 128 draws each, 283 draws against the port's
+26 -- which read, until the animation byte below was found, as Olaf's
+day-4 turn still under his snow. It was not: the draws are the
+animation's, and the corpus case end-turn-power-expiry-snow (DERIVATION
+39) had already measured his snow going WITH his block at his own next
+turn start, which the model kept. What the mission adds is the snow no
+block made: the rig's written snow of DERIVATION 54 (our day 1, no
+block) stood through Olaf's day-1 turn, when he held his power for it,
+and was gone on day 2. `sim.end_turn` now clears such a snow at the
+first new day; the m01-olaf-snow after-board replays and its exception
+in the board test is gone.
+
+**The battle scene's 128 draws come in clear weather too.** Days 1, 15
+and 16 were clear and every battle drew them: 171, 264 and 137 logged
+draws against the port's 43, 8 and 8. The two loops (`0x08035488`,
+`0x080355B4`) seed 32 particle slots each with an x and a y; the
+weather index is read afterwards (`0x080357D8`, 1 snow, 2 rain) to
+choose what the slots show. So it is a property of the scene, not of
+the weather -- and no VS trace has ever drawn them. Writing the no-luck
+settings byte (`+6`) on the VS state did not bring them
+(`scene-vs-noluck`, 17 draws, no block): that byte is not the gate.
+
+**What gates it: settings byte `+9`, the battle animation.** The rig's
+new exec watch (`--watch`, below) caught the seeding call at the battle
+on mission one -- from the scene's loader at `0x08020F4A`, inside the
+state handler `0x08020E24` -- and never on the VS state, where the
+scene does not run at all. The two states' IWRAM (32 KB each, dumped
+through the rig) differ at 6582 bytes; five in the settings block at
+`0x03004310` had small values (`+0`, `+1`, `+9`, `+0x43`, and
+`0x03004300`), and written together onto the VS state they brought the
+draws. One at a time, only `+9` did: `scene-vs-anim-on`, 147 draws with
+a 128-block after the first battle -- and the AI's second fire gone,
+its later unit randoms shifted by the block, which the port reproduces
+draw for draw and record for record. The word the options handler
+`0x0804011C` writes (`0x03001D18`, 2 on VS, 0 on m01) was written alone
+first and brought nothing, as the no-luck byte had. The dumper ships
+the byte as `settings_9`; the port draws the 128 before each battle
+when it is set; the fixture dumps taken before the field existed carry
+it backfilled by state (1 on map 130, 0 on map 38 -- the two IWRAM
+dumps). Every mission-one trace now reproduces draw for draw, 171, 283,
+264, 137 (the last one short, see below).
+
+**The loop's zero-command turn.** On day 20 Olaf had nothing to do and
+dispatched no command. The driver hands the CPU its turn by writing
+BOTH sides' controller bytes to 2 and lets the command hook restore the
+human's on the CPU's first command; with no command the human's 2
+stood, and the game's AI played our turn 21 as well (our AntiAir was
+shot to 1 HP, a capture undone) before the loop saw the turn back. The
+driver now restores the other sides' bytes the moment the CPU side is
+up, and accepts the turn back when the day has moved on with nothing
+dispatched. Turn 16's diff is that, not the port.
+
+**Still wrong, each pinned to its turn.**
+
+- *The hunt's grid.* On day 1 the game drove AntiAir #67 from (15,1) to
+  (11,3); the port's `mode_hunt` goes to (15,5). The port prices the
+  goal (our MdTank at (7,10)) by the whole-map grid and, under the ring
+  mark, walks toward it by the unit's OWN grid from the goal, which puts
+  (11,3) at 20 and (15,5) at 13; the flat Fighter grid the far branch
+  uses puts (11,3) at 11 and picks it, later tiles winning ties, exactly
+  as the game did. But AntiAir #68 and Artillery #70 the same day went
+  where the own grid says (the flat grid picks (15,8) and (7,4) for
+  them; the game (14,7) and (6,4)), and "flat when the goal is past the
+  move" made eleven turns disagree instead of eight. What `0x08065B30`
+  tests before choosing the grid is unread; the port keeps its original
+  branch and the trace waits.
+- *A target the port does not value.* From day 8 to day 10 the game's
+  Tank #73, repaired, marched (15,2) -> (11,2) -> (7,4) -> (5,1) toward
+  our Mech #4 capturing Olaf's city at (3,1), and on day 11 shot it
+  (where port and game agree). The port's `hunt_list` values our MdTank
+  lowest (1500 against the Mech's 7000) and heads south. `0x08060A90`
+  has a term for a capturing enemy, or for the property under it, that
+  the port has not read.
+- *A counter four points light.* Day 15: Olaf's MdTank #66 fired from
+  (10,6), Wood, at our MdTank #5 and took 20 in return; the model says
+  24. The trace agrees with the port record for record and draw for
+  draw (264 of 264), and the strike's damage matches -- this one is the
+  forward model's counter, not the port. `m01-day15` is in the
+  prediction sweep with its board test excepted for exactly that.
+- *A Tank the game left standing.* Day 16: the game's Tank #73 at (0,9),
+  full HP, moved nowhere and dispatched no record (the trace has one
+  record, the MdTank's, and one draw more than the port's 136); the
+  port sends it to (5,10). Its hunt goal is our MdTank at (9,6); why
+  the game stays is unread -- possibly the same test as the first item.
+
+**Rig notes.** `tools/fidelity.py trace RUN TURN NAME [--mss]` builds
+the case from the run's checkpoint and steps; `--watch ADDR,...` on it
+and on `cpu_trace.py run` logs every execution of a ROM address with
+the caller's r14 into run.log (an exec callback per address in
+mesen_drive's cpu_turn) -- how the battle scene's invoker was found
+without a debugger. The `ck-*` state file the trace writes under
+`tests/fixtures/sim_diff/states/` is removed after the run; the
+fixture's before-dump is the record.

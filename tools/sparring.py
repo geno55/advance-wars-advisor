@@ -156,6 +156,7 @@ def board_to_dump(board, ctx: cpu_ai.Context, source: str) -> dict:
         "repair_free": board.repair_free,
         "funds_per_property": board.funds_per_property,
         "rng": board.rng, "settings_6": ctx.settings_6, "settings_8": ctx.settings_8,
+        "map_id": ctx.map_id, "settings_9": ctx.settings_9,
         "ai_profile": prof.hex(), "army0": list(ctx.army0), "flags_e4": ctx.flags_e4,
         "armies": armies, "units": units,
         "terrain": [{"y": y, "t": list(board.terrain[y]), "owner": list(board.owner[y])}

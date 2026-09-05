@@ -1,0 +1,268 @@
+== play: Advance Wars (USA) (Rev 1)_4 as P1, day 1 active 1, control P1=1 P2=2
+  plan requested: turn 1 replan 0
+  check failed (unit 73 untouched and the RNG never drew: no battle); nudge 1
+  check failed (unit 73 untouched and the RNG never drew: no battle); nudge 2
+  check failed (unit 73 untouched and the RNG never drew: no battle); nudge 3
+  step t01r0-1 attack: ok
+  step t01r0-2 wait: ok
+  step t01r0-3 wait: ok
+  step t01r0-4 wait: ok
+  step t01r0-5 wait: ok
+  step t01r0-6 wait: ok
+  step t01r0-7 wait: ok
+  step t01r0-8 wait: ok
+  step t01r0-9 wait: ok
+  step t01r0-10 wait: ok
+  step t01r0-11 wait: ok
+  step t01r0-12 wait: ok
+  cpu_turn: active 1 idx36AC 1 control P1=2 P2=2
+  W idx36AC addr 030036AC val 2 pc 08024D64 phase 3
+  W army P0 +0x1C val 0 pc 0801E19E phase 3 day 1
+  W army P1 +0x1C val 0 pc 0801E1B0 phase 3 day 1
+  W army P2 +0x1C val 0 pc 0801E1B0 phase 3 day 1
+  W army P3 +0x1C val 0 pc 0801E1B0 phase 3 day 1
+  W army P4 +0x1C val 0 pc 0801E1B0 phase 3 day 1
+  W army P2 +0x1C val 1 pc 0801E1F2 phase 3 day 1
+  W army P2 +0x1C val 3 pc 0801E304 phase 3 day 1
+  phase 6 idx36AC 2 control P1=1 P2=2 day 1 cmds 3
+  phase 6 idx36AC 2 control P1=1 P2=2 day 1 cmds 4
+  phase 6 idx36AC 2 control P1=1 P2=2 day 1 cmds 5
+  phase 6 idx36AC 2 control P1=1 P2=2 day 1 cmds 6
+  phase 6 idx36AC 2 control P1=1 P2=2 day 1 cmds 7
+  phase 6 idx36AC 2 control P1=1 P2=2 day 1 cmds 8
+  phase 6 idx36AC 2 control P1=1 P2=2 day 1 cmds 9
+  phase 6 idx36AC 2 control P1=1 P2=2 day 1 cmds 10
+  phase 6 idx36AC 2 control P1=1 P2=2 day 1 cmds 11
+  phase 6 idx36AC 2 control P1=1 P2=2 day 1 cmds 12
+  phase 6 idx36AC 2 control P1=1 P2=2 day 1 cmds 13
+  W idx36AC addr 030036AC val 3 pc 08024D64 phase 3
+  W idx36AC addr 030036AC val 4 pc 08024D64 phase 3
+  W idx36AC addr 030036AC val 5 pc 08024D64 phase 3
+  W idx36AC addr 030036AC val 1 pc 08024D74 phase 3
+  W army P0 +0x1C val 0 pc 0801E19E phase 3 day 2
+  W army P1 +0x1C val 0 pc 0801E1B0 phase 3 day 2
+  W army P2 +0x1C val 0 pc 0801E1B0 phase 3 day 2
+  W army P3 +0x1C val 0 pc 0801E1B0 phase 3 day 2
+  W army P4 +0x1C val 0 pc 0801E1B0 phase 3 day 2
+  W army P1 +0x1C val 3 pc 0801E1F2 phase 3 day 2
+  phase 4 idx36AC 1 control P1=1 P2=2 day 2 cmds 13
+  phase 7 idx36AC 1 control P1=1 P2=2 day 2 cmds 13
+  phase 10 idx36AC 1 control P1=1 P2=2 day 2 cmds 13
+  phase 5 idx36AC 1 control P1=1 P2=2 day 2 cmds 13
+  cpu turn: back, 13 command(s)
+  plan requested: turn 2 replan 0
+  check failed (unit 74 untouched and the RNG never drew: no battle); nudge 1
+  check failed (unit 74 untouched and the RNG never drew: no battle); nudge 2
+  check failed (unit 74 untouched and the RNG never drew: no battle); nudge 3
+  step t02r0-1 attack: ok
+  check failed (unit 71 untouched and the RNG never drew: no battle); nudge 1
+  check failed (unit 71 untouched and the RNG never drew: no battle); nudge 2
+  check failed (unit 71 untouched and the RNG never drew: no battle); nudge 3
+  step t02r0-2 attack: ok
+  check failed (unit 71 untouched and the RNG never drew: no battle); nudge 1
+  check failed (unit 71 untouched and the RNG never drew: no battle); nudge 2
+  check failed (unit 71 untouched and the RNG never drew: no battle); nudge 3
+  step t02r0-3 attack: ok
+  step t02r0-4 wait: ok
+  step t02r0-5 wait: ok
+  step t02r0-6 wait: ok
+  step t02r0-7 supply: ok
+  step t02r0-8 wait: ok
+  step t02r0-9 wait: ok
+  step t02r0-10 wait: ok
+  step t02r0-11 wait: ok
+  step t02r0-12 wait: ok
+  cpu_turn: active 1 idx36AC 1 control P1=2 P2=2
+  W idx36AC addr 030036AC val 2 pc 08024D64 phase 3
+  W army P0 +0x1C val 0 pc 0801E19E phase 3 day 2
+  W army P1 +0x1C val 0 pc 0801E1B0 phase 3 day 2
+  W army P2 +0x1C val 0 pc 0801E1B0 phase 3 day 2
+  W army P3 +0x1C val 0 pc 0801E1B0 phase 3 day 2
+  W army P4 +0x1C val 0 pc 0801E1B0 phase 3 day 2
+  W army P2 +0x1C val 1 pc 0801E1F2 phase 3 day 2
+  W army P2 +0x1C val 3 pc 0801E304 phase 3 day 2
+  phase 13 idx36AC 2 control P1=1 P2=2 day 2 cmds 2
+  phase 6 idx36AC 2 control P1=1 P2=2 day 2 cmds 2
+  phase 6 idx36AC 2 control P1=1 P2=2 day 2 cmds 3
+  phase 13 idx36AC 2 control P1=1 P2=2 day 2 cmds 3
+  phase 6 idx36AC 2 control P1=1 P2=2 day 2 cmds 3
+  phase 6 idx36AC 2 control P1=1 P2=2 day 2 cmds 4
+  phase 6 idx36AC 2 control P1=1 P2=2 day 2 cmds 5
+  phase 6 idx36AC 2 control P1=1 P2=2 day 2 cmds 6
+  phase 6 idx36AC 2 control P1=1 P2=2 day 2 cmds 7
+  phase 6 idx36AC 2 control P1=1 P2=2 day 2 cmds 8
+  phase 6 idx36AC 2 control P1=1 P2=2 day 2 cmds 9
+  phase 6 idx36AC 2 control P1=1 P2=2 day 2 cmds 10
+  phase 6 idx36AC 2 control P1=1 P2=2 day 2 cmds 11
+  phase 6 idx36AC 2 control P1=1 P2=2 day 2 cmds 12
+  phase 6 idx36AC 2 control P1=1 P2=2 day 2 cmds 13
+  phase 1 idx36AC 2 control P1=1 P2=2 day 2 cmds 13
+  W idx36AC addr 030036AC val 3 pc 08024D64 phase 3
+  W idx36AC addr 030036AC val 4 pc 08024D64 phase 3
+  W idx36AC addr 030036AC val 5 pc 08024D64 phase 3
+  W idx36AC addr 030036AC val 1 pc 08024D74 phase 3
+  W army P0 +0x1C val 0 pc 0801E19E phase 3 day 3
+  W army P1 +0x1C val 0 pc 0801E1B0 phase 3 day 3
+  W army P2 +0x1C val 0 pc 0801E1B0 phase 3 day 3
+  W army P3 +0x1C val 0 pc 0801E1B0 phase 3 day 3
+  W army P4 +0x1C val 0 pc 0801E1B0 phase 3 day 3
+  W army P1 +0x1C val 3 pc 0801E1F2 phase 3 day 3
+  phase 4 idx36AC 1 control P1=1 P2=2 day 3 cmds 13
+  phase 7 idx36AC 1 control P1=1 P2=2 day 3 cmds 13
+  phase 10 idx36AC 1 control P1=1 P2=2 day 3 cmds 13
+  phase 5 idx36AC 1 control P1=1 P2=2 day 3 cmds 13
+  cpu turn: back, 13 command(s)
+  plan requested: turn 3 replan 0
+  step t03r0-1 capture: ok
+  check failed (unit 72 untouched and the RNG never drew: no battle); nudge 1
+  check failed (unit 72 untouched and the RNG never drew: no battle); nudge 2
+  check failed (unit 72 untouched and the RNG never drew: no battle); nudge 3
+  step t03r0-2 attack: ok
+  check failed (unit 72 untouched and the RNG never drew: no battle); nudge 1
+  check failed (unit 72 untouched and the RNG never drew: no battle); nudge 2
+  check failed (unit 72 untouched and the RNG never drew: no battle); nudge 3
+  step t03r0-3 attack: ok
+  step t03r0-4 capture: ok
+  step t03r0-5 wait: ok
+  step t03r0-6 wait: ok
+  step t03r0-7 wait: ok
+  step t03r0-8 wait: ok
+  step t03r0-9 wait: ok
+  step t03r0-10 wait: ok
+  check failed (unit 74 untouched and the RNG never drew: no battle); nudge 1
+  check failed (unit 74 untouched and the RNG never drew: no battle); nudge 2
+  check failed (unit 74 untouched and the RNG never drew: no battle); nudge 3
+  step t03r0-11 attack: ok
+  cpu_turn: active 1 idx36AC 1 control P1=2 P2=2
+  W idx36AC addr 030036AC val 2 pc 08024D64 phase 3
+  W army P0 +0x1C val 0 pc 0801E19E phase 3 day 3
+  W army P1 +0x1C val 0 pc 0801E1B0 phase 3 day 3
+  W army P2 +0x1C val 0 pc 0801E1B0 phase 3 day 3
+  W army P3 +0x1C val 0 pc 0801E1B0 phase 3 day 3
+  W army P4 +0x1C val 0 pc 0801E1B0 phase 3 day 3
+  W army P2 +0x1C val 1 pc 0801E1F2 phase 3 day 3
+  W army P2 +0x1C val 3 pc 0801E304 phase 3 day 3
+  phase 6 idx36AC 2 control P1=2 P2=2 day 3 cmds 0
+  phase 13 idx36AC 2 control P1=1 P2=2 day 3 cmds 1
+  phase 6 idx36AC 2 control P1=1 P2=2 day 3 cmds 2
+  phase 13 idx36AC 2 control P1=1 P2=2 day 3 cmds 2
+  phase 6 idx36AC 2 control P1=1 P2=2 day 3 cmds 2
+  phase 13 idx36AC 2 control P1=1 P2=2 day 3 cmds 3
+  phase 6 idx36AC 2 control P1=1 P2=2 day 3 cmds 3
+  phase 6 idx36AC 2 control P1=1 P2=2 day 3 cmds 4
+  phase 6 idx36AC 2 control P1=1 P2=2 day 3 cmds 5
+  phase 13 idx36AC 2 control P1=1 P2=2 day 3 cmds 5
+  phase 6 idx36AC 2 control P1=1 P2=2 day 3 cmds 5
+  phase 6 idx36AC 2 control P1=1 P2=2 day 3 cmds 6
+  phase 6 idx36AC 2 control P1=1 P2=2 day 3 cmds 7
+  phase 6 idx36AC 2 control P1=1 P2=2 day 3 cmds 8
+  phase 6 idx36AC 2 control P1=1 P2=2 day 3 cmds 9
+  phase 6 idx36AC 2 control P1=1 P2=2 day 3 cmds 10
+  phase 13 idx36AC 2 control P1=1 P2=2 day 3 cmds 11
+  phase 6 idx36AC 2 control P1=1 P2=2 day 3 cmds 11
+  phase 2 idx36AC 2 control P1=1 P2=2 day 3 cmds 11
+  W idx36AC addr 030036AC val 3 pc 08024D64 phase 3
+  W idx36AC addr 030036AC val 4 pc 08024D64 phase 3
+  W idx36AC addr 030036AC val 5 pc 08024D64 phase 3
+  W idx36AC addr 030036AC val 1 pc 08024D74 phase 3
+  W army P0 +0x1C val 0 pc 0801E19E phase 3 day 4
+  W army P1 +0x1C val 0 pc 0801E1B0 phase 3 day 4
+  W army P2 +0x1C val 0 pc 0801E1B0 phase 3 day 4
+  W army P3 +0x1C val 0 pc 0801E1B0 phase 3 day 4
+  W army P4 +0x1C val 0 pc 0801E1B0 phase 3 day 4
+  W army P1 +0x1C val 3 pc 0801E1F2 phase 3 day 4
+  phase 4 idx36AC 1 control P1=1 P2=2 day 4 cmds 11
+  phase 7 idx36AC 1 control P1=1 P2=2 day 4 cmds 11
+  phase 10 idx36AC 1 control P1=1 P2=2 day 4 cmds 11
+  phase 5 idx36AC 1 control P1=1 P2=2 day 4 cmds 11
+  cpu turn: back, 11 command(s)
+  plan requested: turn 4 replan 0
+  check failed (unit 69 untouched and the RNG never drew: no battle); nudge 1
+  check failed (unit 69 untouched and the RNG never drew: no battle); nudge 2
+  check failed (unit 69 untouched and the RNG never drew: no battle); nudge 3
+  step t04r0-1 attack: ok
+  check failed (unit 69 untouched and the RNG never drew: no battle); nudge 1
+  check failed (unit 69 untouched and the RNG never drew: no battle); nudge 2
+  check failed (unit 69 untouched and the RNG never drew: no battle); nudge 3
+  step t04r0-2 attack: ok
+  step t04r0-3 wait: ok
+  step t04r0-4 wait: ok
+  step t04r0-5 wait: ok
+  step t04r0-6 wait: ok
+  step t04r0-7 wait: ok
+  step t04r0-8 capture: ok
+  step t04r0-9 wait: ok
+  step t04r0-10 wait: ok
+  cpu_turn: active 1 idx36AC 1 control P1=2 P2=2
+  W idx36AC addr 030036AC val 2 pc 08024D64 phase 3
+  W army P0 +0x1C val 0 pc 0801E19E phase 3 day 4
+  W army P1 +0x1C val 0 pc 0801E1B0 phase 3 day 4
+  W army P2 +0x1C val 0 pc 0801E1B0 phase 3 day 4
+  W army P3 +0x1C val 0 pc 0801E1B0 phase 3 day 4
+  W army P4 +0x1C val 0 pc 0801E1B0 phase 3 day 4
+  W army P2 +0x1C val 1 pc 0801E1F2 phase 3 day 4
+  W army P2 +0x1C val 3 pc 0801E304 phase 3 day 4
+  phase 10 idx36AC 2 control P1=2 P2=2 day 4 cmds 0
+  phase 6 idx36AC 2 control P1=2 P2=2 day 4 cmds 0
+  phase 13 idx36AC 2 control P1=1 P2=2 day 4 cmds 1
+  phase 6 idx36AC 2 control P1=1 P2=2 day 4 cmds 1
+  phase 6 idx36AC 2 control P1=1 P2=2 day 4 cmds 2
+  phase 6 idx36AC 2 control P1=1 P2=2 day 4 cmds 3
+  phase 13 idx36AC 2 control P1=1 P2=2 day 4 cmds 4
+  phase 6 idx36AC 2 control P1=1 P2=2 day 4 cmds 4
+  phase 6 idx36AC 2 control P1=1 P2=2 day 4 cmds 5
+  phase 6 idx36AC 2 control P1=1 P2=2 day 4 cmds 6
+  phase 6 idx36AC 2 control P1=1 P2=2 day 4 cmds 7
+  phase 6 idx36AC 2 control P1=1 P2=2 day 4 cmds 8
+  phase 6 idx36AC 2 control P1=1 P2=2 day 4 cmds 9
+  W idx36AC addr 030036AC val 3 pc 08024D64 phase 3
+  W idx36AC addr 030036AC val 4 pc 08024D64 phase 3
+  W idx36AC addr 030036AC val 5 pc 08024D64 phase 3
+  W idx36AC addr 030036AC val 1 pc 08024D74 phase 3
+  W army P0 +0x1C val 0 pc 0801E19E phase 3 day 5
+  W army P1 +0x1C val 0 pc 0801E1B0 phase 3 day 5
+  W army P2 +0x1C val 0 pc 0801E1B0 phase 3 day 5
+  W army P3 +0x1C val 0 pc 0801E1B0 phase 3 day 5
+  W army P4 +0x1C val 0 pc 0801E1B0 phase 3 day 5
+  W army P1 +0x1C val 3 pc 0801E1F2 phase 3 day 5
+  phase 4 idx36AC 1 control P1=1 P2=2 day 5 cmds 9
+  phase 12 idx36AC 1 control P1=1 P2=2 day 5 cmds 9
+  phase 7 idx36AC 1 control P1=1 P2=2 day 5 cmds 9
+  phase 10 idx36AC 1 control P1=1 P2=2 day 5 cmds 9
+  phase 5 idx36AC 1 control P1=1 P2=2 day 5 cmds 9
+  cpu turn: back, 9 command(s)
+  plan requested: turn 5 replan 0
+  check failed (unit 68 untouched and the RNG never drew: no battle); nudge 1
+  check failed (unit 68 untouched and the RNG never drew: no battle); nudge 2
+  check failed (unit 68 untouched and the RNG never drew: no battle); nudge 3
+  step t05r0-1 attack: ok
+  check failed (unit 68 untouched and the RNG never drew: no battle); nudge 1
+  check failed (unit 68 untouched and the RNG never drew: no battle); nudge 2
+  check failed (unit 68 untouched and the RNG never drew: no battle); nudge 3
+  step t05r0-2 attack: ok
+  step t05r0-3 wait: ok
+  step t05r0-4 wait: ok
+  step t05r0-5 wait: ok
+  step t05r0-6 wait: ok
+  step t05r0-7 wait: ok
+  step t05r0-8 wait: ok
+  step t05r0-9 capture: ok
+  check failed (unit 67 untouched and the RNG never drew: no battle); nudge 1
+  check failed (unit 67 untouched and the RNG never drew: no battle); nudge 2
+  check failed (unit 67 untouched and the RNG never drew: no battle); nudge 3
+  step t05r0-10 attack: ok
+  step t05r0-11 power: FAILED -- cursor never reached the empty tile
+  settle: cursor not answering, tap 1
+  settle: cursor not answering, tap 2
+  settle: cursor not answering, tap 3
+  settle: cursor not answering, tap 4
+  settle: cursor not answering, tap 5
+  settle: cursor not answering, tap 6
+  settle: cursor not answering, tap 7
+  settle: cursor not answering, tap 8
+  settle: cursor not answering, tap 9
+  settle: cursor not answering, tap 10
+  settle: cursor not answering, tap 11
+  settle: cursor not answering, tap 12
+  plan requested: turn 5 replan 1
+  step t05r1-1 power: FAILED -- cursor never reached the empty tile

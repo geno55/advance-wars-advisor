@@ -467,7 +467,7 @@ def compile_step(board, spec, tag, warnings):
         # leaves, so the step returns the board unchanged (tools/cpu_trace.py)
         step = {"kind": "cpu_turn", "tag": tag, "empty": xy(empty_tile(board)),
                 "limit": spec.get("limit", 3000), "cpu": spec.get("cpu"),
-                "checks": []}
+                "watch_pcs": list(spec.get("watch_pcs", [])), "checks": []}
         return step, board, None
     act, every = find_action(board, spec, warnings)
     return compile_action(board, act, every, tag, warnings)

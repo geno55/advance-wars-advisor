@@ -173,8 +173,10 @@ function M.state_json(opts)
   -- on, and the 0x130-byte profile copy the AI's state 0 leaves in EWRAM
   w_(string.format('  "weather_2d": %d,', M.r8(M.WEATHER + 1)))   -- 0x0300433D, read by Olaf's power predicate (DERIVATION 54)
   w_(string.format('  "ai_order": %d,', M.r32(0x030051AC)))       -- the in-match option the AI's order list sorts by (DERIVATION 54)
-  w_(string.format('  "map_id": %d, "settings_6": %d, "settings_8": %d,',
-    M.r8(0x03004310 + 2), M.r8(0x03004310 + 6), M.r8(0x03004310 + 8)))
+  w_(string.format('  "map_id": %d, "settings_6": %d, "settings_8": %d, "settings_9": %d,',
+    M.r8(0x03004310 + 2), M.r8(0x03004310 + 6), M.r8(0x03004310 + 8), M.r8(0x03004310 + 9)))
+  -- settings +9: the battle animation. 1 and every battle's scene seeds
+  -- 128 RNG draws before the battle's own; 0 and none (DERIVATION 55)
   local prof = {}
   for i = 0, 0x12F do prof[#prof + 1] = string.format("%02x", M.r8(0x020235DC + i)) end
   w_(string.format('  "ai_profile": "%s",', table.concat(prof)))

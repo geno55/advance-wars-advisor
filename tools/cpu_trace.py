@@ -46,7 +46,10 @@ COMMAND_NAMES = {1: "move", 2: "wait", 3: "capture", 4: "fire", 5: "supply",
                  15: "cmd15", 16: "cmd16", 17: "end"}
 
 
-def run_case(name: str, state: str, writes: list, setup: list, limit: int) -> dict:
+def run_case(name: str, state: str, writes: list, setup: list, limit: int,
+             watch: tuple = ()) -> dict:
+    """`watch`: ROM addresses whose every execution the driver logs with the
+    caller's r14 (run.log: "watch PC lr LR phase P cmds N draws M")."""
     OUT.mkdir(parents=True, exist_ok=True)
     FIX.mkdir(parents=True, exist_ok=True)
     board = load(sim_diff.STATES_DIR / f"{state}.json")
@@ -64,7 +67,8 @@ def run_case(name: str, state: str, writes: list, setup: list, limit: int) -> di
                                            {"army": human, "control": 2}]}
     case = {"name": name, "state": state, "writes": list(writes),
             "setup": list(setup) + [control],
-            "action": {"kind": "cpu_turn", "limit": limit, "cpu": cpu}, "attempts": 1}
+            "action": {"kind": "cpu_turn", "limit": limit, "cpu": cpu,
+                       "watch_pcs": [int(w) for w in watch]}, "attempts": 1}
     compiled = sim_diff.compile_case(case, [])
     compiled["before"] = (FIX / f"{name}.before.json").as_posix()
     compiled["after"] = (FIX / f"{name}.after.json").as_posix()
@@ -179,6 +183,7 @@ def main() -> int:
     r.add_argument("--writes", default="[]", help="JSON list of corpus-style writes")
     r.add_argument("--setup", default="[]", help="JSON list of corpus-style setup steps")
     r.add_argument("--limit", type=int, default=3000, help="polls of ten frames to wait for the turn back")
+    r.add_argument("--watch", default="", help="comma-separated ROM addresses to log every execution of")
     s = sub.add_parser("show")
     s.add_argument("name")
     rp = sub.add_parser("replay", help="apply the traced commands in Python and diff")
@@ -212,7 +217,8 @@ def main() -> int:
         print(f"{a.name}: {len(diffs)} field(s) differ after replay")
         return 1 if diffs else 0
     if a.cmd == "run":
-        rec = run_case(a.name, a.state, json.loads(a.writes), json.loads(a.setup), a.limit)
+        rec = run_case(a.name, a.state, json.loads(a.writes), json.loads(a.setup), a.limit,
+                       tuple(int(w, 0) for w in a.watch.split(",") if w))
         print(show(rec))
         return 0 if rec["driven"] else 1
     if a.cmd == "show":

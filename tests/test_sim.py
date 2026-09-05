@@ -367,15 +367,24 @@ class TestPower(unittest.TestCase):
         for slot, hp in want.items():
             self.assertEqual(sim.unit_in(after, slot).hp, hp)
 
-    def test_the_block_and_the_snow_expire_at_the_casters_next_turn(self):
+    def test_the_block_and_its_snow_expire_at_the_casters_next_turn(self):
+        # end-turn-power-expiry-snow: P2's block and the snow went at P2's
+        # own turn start, the same day (DERIVATION 39, 55)
         b = self.charged(OLAF, [unit("Tank", 0, 0), unit("Tank", 4, 0, player=2, slot=2)])
         after = sim.apply(b, actions.power_action(b, 1, warnings=[]))
         p2 = sim.end_turn(after)                                # P2's turn: still up
         self.assertTrue(p2.army(1).power_active)
         self.assertEqual(p2.weather_index, sim.SNOW_INDEX)
-        p1 = sim.end_turn(p2)                                   # P1 again: gone
+        p1 = sim.end_turn(p2)                                   # P1 again: both gone
         self.assertFalse(p1.army(1).power_active)
         self.assertEqual(p1.weather_index, sim.CLEAR_INDEX)
+
+    def test_a_snow_with_no_block_behind_it_clears_at_the_next_new_day(self):
+        b = self.charged(OLAF, [unit("Tank", 0, 0), unit("Tank", 4, 0, player=2, slot=2)])
+        b = dataclasses.replace(b, weather_index=sim.SNOW_INDEX)    # written, as the rig does
+        p2 = sim.end_turn(b)                                    # the same day: it stands
+        self.assertEqual(p2.weather_index, sim.SNOW_INDEX)
+        self.assertEqual(sim.end_turn(p2).weather_index, sim.CLEAR_INDEX)
 
 
 class TestEndTurn(unittest.TestCase):

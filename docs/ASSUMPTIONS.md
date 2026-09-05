@@ -186,7 +186,7 @@ fixtures, and in this file's git history.
   `0x03004318`, closing that unknown) and stops while a power runs.
   Activation (map-menu Power item): meter to 0, `+0x1E` = 1 until the start
   of the caster's next turn. One-shots, all measured: Andy +2 display HP
-  free via the repair path; Olaf snow for the power's lifetime; Drake −10
+  free via the repair path; Olaf snow to the end of his next turn; Drake −10
   internal to every enemy, floor 1; Sturm −80 internal (record 10) or −40
   (record 11) in a Manhattan-2 blast; Eagle clears the acted bit on
   non-foot units; Sami's block swaps to movement tables where foot pays 1
@@ -370,14 +370,20 @@ fixtures, and in this file's git history.
   (refused). The sibling move byte at `+7` is measured, once: the CPU's
   APC drove seven tiles under Max's power on the `power-max` trace.
 
-- **A battle scene under snow seeds 128 draws, once per battle.** Two
-  traces, one battle each (DERIVATION 54). Kill by: a snowy CPU turn with
-  two battles, and the draw log's count.
-- **A snow no power made lasts as the game says, not as the model says.**
-  `sim.end_turn` expires Olaf's snow with his block and leaves any other
-  snow alone; the rig's written snow cleared at the next turn change. What
-  the game counts down (`0x0300433D`?) is unread. Kill by: reading the
-  weather change at End Turn.
+- **The battle scene seeds 128 draws per battle when settings `+9` (the
+  battle animation) is set, whatever the weather.** Measured on six
+  mission-one traces (one and two battles, clear and snow) and made to
+  happen on the VS state by writing the byte (scene-vs-anim-on, DERIVATION
+  55). Kept here for three or more battles in one turn, unmeasured, and
+  for what else the byte switches: the port's only use of it is the draws.
+- **A snow no power made goes at the first new day.** A power's snow goes
+  with its block at the caster's next turn start (end-turn-power-expiry-
+  snow, DERIVATION 39); a snow written with no block stood through the
+  same day's remaining turn and was gone at the next day (m01-olaf-snow,
+  DERIVATION 54, 55). `sim.end_turn` does both. What it would do to a map
+  whose weather is snow by design is not known: the model would clear it
+  at the first new day. Kill by: a campaign map that opens under snow,
+  one day.
 
 Everything else this file has carried is either in Established above or in
 the Retired ledger below, each killed by a measurement or a read with its

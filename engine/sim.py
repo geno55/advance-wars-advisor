@@ -38,7 +38,8 @@ WHAT IS EXACT (given the modules)
     (or the RNG state's), all from engine/power.py.
   * end_turn: the ending player's acted bits clear (its passengers keep
     theirs); the next army in player order becomes active (the day turns
-    over when the order wraps); its power block and Olaf's snow expire;
+    over when the order wraps); its power block and the snow it made
+    expire, and a snow no block made goes at the new day;
     income; then its units in slot order through supply.turn_start with the
     treasury threaded from one repair to the next, crashed units removed;
     the vision photograph dropped.
@@ -585,6 +586,15 @@ def end_turn(board, *, warnings: Optional[list] = None):
                              for u in board.units
                              if u.player == cur and u.acted and not u.loaded})
     after = dataclasses.replace(after, active_player=nxt, day=day, vision=None)
+    # -- a snow with no weather power's block behind it goes at the first
+    # -- new day: written on the human's day 1, it stood through Olaf's
+    # -- day-1 turn (he held his power for it) and was gone on day 2
+    # -- (m01-olaf-snow, DERIVATION 54, 55). A power's snow goes with its
+    # -- block, below (end-turn-power-expiry-snow).
+    if day != board.day and after.weather_index == SNOW_INDEX and not any(
+            a.power_active and co_mod.POWER_EFFECTS.get(a.co_id, {}).get("weather")
+            for a in after.armies):
+        after = dataclasses.replace(after, weather_index=CLEAR_INDEX)
     return turn_start(after, nxt, warnings=warnings)
 
 
@@ -600,7 +610,7 @@ def turn_start(board, player: int, *, warnings: Optional[list] = None):
     army = _army(after, player)
     cid = army.co_id if army is not None else None
     # -- expiry: the block clears at the caster's next turn start, and the
-    # -- snow at the same boundary (reverting to Clear: stated, not measured)
+    # -- snow it made with it (end-turn-power-expiry-snow, DERIVATION 39)
     if army is not None and army.power_active:
         after = _set_army(after, dataclasses.replace(army, power_active=False))
         if cid is not None and co_mod.POWER_EFFECTS.get(cid, {}).get("weather"):
