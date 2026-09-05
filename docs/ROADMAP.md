@@ -354,6 +354,17 @@ Three decisions, made once so they do not get re-argued:
    the identical game), and the game takes 25 s instead of 410. Tuning
    over the twenty-four saved boards is now minutes a weight set.
 
+   *The rank, read (DERIVATION 58).* The debrief's Speed, Power and
+   Technique were read from the ROM and checked against the numbers the
+   game gave the day-26 win (25, 100, 54: a C). Speed is 100 up to the
+   mission's par (8 days on mission one) and falls linearly to 0 at four
+   times par; Power is 100 whenever one day's kills reach a tenth of the
+   enemy's units; Technique is 100 while a fifth or less of the units
+   fielded are lost. The total weighs them 5:2:3 and S needs 950. On
+   mission one that is a win by day 10 with two or fewer units lost; A is
+   day 15. The rank is now `engine/rank.py`, and the objective for the
+   weight search is tempo, not safety.
+
 7. **Campaign facts, on demand.** A mission that fails acceptance, or ends
    in a way the standard win conditions do not explain, triggers reading its
    objective and events: victory and loss condition, scripted reinforcements

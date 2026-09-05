@@ -37224,823 +37224,1021 @@
   {
    "vs": false,
    "b22": 0,
-   "row": 0
+   "row": 0,
+   "par": 0
   },
   {
    "vs": false,
    "b22": 116,
-   "row": 1
+   "row": 1,
+   "par": 14
   },
   {
    "vs": false,
    "b22": 117,
-   "row": 1
+   "row": 1,
+   "par": 14
   },
   {
    "vs": false,
    "b22": 118,
-   "row": 2
+   "row": 2,
+   "par": 14
   },
   {
    "vs": false,
    "b22": 119,
-   "row": 4
+   "row": 4,
+   "par": 14
   },
   {
    "vs": false,
    "b22": 120,
-   "row": 1
+   "row": 1,
+   "par": 16
   },
   {
    "vs": false,
    "b22": 121,
-   "row": 4
+   "row": 4,
+   "par": 24
   },
   {
    "vs": false,
    "b22": 122,
-   "row": 1
+   "row": 1,
+   "par": 18
   },
   {
    "vs": false,
    "b22": 123,
-   "row": 4
+   "row": 4,
+   "par": 18
   },
   {
    "vs": false,
    "b22": 124,
-   "row": 2
+   "row": 2,
+   "par": 22
   },
   {
    "vs": false,
    "b22": 125,
-   "row": 2
+   "row": 2,
+   "par": 22
   },
   {
    "vs": false,
    "b22": 126,
-   "row": 2
+   "row": 2,
+   "par": 12
   },
   {
    "vs": false,
    "b22": 127,
-   "row": 3
+   "row": 3,
+   "par": 30
   },
   {
    "vs": false,
    "b22": 128,
-   "row": 6
+   "row": 6,
+   "par": 30
   },
   {
    "vs": false,
    "b22": 129,
-   "row": 2
+   "row": 2,
+   "par": 22
   },
   {
    "vs": false,
    "b22": 130,
-   "row": 2
+   "row": 2,
+   "par": 14
   },
   {
    "vs": false,
    "b22": 131,
-   "row": 4
+   "row": 4,
+   "par": 14
   },
   {
    "vs": false,
    "b22": 132,
-   "row": 4
+   "row": 4,
+   "par": 14
   },
   {
    "vs": true,
    "b22": 255,
-   "row": 1
+   "row": 1,
+   "par": 12
   },
   {
    "vs": true,
    "b22": 255,
-   "row": 3
+   "row": 3,
+   "par": 30
   },
   {
    "vs": true,
    "b22": 255,
-   "row": 2
+   "row": 2,
+   "par": 15
   },
   {
    "vs": true,
    "b22": 255,
-   "row": 4
+   "row": 4,
+   "par": 13
   },
   {
    "vs": true,
    "b22": 255,
-   "row": 2
+   "row": 2,
+   "par": 13
   },
   {
    "vs": true,
    "b22": 255,
-   "row": 2
+   "row": 2,
+   "par": 13
   },
   {
    "vs": true,
    "b22": 255,
-   "row": 1
+   "row": 1,
+   "par": 13
   },
   {
    "vs": true,
    "b22": 255,
-   "row": 1
+   "row": 1,
+   "par": 13
   },
   {
    "vs": true,
    "b22": 255,
-   "row": 1
+   "row": 1,
+   "par": 13
   },
   {
    "vs": true,
    "b22": 255,
-   "row": 1
+   "row": 1,
+   "par": 13
   },
   {
    "vs": true,
    "b22": 255,
-   "row": 1
+   "row": 1,
+   "par": 22
   },
   {
    "vs": true,
    "b22": 255,
-   "row": 4
+   "row": 4,
+   "par": 18
   },
   {
    "vs": true,
    "b22": 255,
-   "row": 4
+   "row": 4,
+   "par": 13
   },
   {
    "vs": true,
    "b22": 255,
-   "row": 3
+   "row": 3,
+   "par": 13
   },
   {
    "vs": true,
    "b22": 255,
-   "row": 3
+   "row": 3,
+   "par": 13
   },
   {
    "vs": true,
    "b22": 255,
-   "row": 5
+   "row": 5,
+   "par": 13
   },
   {
    "vs": true,
    "b22": 255,
-   "row": 2
+   "row": 2,
+   "par": 13
   },
   {
    "vs": true,
    "b22": 255,
-   "row": 2
+   "row": 2,
+   "par": 13
   },
   {
    "vs": true,
    "b22": 255,
-   "row": 5
+   "row": 5,
+   "par": 13
   },
   {
    "vs": true,
    "b22": 255,
-   "row": 3
+   "row": 3,
+   "par": 13
   },
   {
    "vs": true,
    "b22": 255,
-   "row": 1
+   "row": 1,
+   "par": 11
   },
   {
    "vs": true,
    "b22": 255,
-   "row": 1
+   "row": 1,
+   "par": 6
   },
   {
    "vs": true,
    "b22": 255,
-   "row": 4
+   "row": 4,
+   "par": 7
   },
   {
    "vs": true,
    "b22": 255,
-   "row": 4
+   "row": 4,
+   "par": 7
   },
   {
    "vs": true,
    "b22": 255,
-   "row": 4
+   "row": 4,
+   "par": 6
   },
   {
    "vs": true,
    "b22": 255,
-   "row": 4
+   "row": 4,
+   "par": 22
   },
   {
    "vs": true,
    "b22": 255,
-   "row": 4
+   "row": 4,
+   "par": 22
   },
   {
    "vs": true,
    "b22": 255,
-   "row": 4
+   "row": 4,
+   "par": 22
   },
   {
    "vs": true,
    "b22": 255,
-   "row": 4
+   "row": 4,
+   "par": 22
   },
   {
    "vs": true,
    "b22": 255,
-   "row": 4
+   "row": 4,
+   "par": 22
   },
   {
    "vs": true,
    "b22": 255,
-   "row": 4
+   "row": 4,
+   "par": 22
   },
   {
    "vs": true,
    "b22": 255,
-   "row": 1
+   "row": 1,
+   "par": 22
   },
   {
    "vs": true,
    "b22": 255,
-   "row": 1
+   "row": 1,
+   "par": 22
   },
   {
    "vs": true,
    "b22": 255,
-   "row": 3
+   "row": 3,
+   "par": 22
   },
   {
    "vs": true,
    "b22": 255,
-   "row": 1
+   "row": 1,
+   "par": 22
   },
   {
    "vs": true,
    "b22": 255,
-   "row": 4
+   "row": 4,
+   "par": 22
   },
   {
    "vs": true,
    "b22": 255,
-   "row": 4
+   "row": 4,
+   "par": 22
   },
   {
    "vs": true,
    "b22": 255,
-   "row": 1
+   "row": 1,
+   "par": 30
   },
   {
    "vs": true,
    "b22": 255,
-   "row": 3
+   "row": 3,
+   "par": 30
   },
   {
    "vs": true,
    "b22": 255,
-   "row": 2
+   "row": 2,
+   "par": 30
   },
   {
    "vs": true,
    "b22": 255,
-   "row": 4
+   "row": 4,
+   "par": 30
   },
   {
    "vs": true,
    "b22": 255,
-   "row": 1
+   "row": 1,
+   "par": 30
   },
   {
    "vs": true,
    "b22": 255,
-   "row": 2
+   "row": 2,
+   "par": 30
   },
   {
    "vs": true,
    "b22": 255,
-   "row": 3
+   "row": 3,
+   "par": 30
   },
   {
    "vs": true,
    "b22": 255,
-   "row": 4
+   "row": 4,
+   "par": 30
   },
   {
    "vs": true,
    "b22": 255,
-   "row": 1
+   "row": 1,
+   "par": 30
   },
   {
    "vs": true,
    "b22": 255,
-   "row": 2
+   "row": 2,
+   "par": 30
   },
   {
    "vs": true,
    "b22": 255,
-   "row": 4
+   "row": 4,
+   "par": 30
   },
   {
    "vs": true,
    "b22": 255,
-   "row": 1
+   "row": 1,
+   "par": 30
   },
   {
    "vs": true,
    "b22": 255,
-   "row": 2
+   "row": 2,
+   "par": 30
   },
   {
    "vs": true,
    "b22": 255,
-   "row": 3
+   "row": 3,
+   "par": 30
   },
   {
    "vs": true,
    "b22": 255,
-   "row": 4
+   "row": 4,
+   "par": 30
   },
   {
    "vs": true,
    "b22": 255,
-   "row": 1
+   "row": 1,
+   "par": 30
   },
   {
    "vs": true,
    "b22": 255,
-   "row": 2
+   "row": 2,
+   "par": 30
   },
   {
    "vs": true,
    "b22": 255,
-   "row": 3
+   "row": 3,
+   "par": 30
   },
   {
    "vs": true,
    "b22": 255,
-   "row": 4
+   "row": 4,
+   "par": 30
   },
   {
    "vs": true,
    "b22": 255,
-   "row": 4
+   "row": 4,
+   "par": 30
   },
   {
    "vs": true,
    "b22": 255,
-   "row": 2
+   "row": 2,
+   "par": 15
   },
   {
    "vs": true,
    "b22": 255,
-   "row": 1
+   "row": 1,
+   "par": 22
   },
   {
    "vs": true,
    "b22": 255,
-   "row": 2
+   "row": 2,
+   "par": 22
   },
   {
    "vs": true,
    "b22": 255,
-   "row": 3
+   "row": 3,
+   "par": 22
   },
   {
    "vs": true,
    "b22": 255,
-   "row": 4
+   "row": 4,
+   "par": 22
   },
   {
    "vs": true,
    "b22": 255,
-   "row": 1
+   "row": 1,
+   "par": 22
   },
   {
    "vs": true,
    "b22": 255,
-   "row": 1
+   "row": 1,
+   "par": 22
   },
   {
    "vs": true,
    "b22": 255,
-   "row": 2
+   "row": 2,
+   "par": 22
   },
   {
    "vs": true,
    "b22": 255,
-   "row": 4
+   "row": 4,
+   "par": 22
   },
   {
    "vs": true,
    "b22": 255,
-   "row": 1
+   "row": 1,
+   "par": 22
   },
   {
    "vs": true,
    "b22": 255,
-   "row": 2
+   "row": 2,
+   "par": 22
   },
   {
    "vs": true,
    "b22": 255,
-   "row": 3
+   "row": 3,
+   "par": 22
   },
   {
    "vs": true,
    "b22": 255,
-   "row": 4
+   "row": 4,
+   "par": 22
   },
   {
    "vs": true,
    "b22": 255,
-   "row": 1
+   "row": 1,
+   "par": 22
   },
   {
    "vs": true,
    "b22": 255,
-   "row": 2
+   "row": 2,
+   "par": 22
   },
   {
    "vs": true,
    "b22": 255,
-   "row": 6
+   "row": 6,
+   "par": 22
   },
   {
    "vs": true,
    "b22": 255,
-   "row": 1
+   "row": 1,
+   "par": 22
   },
   {
    "vs": true,
    "b22": 255,
-   "row": 1
+   "row": 1,
+   "par": 22
   },
   {
    "vs": true,
    "b22": 255,
-   "row": 2
+   "row": 2,
+   "par": 22
   },
   {
    "vs": true,
    "b22": 255,
-   "row": 5
+   "row": 5,
+   "par": 22
   },
   {
    "vs": true,
    "b22": 255,
-   "row": 4
+   "row": 4,
+   "par": 22
   },
   {
    "vs": true,
    "b22": 255,
-   "row": 12
+   "row": 12,
+   "par": 10
   },
   {
    "vs": true,
    "b22": 255,
-   "row": 13
+   "row": 13,
+   "par": 14
   },
   {
    "vs": true,
    "b22": 255,
-   "row": 14
+   "row": 14,
+   "par": 13
   },
   {
    "vs": true,
    "b22": 255,
-   "row": 15
+   "row": 15,
+   "par": 18
   },
   {
    "vs": true,
    "b22": 255,
-   "row": 16
+   "row": 16,
+   "par": 15
   },
   {
    "vs": true,
    "b22": 255,
-   "row": 17
+   "row": 17,
+   "par": 12
   },
   {
    "vs": true,
    "b22": 255,
-   "row": 18
+   "row": 18,
+   "par": 25
   },
   {
    "vs": true,
    "b22": 255,
-   "row": 19
+   "row": 19,
+   "par": 15
   },
   {
    "vs": true,
    "b22": 255,
-   "row": 20
+   "row": 20,
+   "par": 9
   },
   {
    "vs": true,
    "b22": 255,
-   "row": 21
+   "row": 21,
+   "par": 14
   },
   {
    "vs": true,
    "b22": 255,
-   "row": 22
+   "row": 22,
+   "par": 22
   },
   {
    "vs": true,
    "b22": 255,
-   "row": 23
+   "row": 23,
+   "par": 17
   },
   {
    "vs": true,
    "b22": 255,
-   "row": 24
+   "row": 24,
+   "par": 20
   },
   {
    "vs": true,
    "b22": 255,
-   "row": 25
+   "row": 25,
+   "par": 13
   },
   {
    "vs": true,
    "b22": 255,
-   "row": 26
+   "row": 26,
+   "par": 22
   },
   {
    "vs": true,
    "b22": 255,
-   "row": 27
+   "row": 27,
+   "par": 19
   },
   {
    "vs": true,
    "b22": 255,
-   "row": 28
+   "row": 28,
+   "par": 13
   },
   {
    "vs": true,
    "b22": 255,
-   "row": 29
+   "row": 29,
+   "par": 20
   },
   {
    "vs": true,
    "b22": 255,
-   "row": 30
+   "row": 30,
+   "par": 26
   },
   {
    "vs": true,
    "b22": 255,
-   "row": 31
+   "row": 31,
+   "par": 30
   },
   {
    "vs": true,
    "b22": 255,
-   "row": 1
+   "row": 1,
+   "par": 3
   },
   {
    "vs": true,
    "b22": 255,
-   "row": 1
+   "row": 1,
+   "par": 3
   },
   {
    "vs": true,
    "b22": 255,
-   "row": 1
+   "row": 1,
+   "par": 9
   },
   {
    "vs": true,
    "b22": 255,
-   "row": 1
+   "row": 1,
+   "par": 5
   },
   {
    "vs": true,
    "b22": 255,
-   "row": 1
+   "row": 1,
+   "par": 6
   },
   {
    "vs": true,
    "b22": 255,
-   "row": 1
+   "row": 1,
+   "par": 7
   },
   {
    "vs": true,
    "b22": 255,
-   "row": 2
+   "row": 2,
+   "par": 3
   },
   {
    "vs": true,
    "b22": 255,
-   "row": 2
+   "row": 2,
+   "par": 7
   },
   {
    "vs": true,
    "b22": 255,
-   "row": 2
+   "row": 2,
+   "par": 5
   },
   {
    "vs": true,
    "b22": 255,
-   "row": 4
+   "row": 4,
+   "par": 3
   },
   {
    "vs": true,
    "b22": 255,
-   "row": 3
+   "row": 3,
+   "par": 7
   },
   {
    "vs": true,
    "b22": 255,
-   "row": 2
+   "row": 2,
+   "par": 8
   },
   {
    "vs": true,
    "b22": 255,
-   "row": 1
+   "row": 1,
+   "par": 6
   },
   {
    "vs": true,
    "b22": 255,
-   "row": 4
+   "row": 4,
+   "par": 3
   },
   {
    "vs": true,
    "b22": 255,
-   "row": 1
+   "row": 1,
+   "par": 8
   },
   {
    "vs": true,
    "b22": 255,
-   "row": 1
+   "row": 1,
+   "par": 10
   },
   {
    "vs": true,
    "b22": 255,
-   "row": 7
+   "row": 7,
+   "par": 6
   },
   {
    "vs": true,
    "b22": 255,
-   "row": 3
+   "row": 3,
+   "par": 7
   },
   {
    "vs": true,
    "b22": 255,
-   "row": 2
+   "row": 2,
+   "par": 6
   },
   {
    "vs": true,
    "b22": 255,
-   "row": 3
+   "row": 3,
+   "par": 7
   },
   {
    "vs": true,
    "b22": 255,
-   "row": 3
+   "row": 3,
+   "par": 9
   },
   {
    "vs": true,
    "b22": 255,
-   "row": 3
+   "row": 3,
+   "par": 5
   },
   {
    "vs": true,
    "b22": 255,
-   "row": 2
+   "row": 2,
+   "par": 7
   },
   {
    "vs": true,
    "b22": 255,
-   "row": 1
+   "row": 1,
+   "par": 6
   },
   {
    "vs": true,
    "b22": 255,
-   "row": 3
+   "row": 3,
+   "par": 9
   },
   {
    "vs": true,
    "b22": 255,
-   "row": 2
+   "row": 2,
+   "par": 9
   },
   {
    "vs": true,
    "b22": 255,
-   "row": 2
+   "row": 2,
+   "par": 5
   },
   {
    "vs": true,
    "b22": 255,
-   "row": 2
+   "row": 2,
+   "par": 7
   },
   {
    "vs": true,
    "b22": 255,
-   "row": 2
+   "row": 2,
+   "par": 10
   },
   {
    "vs": true,
    "b22": 255,
-   "row": 2
+   "row": 2,
+   "par": 12
   },
   {
    "vs": true,
    "b22": 255,
-   "row": 3
+   "row": 3,
+   "par": 10
   },
   {
    "vs": true,
    "b22": 255,
-   "row": 4
+   "row": 4,
+   "par": 14
   },
   {
    "vs": true,
    "b22": 255,
-   "row": 3
+   "row": 3,
+   "par": 11
   },
   {
    "vs": true,
    "b22": 255,
-   "row": 3
+   "row": 3,
+   "par": 7
   },
   {
    "vs": true,
    "b22": 255,
-   "row": 3
+   "row": 3,
+   "par": 12
   },
   {
    "vs": true,
    "b22": 255,
-   "row": 3
+   "row": 3,
+   "par": 10
   },
   {
    "vs": true,
    "b22": 255,
-   "row": 3
+   "row": 3,
+   "par": 12
   },
   {
    "vs": true,
    "b22": 255,
-   "row": 3
+   "row": 3,
+   "par": 10
   },
   {
    "vs": true,
    "b22": 255,
-   "row": 2
+   "row": 2,
+   "par": 7
   },
   {
    "vs": true,
    "b22": 255,
-   "row": 2
+   "row": 2,
+   "par": 7
   },
   {
    "vs": true,
    "b22": 255,
-   "row": 2
+   "row": 2,
+   "par": 8
   },
   {
    "vs": true,
    "b22": 255,
-   "row": 3
+   "row": 3,
+   "par": 9
   },
   {
    "vs": true,
    "b22": 255,
-   "row": 3
+   "row": 3,
+   "par": 9
   },
   {
    "vs": true,
    "b22": 255,
-   "row": 8
+   "row": 8,
+   "par": 8
   },
   {
    "vs": true,
    "b22": 255,
-   "row": 4
+   "row": 4,
+   "par": 5
   },
   {
    "vs": true,
    "b22": 255,
-   "row": 9
+   "row": 9,
+   "par": 16
   },
   {
    "vs": true,
    "b22": 255,
-   "row": 10
+   "row": 10,
+   "par": 14
   },
   {
    "vs": true,
    "b22": 255,
-   "row": 11
+   "row": 11,
+   "par": 20
   }
+ ],
+ "campaign_par": [
+  5,
+  10,
+  5,
+  5,
+  6,
+  5,
+  9,
+  4,
+  4,
+  8,
+  4,
+  14,
+  4,
+  6,
+  9,
+  7,
+  6,
+  7,
+  11,
+  4,
+  9,
+  10,
+  6,
+  10,
+  7,
+  6,
+  5,
+  4,
+  7,
+  8,
+  5,
+  21
  ],
  "cos": [
   {

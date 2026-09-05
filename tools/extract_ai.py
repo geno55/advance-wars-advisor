@@ -108,7 +108,14 @@ def extract(rom: bytes) -> dict:
     missions = []
     for m in range(0xA4):
         r = rom[0x287478 + 60 * m: 0x287478 + 60 * m + 60]
-        missions.append({"vs": r[0x22] == 0xFF, "b22": r[0x22], "row": r[0x23]})
+        # +0x20: the mission's par in days for the debrief's Speed score
+        # (0x080248E8, DERIVATION 58)
+        missions.append({"vs": r[0x22] == 0xFF, "b22": r[0x22], "row": r[0x23],
+                         "par": int.from_bytes(r[0x20:0x22], "little")})
+    # the campaign par table at 0x082EA3D0, one byte per map from 0x82 on,
+    # read instead of the record's par when settings +1 is 1 AND the byte at
+    # 0x0201228D is set -- a mode not met yet (DERIVATION 58)
+    campaign_par = list(rom[0x2EA3D0:0x2EA3F0])
     cos = []
     for co in range(12):
         base = 0x08284A0C + 0x124 * co
@@ -157,6 +164,7 @@ def extract(rom: bytes) -> dict:
         "profile_index": co_rows,
         "profiles": profiles,
         "missions": missions,
+        "campaign_par": campaign_par,
         "cos": cos,
     }
 

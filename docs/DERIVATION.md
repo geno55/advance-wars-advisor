@@ -3807,3 +3807,64 @@ planner wins mission one from the Day 1 board by HQ capture on day 27
 material for 40000 of its own. The port that drew at the day cap
 (DERIVATION 54) sent its damaged units out to die and chased the wrong
 targets; the fixed one loses the same way the game did.
+
+## 58. The rank: Speed, Power, Technique, and what S costs on mission one
+
+Tuning for a rank needs the rank as the game computes it, so the
+debrief's scoring was read. Nell's explanation in the ROM text
+(`0x08307912`) gives the three words; the code was found by replaying
+the mission's winning turn from the turn-20 checkpoint with a read
+callback on the day counter (`0x03004420`): in the result phase (15)
+five PCs read it, all in one routine cluster at `0x08024900`, and the
+army records' bytes read after the debrief confirm every formula.
+
+**The aggregator** (`0x08024AE0`), for each side with a controller that
+was not eliminated (`0x08024CD0`: `+0x1B` set, `+0x14` zero): Speed
+into the army record's `+0x2F`, Power `+0x30`, Technique `+0x31`, the
+total `+0x32`, the letter `+0x2E`.
+
+**Speed** (`0x080248E8`). The par in days is the mission record's
+`+0x20` (the 60-byte records at `0x08287478`: 8 on map 130, mission
+one; 11 on the VS map 38), replaced by a byte from `0x082EA3D0` (maps
+`0x82` on: 5, 10, 5, 5, 6, 5, 9, 4 ...) when settings `+1` is 1 AND the
+byte at `0x0201228D` is set -- it was 0 on our run, so the record's 8
+applied. With `days` the day counter at the win: 100 up to par; past
+it `100 - (days - par) * 100 / (3 * par)` in integer arithmetic; 0
+from four times par. Day 26 on par 8: 100 - 1800/24 = 25.
+
+**Power** (`0x08024970`). The most enemy units destroyed in one day
+(`+0x18`, the running maximum of `+0x16`, which `0x08024B88` bumps per
+kill) against every unit the enemy sides fielded (the sum of `+0x37`
+to `+0x4E`, per type, over sides with a controller and another team):
+`min(100, 1000 * best / fielded)`. Two kills in a day against Olaf's
+seventeen: 117, so 100. A tenth of the enemy in one day is a full
+score. Map `0x81` and the campaign-table mode above score 100 outright.
+
+**Technique** (`0x08024A48`). Units fielded (`+0x37..`) and units lost
+(`+0x50..+0x67`), our own: `floor + 100 - (100 * lost / fielded)`,
+the ratio in integer percent, capped at 100, floored at 0; the floor is
+20 with settings `+1` at 1 (the campaign), 10 otherwise. Twelve
+fielded, eight lost: 20 + 100 - 66 = 54. A fifth lost or less is 100.
+
+**Total and letter.** `5 * Speed + 2 * Power + 3 * Technique`, capped
+at 999 (`0x080248AC`); 487 for us. `0x080397B8` maps it: up to 249,
+449, 649, 849, 949 are codes 0 to 4, above 949 code 5 -- S -- except
+with settings `+1` at 0, where the ceiling is code 4. Our 487 is code
+2, a C, which is what the debrief showed.
+
+**What the ranks cost on mission one** (`engine/rank.py`, pinned in
+`tests/test_rank.py`). With Power and Technique at 100, S needs Speed
+90 or better: a win by day 10. A needs Speed 70: day 15. Power's 100
+is one day with two kills, which any real fight gives. Technique's 100
+allows two of the twelve starting units lost -- three drops it to 95
+and S to day 9; every unit built raises the denominator. The planner's
+day-27 win against the port, had it been the game, would have scored
+Speed 21 at best: the whole gap to a rank is tempo.
+
+**Rig notes.** The day-counter readers were found in one Mesen run of
+the winning turn and its ending (`rankprobe.py`, a read callback
+logging r15 and r14 into a first-seen table); the counters and scores
+were read back in a second run through every page of the debrief. The
+scores are written on the first page of the result phase and the map
+id advances to the next mission during the ending, so a probe that
+reads the par must read it before the debrief, not after.

@@ -588,6 +588,12 @@ evaluation carries the same term for both sides. Six tests.
 engine/damage.py          weapon selection, formula variants, damage envelopes
 engine/state.py           Board: terrain, defence, movement cost, units, cargo
 engine/pathing.py         one Dijkstra: reachable, destinations, path
+engine/rank.py            the debrief's rank as the ROM computes it: Speed by
+                          days against par, Power by the best day's kills,
+                          Technique by units lost; totals, letters, and the
+                          last day a win still earns S or A (DERIVATION 58)
+tests/test_rank.py        7 tests: the game's own debrief numbers for the m01
+                          win, the curves, what S and A cost on mission one
 engine/co.py              CO modifiers, and what it refuses to model
 engine/threat.py          what the enemy can do to you next turn
 engine/actions.py         every legal action a unit has this turn  <- the advisor
