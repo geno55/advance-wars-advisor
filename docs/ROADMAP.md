@@ -336,12 +336,14 @@ Three decisions, made once so they do not get re-argued:
    brought the draws and moved the AI. And a CPU turn with no command
    left the human's controller byte at 2, so the game's AI played our
    next turn as well -- the driver restores the byte the moment the CPU
-   side is up. What remains, each pinned to a turn in
-   `tests/test_fidelity.py`: the hunt's grid choice (an AntiAir went where
-   the flat grid says while two units the same day went by their own
-   grid), a Tank the game marched toward a capturing Mech where the port
-   values a MdTank, a counter four points lighter than the model's, and a
-   Tank the game left standing.
+   side is up. Three of the four gaps that remained were one misreading
+   of the hunt list (DERIVATION 56): the game lists an enemy only when the
+   base damage against it clears 41 and then takes the NEAREST, where the
+   port had taken the one it hurt least -- so Olaf's Tank chased our
+   MdTank instead of the Mech capturing his city. Twenty-two of the
+   twenty-four turns agree now, all 47 traces reproduce record for record
+   and draw for draw, and the one port-side gap left is the forward
+   model's counter on day 15, four points heavier than the game's.
 
 7. **Campaign facts, on demand.** A mission that fails acceptance, or ends
    in a way the standard win conditions do not explain, triggers reading its

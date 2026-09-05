@@ -63,11 +63,13 @@ OLAF = ["m01-olaf-power", "m01-olaf-snow"]
 # Real turns of the m01 acceptance run, re-traced from the loop's
 # checkpoints by `tools/fidelity.py trace` (DERIVATION 55): day 4 is Olaf's
 # 1-HP Tank staying on its city (a stay decides the unit) and two battles,
-# 128 scene draws each, 283 draws in all; day 15 is two
-# fires in clear weather, 264 draws, and a counter the forward model
-# prices four points heavier than the game did -- its board is excepted
-# for exactly that, the records and draws agree.
-ACCEPT = ["m01-day4", "m01-day15"]
+# 128 scene draws each, 283 draws in all; day 15 is two fires in clear
+# weather, 264 draws, and a counter the forward model prices four points
+# heavier than the game did -- its board is excepted for exactly that, the
+# records and draws agree. Day 1 and day 16 are the hunt list read right
+# (DERIVATION 56): the nearest target worth hunting, an AntiAir off along
+# the north edge and a Tank standing where its target is adjacent.
+ACCEPT = ["m01-day1", "m01-day4", "m01-day15", "m01-day16"]
 BOARD_EXCEPT = {"m01-day15"}
 # The battle animation byte, settings +9, written to 1 on the VS state: the
 # first battle's scene seeds 128 draws and the AI's later randoms shift, so

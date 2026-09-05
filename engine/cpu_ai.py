@@ -923,14 +923,24 @@ class Turn:
         self.move_toward(unit, goal)
 
     def hunt_list(self, unit, g: Dict[Coord, int]) -> List[Tuple[Coord, int]]:
-        """0x08060A90: every enemy this unit can damage, valued by the
-        forecast base against it and its fuel band."""
+        """0x08060A90: every enemy WORTH hunting, scored by distance. An
+        enemy is listed when the attacker's base damage against it (the
+        CO's per-type and all-units multipliers applied, the larger weapon)
+        times the fuel band's multiplier exceeds 4999 -- the product's low
+        sixteen bits, the game compares it shifted -- and the score written
+        beside it is the move grid's cost at its tile, so 0x08060A34 picks
+        the NEAREST worthwhile target. The port used to score by the damage
+        value and so chased whatever it hurt least: Olaf's Tank went for
+        our MdTank (1500) for three days where the game's marched to the
+        Mech capturing his city (m01b days 8-10, DERIVATION 56)."""
         mult = tables()["hunt_multiplier"]
-        bands = tables()["fuel_bands"]
-        fuel = unit.fuel
-        band = 0
-        while band < len(bands) and fuel > bands[band]:
-            band += 1
+        # 0x08060ED8 is handed bit 7 of the record's byte +6 -- a 0 or a 1
+        # -- and walks the halfword bounds 500, 1000, 2000, 4000, 65535 for
+        # the first the argument does not exceed: the first, so it returns
+        # index 1 and the multiplier is 120 every time. The port used to
+        # band the unit's fuel against those bounds (index 0, 100), and a
+        # Recon's 45 against an APC fell under the threshold (DERIVATION 56).
+        band = 1
         out = []
         s = stats(unit.type)
         for k in self.enemy_sides():
@@ -953,7 +963,9 @@ class Turn:
                 q = div(div(sec * atk_pct, 100) * atk_uni, 100) if sec else 0
                 base = p if p >= q else q
                 val = base * mult[min(band, len(mult) - 1)]
-                out.append(((e.x, e.y), val, e))
+                if (val & 0xFFFF) <= 4999:
+                    continue
+                out.append(((e.x, e.y), g[(e.x, e.y)], e))
         return out
 
     def mode_hunt(self, unit):                                   # 0x08065B30
@@ -965,19 +977,16 @@ class Turn:
         for tile, val, e in lst:
             if val <= best:
                 goal, best = tile, val
-        self.log.append(f"  hunt: {len(lst)} target(s) {[(t, v, e.type + '#' + str(e.slot)) for t, v, e in lst][:6]} -> goal {goal} val {best}")
+        self.log.append(f"  hunt: {len(lst)} target(s) {[(t, d, e.type + '#' + str(e.slot)) for t, d, e in lst][:6]} -> goal {goal} at {best}")
         if goal is None:
             self.fallback(unit)
             return
         d = g.get(goal)
         if d is not None and 0 <= d <= RANGE_MARK:
             # the goal is priced by the whole-map grid: the unit's own
-            # grid from the goal. NOT the whole story: on day 1 of mission
-            # one Olaf's AntiAir #67 went to (11,3), the flat grid's pick,
-            # where this branch says (15,5) -- and his AntiAir #68 and
-            # Artillery #70 the same day went where THIS grid says. What
-            # 0x08065B30 tests to pick the grid is still to be read
-            # (m01-day1, DERIVATION 55).
+            # grid from the goal. (DERIVATION 55 suspected this branch for
+            # Olaf's AntiAir on day 1 of mission one; it was the goal that
+            # was wrong, DERIVATION 56.)
             self.move_toward(unit, goal)
         else:
             # a goal the grid never priced (the port used to read that as

@@ -24,13 +24,10 @@ ACC = ROOT / "tests" / "fixtures" / "acceptance"
 # one moves it OUT of here (the test says which); a change that adds one is
 # a regression the test names by turn.
 KNOWN_GAPS = {
-    ("m01a", 1): "AntiAir #67's hunt goal: the game drove it to (11,3), the port to (15,5)",
-    ("m01a", 2): "AntiAir #67's and Artillery #70's goals",
-    ("m01b", 4): "Tank #73's hunt goal once repaired (day 8: game (11,2), port (15,6))",
-    ("m01b", 5): "Tank #73's hunt goal (day 9)",
-    ("m01b", 6): "Tank #73's hunt goal (day 10)",
-    ("m01b", 11): "MdTank #66 took 20 from the counter where the model says 24",
-    ("m01b", 12): "Tank #73 stood at (0,9) where the port moves it to (5,10)",
+    # the hunt goals of days 1, 2, 8-10 and 16 were one misreading of the
+    # hunt list, cleared by DERIVATION 56
+    ("m01b", 11): "MdTank #66 took 20 from the counter where the model says 24 "
+                  "(the forward model: m01-day15 agrees record for record)",
     ("m01b", 16): "not the port: Olaf issued no command on day 20 and the loop let the "
                   "AI play our turn 17 as well (mesen_drive.lua cpu_turn, fixed)",
 }

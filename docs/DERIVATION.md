@@ -3695,3 +3695,62 @@ mesen_drive's cpu_turn) -- how the battle scene's invoker was found
 without a debugger. The `ck-*` state file the trace writes under
 `tests/fixtures/sim_diff/states/` is removed after the run; the
 fixture's before-dump is the record.
+
+## 56. The hunt list: worth first, then nearest
+
+Three of DERIVATION 55's four open items -- Olaf's AntiAir #67 driven
+off along the north edge on day 1, his Tank #73 marching three days
+toward the Mech capturing his city, the Tank left standing at (0,9) on
+day 16 -- were one misreading of `0x08060A90`, the list `mode_hunt`
+(`0x08065B30`) picks a goal from. The port had it as "every enemy this
+unit can damage, valued by the base damage and the fuel band", and took
+the LOWEST value: it chased whatever it hurt least. Read again, with
+the m01 traces to check against:
+
+**The routine.** For each side in the mover's enemy mask, each slot: a
+type, a move-grid value above zero at its tile (the mover's whole-map
+fill with range rings, `0x03003600` row pointers), a dived Sub skipped
+(`0x08023DD0`), the target seen (`0x0801E7D8(side, x, y)`, unread
+here: the fog VS trace passes without it). The value: primary base
+damage through the CO's per-type attack byte (`+5` of the type record
+in the CO block at `0x08284A0C`, the CO's own block only with settings
+`+8` set) and the all-units byte (`+0x2F`), the secondary likewise, the
+larger (a tie keeps the primary). Then `value x multiplier`, shifted
+left sixteen and compared with `0x13870000`: the enemy is listed only
+when the product's low sixteen bits exceed 4999. What is written beside
+its x and y is the GRID VALUE at its tile -- so `0x08060A34` (lowest
+score, later entries winning ties) picks the nearest target worth
+hunting, and nothing else is a candidate. The sentinel `mode_hunt` sets
+is 9999; when it comes back unchanged the unit falls to `0x0806606C`.
+
+**The multiplier is 120, always.** The band routine `0x08060ED8` is
+handed bit 7 of the record's byte `+6` -- a 0 or a 1 -- and walks the
+halfword bounds at `0x0811A906` (500, 1000, 2000, 4000, 65535) for the
+first the argument does not exceed: the first, so it answers index 1
+and the five-byte table at `0x0811A900` (100, 120, 140, 160, 180)
+gives 120. The port had banded the unit's FUEL against those bounds
+(index 0, 100). The threshold is therefore base damage over 41: a
+Recon lists an APC (45) and not a Tank (6); an Artillery lists a
+MdTank (45) and an AntiAir does not (10 or so), and what an AntiAir
+lists on mission one is foot soldiers -- which is why #67 turned west
+toward our Mech #3 rather than south toward our MdTank.
+
+**How it passed 41 traces wrongly.** On the parked VS boards the enemy
+the mover hurt least and the enemy nearest were the same unit often
+enough, and where they were not, `move_toward` happened to step onto
+the same tile. Two traces caught the intermediate reading (the
+threshold with the fuel band): `build-b7-enemy-tanks`, whose Recon has
+only Tanks and an APC in reach and must list the APC (45 x 120 = 5400),
+and `m01-day1`, whose Artillery #71 must list our MdTank.
+
+**Result.** All 47 traces reproduce record for record and draw for draw
+(`m01-day1` and `m01-day16` join the sweep with their boards). The
+fidelity check: 22 of Olaf's 24 real turns agree; the two left are the
+day-20 loop artefact and the day-15 counter, which is the forward
+model's. DERIVATION 55's suspicion of the hunt's grid choice
+(`0x08065B30`'s near-or-far test) is withdrawn: the goal was wrong, the
+grid was not.
+
+**Not read.** `0x0801E7D8` (whether the mover's side sees the target;
+only fog can make it matter); what record byte `+6` bit 7 is, since
+either value gives the same band.
