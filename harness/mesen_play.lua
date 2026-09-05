@@ -45,27 +45,32 @@ local function load_table(path)
   return val
 end
 
--- Ask Python for the turn's steps from a fresh dump. Returns the table
--- (steps, over, note) or nil and why.
+-- Ask the planner service (campaign_run.py serve, started beside Mesen by
+-- campaign_run.py run) for the turn's steps from a fresh dump. No process
+-- is ever spawned from inside Mesen: a GUI process's os.execute opens a
+-- console window per call. The request is a file; the answer is a file.
 function M.ask_plan(cfg, turn, replan)
-  local dump = string.format("%st%02d%s.json", cfg.run_dir, turn, replan > 0 and ("r" .. replan) or "")
-  local steps = string.format("%st%02d%s.steps.lua", cfg.run_dir, turn, replan > 0 and ("r" .. replan) or "")
+  local suffix = replan > 0 and ("r" .. replan) or ""
+  local dump = string.format("%st%02d%s.json", cfg.run_dir, turn, suffix)
+  local steps = string.format("%st%02d%s.steps.lua", cfg.run_dir, turn, suffix)
   M.dump(dump, { note = string.format("turn %d replan %d, campaign_run", turn, replan) })
-  -- cmd.exe strips the leading quote of a command that starts with one,
-  -- so the interpreter and script paths go unquoted (no spaces in them);
-  -- the plan's own output lands beside the steps file
-  local cmd = string.format('%s plan --dump "%s" --steps "%s" --player %d --turn %d --replan %d %s > "%s.log" 2>&1',
-    cfg.python_cmd, dump, steps, cfg.player, turn, replan, cfg.plan_args or "", steps)
-  M.L("  $ " .. cmd)
-  -- Mesen has no console, so a plain os.execute pops a window per call;
-  -- the command goes into a .cmd file that wscript runs hidden and waits on
-  local batch = steps .. ".cmd"
-  local bf = assert(io.open(batch, "w")); bf:write("@echo off\r\n" .. cmd .. "\r\n"); bf:close()
-  local ok, rc = pcall(os.execute, string.format('wscript.exe //B //Nologo "%s" "%s"', cfg.hidden_vbs, batch))
-  if not ok then return nil, "os.execute failed: " .. tostring(rc) end
-  local t, err = load_table(steps)
-  if not t then return nil, "no steps file: " .. tostring(err) end
-  return t
+  local rq = assert(io.open(steps .. ".req", "w"))
+  rq:write(string.format("%d %d %s\n%s\n", turn, replan, dump, steps)); rq:close()
+  M.L(string.format("  plan requested: turn %d replan %d", turn, replan))
+  for _ = 1, (cfg.plan_wait or 36000) / 30 do      -- up to ten minutes of frames
+    M.wait(30)
+    local fh = io.open(steps, "r")
+    if fh then
+      fh:close()
+      local t, err = load_table(steps)
+      if t then return t end
+      M.wait(30)                                     -- half-written: read again
+      t, err = load_table(steps)
+      if t then return t end
+      return nil, "bad steps file: " .. tostring(err)
+    end
+  end
+  return nil, "the planner service did not answer in time"
 end
 
 -- Tap through whatever is on screen (a turn card, a dialogue page) until
@@ -104,6 +109,28 @@ function M.match_status(cfg)
   if mine == 0 then return "loss", "no unit of ours is left" end
   if theirs == 0 then return "win", "the enemy has no unit left" end
   return nil
+end
+
+-- A unit-free Plain or Road nearest the middle, for opening the map menu:
+-- chosen fresh each time, since the tile picked at the start fills up.
+function M.find_empty(cfg)
+  local w, h = M.dims()
+  local occ = {}
+  for slot = 0, 4 * M.ARMY_SLOTS - 1 do
+    local u = M.unit(slot)
+    if u and not u.loaded then occ[u.y * 256 + u.x] = true end
+  end
+  local best, bx, by = nil, cfg.empty.x, cfg.empty.y
+  for y = 0, h - 1 do
+    for x = 0, w - 1 do
+      local t = M.r8(M.MAP + y * w + x) % 32
+      if (t == 1 or t == 5) and not occ[y * 256 + x] then
+        local d = math.abs(x - math.floor(w / 2)) + math.abs(y - math.floor(h / 2))
+        if best == nil or d < best then best, bx, by = d, x, y end
+      end
+    end
+  end
+  return { x = bx, y = by }
 end
 
 function M.play_game(cfg)
@@ -167,7 +194,9 @@ function M.play_game(cfg)
     local w = M.do_step({ kind = "write", tag = string.format("t%02d-ctrl", turn),
                           writes = { { kind = "army", player = cfg.cpu, control = 2 },
                                      { kind = "army", player = cfg.player, control = 2 } } }, 1)
-    local c = M.cpu_turn({ kind = "cpu_turn", tag = string.format("t%02d-cpu", turn), empty = cfg.empty,
+    local empty = M.find_empty(cfg)
+    M.settle_tile = empty
+    local c = M.cpu_turn({ kind = "cpu_turn", tag = string.format("t%02d-cpu", turn), empty = empty,
                            limit = cfg.cpu_limit or 3000, cpu = cfg.cpu, checks = {},
                            watch = function() return M.match_status(cfg) end })
     if c.result then

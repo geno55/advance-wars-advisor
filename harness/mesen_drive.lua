@@ -486,8 +486,21 @@ local function select_and_move(s)
   return true
 end
 
-local function pick_menu(index)
-  for _ = 1, index do M.tap("down", 8, 26) end
+-- With `count` (the predicted menu's length) the item is reached from
+-- the END, up from the first item wrapping to the last: the unit menu is
+-- a subset of a fixed order, and an item the prediction missed at the
+-- front -- the Fire an unmoved indirect unit is offered with no target in
+-- range, seen on the Field Training state (campaign_run, 2026-09-04) --
+-- then shifts nothing. The shop keeps the down-count.
+local function pick_menu(index, count)
+  if count then
+    -- count - index ups, no modulo: the last predicted item is ONE up
+    -- away (the wrap), so an extra item at the front shifts nothing --
+    -- a lone predicted "Wait" behind an unpredicted Fire included
+    for _ = 1, count - index do M.tap("up", 8, 26) end
+  else
+    for _ = 1, index do M.tap("down", 8, 26) end
+  end
   M.tap("a", 8, 70)
 end
 
@@ -588,7 +601,7 @@ function M.do_step(s, attempt)
       M.wait(120)
     else
       M.wait(30); M.shot(s.tag .. "-menu")
-      pick_menu(s.menu_index)
+      pick_menu(s.menu_index, s.menu and #s.menu or nil)
       if k == "attack" then
         local _, note = M.select_target(s.target, attempt)
         r.target_note = note

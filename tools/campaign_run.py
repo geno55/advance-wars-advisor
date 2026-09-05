@@ -16,7 +16,11 @@ our HQ theirs or no unit of ours the loss, both read off the board the
 game left -- then plans the turn (engine/advisor.plan with the CPU port as
 the modelled reply, or the planner standing in where the port cannot
 build a context) and compiles the steps with tools/sim_diff.compile_action.
-The steps go back as a Lua table file because Mesen's Lua reads no JSON.
+The steps go back as a Lua table file because Mesen's Lua reads no JSON,
+and they travel by file both ways: `run` starts `serve` beside the
+emulator in its own console, the loop writes <steps>.req after each dump
+and waits for <steps>, so nothing is ever spawned from inside Mesen (a
+GUI process's os.execute opens a console window per call).
 
 The plan was scored in the worst-case world, so after every attack, build
 or power -- and after any step the driver could not verify -- the rest of
@@ -106,39 +110,88 @@ def compile_plan(plan, player: int, tag: str, warnings: list) -> list:
     return steps
 
 
-def cmd_plan(a) -> int:
-    dump = pathlib.Path(a.dump)
+def plan_once(dump, steps, player: int, turn: int, replan: int, start_path,
+              days: int, branches: int, reply: str, reply_on_replan: bool) -> dict:
+    """Judge the dump, plan the turn, compile the steps, write `steps` (a
+    Lua table file, atomically) and its .plan.txt; return what was written."""
+    dump = pathlib.Path(dump)
     board = load(dump)
-    start = load(a.start) if a.start and pathlib.Path(a.start).exists() else board
+    start = load(start_path) if start_path and pathlib.Path(start_path).exists() else board
     warnings = list(board.warnings)
     out = {"steps": [], "over": None, "note": ""}
-    over, note = judge(board, a.player, start, a.days)
-    if over is None and board.active_player != a.player:
+    over, note = judge(board, player, start, days)
+    if over is None and board.active_player != player:
         over, note = "stuck", f"the dump says P{board.active_player} is to move, not us"
-    text = [f"turn {a.turn} replan {a.replan}: day {board.day}, P{board.active_player} to move"]
+    text = [f"turn {turn} replan {replan}: day {board.day}, P{board.active_player} to move"]
     if over:
         out["over"], out["note"] = over, note
         text.append(f"over: {over} -- {note}")
     else:
-        model, ctx, why = reply_context(dump, board, a.player)
-        if a.reply == "none" or (a.replan > 0 and not a.reply_on_replan):
+        model, ctx, why = reply_context(dump, board, player)
+        if reply == "none" or (replan > 0 and not reply_on_replan):
             model, ctx, why = None, None, "a mid-turn re-plan is greedy only (fast)"
-        elif a.reply == "planner":
+        elif reply == "planner":
             model, ctx = "planner", None
         text.append(f"reply model: {model or 'none'} -- {why}")
         t0 = time.time()
-        plan = advisor.plan(board, a.player, reply=model, cpu_ctx=ctx,
-                            branches=a.branches, warnings=warnings)
-        steps = compile_plan(plan, a.player, f"t{a.turn:02d}r{a.replan}", warnings)
-        out["steps"] = steps
-        out["note"] = "; ".join(s["describe"] for s in steps) or "nothing to do"
+        plan = advisor.plan(board, player, reply=model, cpu_ctx=ctx,
+                            branches=branches, warnings=warnings)
+        compiled = compile_plan(plan, player, f"t{turn:02d}r{replan}", warnings)
+        out["steps"] = compiled
+        out["note"] = "; ".join(st["describe"] for st in compiled) or "nothing to do"
         text.append(advisor.render(plan, terms=False))
-        text.append(f"{len(steps)} step(s) compiled in {time.time() - t0:.1f}s")
+        text.append(f"{len(compiled)} step(s) compiled in {time.time() - t0:.1f}s")
     for w in warnings:
         text.append(f"  !! {w}")
-    steps_path = pathlib.Path(a.steps)
-    steps_path.write_text("return " + sim_diff.lua(out) + "\n", encoding="utf-8")
+    steps_path = pathlib.Path(steps)
+    tmp = steps_path.with_suffix(".tmp")
+    tmp.write_text("return " + sim_diff.lua(out) + "\n", encoding="utf-8")
     steps_path.with_suffix("").with_suffix(".plan.txt").write_text("\n".join(text) + "\n", encoding="utf-8")
+    tmp.replace(steps_path)                     # the loop reads it whole or not at all
+    return out
+
+
+def cmd_plan(a) -> int:
+    plan_once(a.dump, a.steps, a.player, a.turn, a.replan, a.start, a.days,
+              a.branches, a.reply, a.reply_on_replan)
+    return 0
+
+
+def cmd_serve(a) -> int:
+    """The planner service: answer every <steps>.req the Lua loop writes in
+    `--dir` (a line "turn replan dump", then the steps path) until the run's
+    result.json or a stop file appears. Started by `run` beside Mesen, in
+    the same console, so nothing inside the emulator ever spawns a process."""
+    run_dir = pathlib.Path(a.dir)
+    log = open(run_dir / "serve.log", "a", encoding="utf-8")
+    log.write(f"serve: P{a.player} in {run_dir}\n"); log.flush()
+    while not (run_dir / "result.json").exists() and not (run_dir / "stop").exists():
+        reqs = sorted(run_dir.glob("*.req"), key=lambda q: q.stat().st_mtime)
+        if not reqs:
+            time.sleep(0.5)
+            continue
+        req = reqs[0]
+        steps = None
+        try:
+            head, steps = req.read_text(encoding="utf-8").splitlines()[:2]
+            turn, replan, dump = head.split(" ", 2)
+            t0 = time.time()
+            out = plan_once(dump, steps, a.player, int(turn), int(replan), a.start,
+                            a.days, a.branches, a.reply, a.reply_on_replan)
+            log.write(f"{req.name}: {len(out['steps'])} step(s), over={out['over']}, "
+                      f"{time.time() - t0:.1f}s\n")
+        except Exception as e:                  # noqa: BLE001 -- the loop must go on
+            import traceback
+            log.write(f"{req.name}: FAILED {e}\n{traceback.format_exc()}\n")
+            if steps:
+                pathlib.Path(steps).write_text(
+                    "return " + sim_diff.lua({"steps": [], "over": "harness",
+                                              "note": f"plan failed: {e}"}) + "\n",
+                    encoding="utf-8")
+        finally:
+            log.flush()
+            req.unlink(missing_ok=True)
+    log.write("serve: done\n"); log.close()
     return 0
 
 
@@ -203,7 +256,7 @@ end
 
 def cmd_run(a) -> int:
     if a.mss:
-        mss = pathlib.Path(a.mss)
+        mss = pathlib.Path(a.mss).resolve()     # Mesen's Lua opens it by path
         name = mss.stem
         dims = tuple(int(v) for v in a.dims.split("x")) if a.dims else None
     else:
@@ -220,25 +273,32 @@ def cmd_run(a) -> int:
     cpu = next((p for p in sim.players_in_order(board) if p != player), 3 - player)
     print(f"{name}: planner P{player} against the game's P{cpu}, day {board.day}, "
           f"{board.width}x{board.height}, empty tile {empty}, out {run_dir}")
-    plan_args = (f'--start "{start.as_posix()}" --days {a.days} --branches {a.branches} '
-                 f'--reply {a.reply}' + (" --reply-on-replan" if a.reply_on_replan else ""))
     hqs = [{"x": x, "y": y, "owner": board.owner[y][x]}
            for y in range(board.height) for x in range(board.width)
            if board.terrain[y][x] == TERRAIN_HQ]
     cfg = {"name": name, "mss": mss.as_posix(), "player": player, "cpu": cpu, "hqs": hqs,
-           "hidden_vbs": (ROOT / "harness" / "run_hidden.vbs").as_posix(),
            "run_dir": run_dir.as_posix() + "/", "empty": {"x": empty[0], "y": empty[1]},
            "w": dims[0] if dims else None, "h": dims[1] if dims else None,
            "max_turns": a.max_turns, "cpu_limit": a.cpu_limit,
-           "replan_after": bool(a.replan_after),
-           # unquoted on purpose: cmd.exe drops a command's leading quote
-           "python_cmd": f'{pathlib.Path(sys.executable).as_posix()} '
-                         f'{(ROOT / "tools" / "campaign_run.py").as_posix()}',
-           "plan_args": plan_args}
+           "replan_after": bool(a.replan_after), "plan_wait": 36000}
     script = run_dir / "play.lua"
     script.write_text(make_play_script(run_dir, cfg), encoding="utf-8")
+    (run_dir / "stop").unlink(missing_ok=True)
+    serve_cmd = [sys.executable, str(ROOT / "tools" / "campaign_run.py"), "serve",
+                 "--dir", str(run_dir), "--player", str(player), "--start", start.as_posix(),
+                 "--days", str(a.days), "--branches", str(a.branches), "--reply", a.reply]
+    if a.reply_on_replan:
+        serve_cmd.append("--reply-on-replan")
+    service = subprocess.Popen(serve_cmd)        # this console, no window of its own
     t0 = time.time()
-    rc, took = sim_diff.run_mesen(script, a.timeout)
+    try:
+        rc, took = sim_diff.run_mesen(script, a.timeout)
+    finally:
+        (run_dir / "stop").write_text("stop", encoding="utf-8")
+        try:
+            service.wait(timeout=30)
+        except subprocess.TimeoutExpired:
+            service.kill()
     err = run_dir / "error.log"
     if err.exists():
         print("!! " + err.read_text(encoding="utf-8"))
@@ -297,6 +357,15 @@ def main() -> int:
     q.add_argument("--reply-on-replan", action="store_true",
                    help="model the reply on mid-turn re-plans too (slow)")
     q.set_defaults(fn=cmd_plan)
+    v = sub.add_parser("serve", help="(started by run) answer the loop's plan requests")
+    v.add_argument("--dir", required=True)
+    v.add_argument("--player", type=int, required=True)
+    v.add_argument("--start")
+    v.add_argument("--days", type=int, default=30)
+    v.add_argument("--branches", type=int, default=1)
+    v.add_argument("--reply", choices=("cpu", "planner", "none"), default="cpu")
+    v.add_argument("--reply-on-replan", action="store_true")
+    v.set_defaults(fn=cmd_serve)
     j = sub.add_parser("judge", help="read a dump: won, lost, or still playing")
     j.add_argument("--dump", required=True)
     j.add_argument("--player", type=int, required=True)
