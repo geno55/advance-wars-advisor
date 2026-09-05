@@ -76,11 +76,15 @@ end
 -- Tap through whatever is on screen (a turn card, a dialogue page) until
 -- the map cursor answers again.
 function M.settle_screen(tag)
-  for i = 1, 12 do
-    if M.goto_tile(M.settle_tile.x, M.settle_tile.y) then return true end
-    M.L("  settle: cursor not answering, tap " .. i)
-    M.tap("a", 6, 40)
-    if i % 3 == 0 then M.tap("b", 6, 40) end
+  -- a campaign mission's scripted dialogue (mission one's CO power lesson
+  -- ran past twelve presses) is pages of A; B does nothing for it
+  for i = 1, 80 do
+    if M.goto_tile(M.settle_tile.x, M.settle_tile.y) then
+      if i > 1 then M.L(string.format("  settle: cursor answers after %d tap(s)", i - 1)) end
+      return true
+    end
+    if i % 10 == 1 then M.L("  settle: cursor not answering, tap " .. i); M.shot(string.format("%s-settle-%d", tag, i)) end
+    M.tap("a", 6, 30)
   end
   M.shot(tag .. "-stuck")
   return false
@@ -176,6 +180,8 @@ function M.play_game(cfg)
     local i = 1
     while i <= #queue do
       local s = queue[i]
+      if s.kind == "power" or s.kind == "end_turn" then s.empty = M.find_empty(cfg) end
+      M.settle_screen(s.tag)          -- a dialogue the last step triggered
       local r = M.do_step(s, 1)
       rec.steps[#rec.steps + 1] = { tag = s.tag, kind = s.kind, ok = r.ok, why = r.why }
       M.L(string.format("  step %s %s: %s%s", s.tag, s.kind, r.ok and "ok" or "FAILED", r.why and (" -- " .. r.why) or ""))
