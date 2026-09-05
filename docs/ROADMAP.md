@@ -216,15 +216,23 @@ Three decisions, made once so they do not get re-argued:
    never appeared in a trace and had no mapping to an engine action
    (DERIVATION 51; the harness now files such a disagreement as an abort
    with its dump). The aborts, classified by running the port on each
-   dump, are the trace queue in order of size: the retreat-after-move
+   dump, were the trace queue in order of size: the retreat-after-move
    check `0x0806636C` (27 games), the loaded transport's move
    `0x08060708` / `0x080607C4` (15), and movement modes 3, 5, 2 and 6
    (16 between them, all on the build states where the CPU has a factory
-   to buy from). The two HQ losses are the next shape question for the
-   planner: on `noprop-foot.after` as P2 a Mech walked onto the HQ while
-   the planner's units were away on the far side, and on
-   `prestep-hp-tank` as P1 an enemy Mech took the HQ on day 17 with the
-   planner reduced to an Infantry and a Recon. The command is the same
+   to buy from). With the retreat check ported (DERIVATION 52) those 27
+   games were rerun: 21 won, 1 lost by HQ, 3 drawn at the day cap, 1 now
+   aborting on the loaded transport -- the sweep stands at 58 won (43
+   as P1, 15 as P2), 3 lost, 3 drawn, 32 aborted, and the queue is the
+   loaded transport's move (16 games) and the movement modes (16). The
+   three HQ losses are the next shape question for the planner: on
+   `noprop-foot.after` as P2 a Mech walked onto the HQ while the
+   planner's units were away on the far side; on `prestep-hp-tank` as P1
+   an enemy Mech took the HQ on day 17 with the planner reduced to an
+   Infantry and a Recon; on `prestep-repair-inf` as P1 the HQ fell on
+   day 15. The three draws are long games as P1 at the day cap, worth
+   reading for what the planner does with a won position. The command is
+   the same
    (`tools/sparring.py STATES --both-sides --aborts DIR`) and every game
    is deterministic.
 
