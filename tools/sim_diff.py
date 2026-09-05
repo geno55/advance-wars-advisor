@@ -465,6 +465,15 @@ def compile_step(board, spec, tag, warnings):
                 "checks": []}
         return step, board, None
     act, every = find_action(board, spec, warnings)
+    return compile_action(board, act, every, tag, warnings)
+
+
+def compile_action(board, act, every, tag, warnings):
+    """(driver step, the board sim says it leaves, the Action) for an engine
+    Action on `board`; `every` is the actor's action list (the menu the game
+    will show is predicted from it). tools/campaign_run.py feeds the
+    planner's own steps through here."""
+    k = act.kind
     if k == "build":
         tid = board.terrain[act.tile[1]][act.tile[0]]
         shop = production.shop(tid)

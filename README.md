@@ -707,6 +707,14 @@ tools/threat_report.py    exposure, per-unit safety, and the coverage grid
 tools/action_report.py    every action a unit has this turn, facts attached
 tools/advise.py           a turn's plan: facts quoted, weights labelled heuristic,
                           the opponent's modelled reply under it
+tools/campaign_run.py     the acceptance loop: the planner against the real
+                          CPU on headless Mesen, one session a game, the win
+                          read off the board (ROADMAP step 6)
+harness/mesen_play.lua    the loop's Lua half over mesen_drive.lua: dump,
+                          shell out for the plan, drive, re-plan, CPU turn,
+                          checkpoint
+tests/test_campaign_run.py 4 tests: the judge both ways, the rout, the day
+                          cap, a plan compiled to driver steps
 tools/sparring.py         the planner against the CPU port to the end: the
                           result a weight set is judged by (ROADMAP step 5)
 tests/test_sparring.py    4 tests: the rout, the day cap, the abort's dump, the HQ
@@ -913,6 +921,27 @@ sets across states rather than by repetition. Where the port meets a branch
 it has not read the game stops as an abort and `--aborts DIR` writes the
 board as a dump the step 3 rig can trace from. A win here is a win over the
 port, not yet over the game: see ROADMAP step 5 for the two caveats.
+
+## Acceptance: the planner against the real game
+
+```bash
+python tools/campaign_run.py run --state vs15_p2 --player 2 --out harness/out/play/vs15
+python tools/campaign_run.py run --mss "C:/.../Advance Wars (USA) (Rev 1)_3.mss" --player 1 --out DIR
+```
+
+ROADMAP step 6. The planner plays a whole match on headless Mesen2 against
+the game's own CPU, from a parked savestate to the result, in one emulator
+session: the board is dumped, the turn is planned in Python with the CPU
+port as the modelled reply, each step is driven through the same
+single-action driver the differential corpus certified and verified by
+read-back, the rest of the turn is re-planned after every attack, build,
+power or failed step, the CPU plays, a checkpoint savestate is saved, and
+the win is read off the board the game leaves -- an enemy HQ that is ours
+or an enemy with no units, never assumed. `--out` fills with the dumps,
+the rendered plans, the CPU-turn boards, the checkpoints and
+`result.json`. A campaign mission is the same command with its savestate
+under `--mss`; a result the standard conditions do not explain is the cue
+for ROADMAP step 7.
 
 ## Re-extracting from the ROM
 

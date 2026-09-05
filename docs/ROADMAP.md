@@ -247,6 +247,21 @@ Three decisions, made once so they do not get re-argued:
    to compare two weight sets -- and does not apply here, where the win is
    the claim.
 
+   *Begun: the loop.* `tools/campaign_run.py run` with
+   `harness/mesen_play.lua`: one Mesen session a game; the board dumped,
+   the turn planned in Python (the CPU port as the reply), each step
+   driven through the certified single-action driver and verified by
+   read-back, the turn re-planned after every attack, build, power or
+   failed step, the CPU's turn through the step 3 rig's End Turn and
+   wait, a checkpoint savestate a turn, the win read off the board. Two
+   rig facts it cost: cmd.exe drops the leading quote of a shelled
+   command, and the drop selector's start tile is still a recording, so
+   a drop can land on the wrong side and is re-planned. The first trial
+   on the 15x10 VS state drove 17 of 18 steps first time at about seventy
+   seconds a turn. No campaign savestate is parked yet: mission one needs
+   one (the GUI's slot file, the way every fixture was made), and its
+   first dump also checks DERIVATION 53's profile merge.
+
 7. **Campaign facts, on demand.** A mission that fails acceptance, or ends
    in a way the standard win conditions do not explain, triggers reading its
    objective and events: victory and loss condition, scripted reinforcements
