@@ -447,6 +447,10 @@ function M.cpu_turn(s)
       ph, M.r16(0x030036AC), M.army(1).control, M.army(2).control, M.r32(M.TURN), #M.trace)
     if sig ~= last then M.L("  " .. sig); last = sig end
     if ph == 5 and M.r16(0x030036AC) == before and #M.trace > 0 then back = true; break end
+    if s.watch then                       -- mesen_play: the match decided mid-turn
+      local st, why = s.watch()
+      if st then r.result, r.result_why = st, why; M.L("  watch: " .. st .. " -- " .. tostring(why)); break end
+    end
     if ph ~= 5 then M.tap("a", 4, 6) else M.wait(10) end
   end
   r.commands = M.trace
@@ -459,6 +463,7 @@ function M.cpu_turn(s)
   M.state_log = nil
   M.cpu_side = nil
   for p = 1, 4 do M.w8(M.army_addr(p) + 0x1B, M.control_orig[p]) end
+  if r.result then r.why = "the match was decided: " .. r.result; return r end
   if not back then r.why = string.format("P%d never handed the turn back (%s)", cpu, last); return r end
   M.wait(120); M.tap("a", 8, 60); M.tap("a", 8, 60); M.wait(150)
   M.cancel(3)
@@ -520,7 +525,7 @@ function M.wait_battle(att, def)
     return string.format("%s|%s|%d", a and (a.hp .. "," .. a.ammo) or "x",
       d and (d.hp .. "," .. d.ammo) or "x", M.r32(M.RNG))
   end
-  local acted, last, still = false, sig(), 0
+  local acted, last, still, nudges = false, sig(), 0, 0
   for _ = 1, 90 do
     M.wait(10)
     local a = M.unit(att)
@@ -529,6 +534,15 @@ function M.wait_battle(att, def)
     if now == last then still = still + 1 else still = 0 end
     last = now
     if acted and still >= 9 then return true end
+    -- the Field Training state (campaign_run, 2026-09-04): the confirm on
+    -- the target screen needed a second A, and the battle scene a third,
+    -- before anything changed -- a nudge whenever nothing has moved for
+    -- 120 frames, at most six times
+    if still >= 12 and nudges < 6 then
+      nudges = nudges + 1; still = 0
+      M.L(string.format("  wait_battle: nothing for 120 frames, nudge %d (acted %s)", nudges, tostring(acted)))
+      M.tap("a", 6, 10)
+    end
   end
   return false, "the battle never resolved (acted=" .. tostring(acted) .. ")"
 end
@@ -597,6 +611,15 @@ function M.do_step(s, attempt)
     end
   end
   local ok, why = M.check(s.checks, snap)
+  -- a text box or a confirm the state wants pressed (Field Training):
+  -- before calling it a failure, nudge A and look again, three times
+  local nudges = 0
+  while not ok and nudges < 3 do
+    nudges = nudges + 1
+    M.L(string.format("  check failed (%s); nudge %d", tostring(why), nudges))
+    M.tap("a", 6, 90)
+    ok, why = M.check(s.checks, snap)
+  end
   r.ok, r.why = ok, why
   return r
 end

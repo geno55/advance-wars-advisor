@@ -121,8 +121,8 @@ def cmd_plan(a) -> int:
         text.append(f"over: {over} -- {note}")
     else:
         model, ctx, why = reply_context(dump, board, a.player)
-        if a.reply == "none":
-            model, ctx = None, None
+        if a.reply == "none" or (a.replan > 0 and not a.reply_on_replan):
+            model, ctx, why = None, None, "a mid-turn re-plan is greedy only (fast)"
         elif a.reply == "planner":
             model, ctx = "planner", None
         text.append(f"reply model: {model or 'none'} -- {why}")
@@ -221,11 +221,16 @@ def cmd_run(a) -> int:
     print(f"{name}: planner P{player} against the game's P{cpu}, day {board.day}, "
           f"{board.width}x{board.height}, empty tile {empty}, out {run_dir}")
     plan_args = (f'--start "{start.as_posix()}" --days {a.days} --branches {a.branches} '
-                 f'--reply {a.reply}')
-    cfg = {"name": name, "mss": mss.as_posix(), "player": player, "cpu": cpu,
+                 f'--reply {a.reply}' + (" --reply-on-replan" if a.reply_on_replan else ""))
+    hqs = [{"x": x, "y": y, "owner": board.owner[y][x]}
+           for y in range(board.height) for x in range(board.width)
+           if board.terrain[y][x] == TERRAIN_HQ]
+    cfg = {"name": name, "mss": mss.as_posix(), "player": player, "cpu": cpu, "hqs": hqs,
+           "hidden_vbs": (ROOT / "harness" / "run_hidden.vbs").as_posix(),
            "run_dir": run_dir.as_posix() + "/", "empty": {"x": empty[0], "y": empty[1]},
            "w": dims[0] if dims else None, "h": dims[1] if dims else None,
            "max_turns": a.max_turns, "cpu_limit": a.cpu_limit,
+           "replan_after": bool(a.replan_after),
            # unquoted on purpose: cmd.exe drops a command's leading quote
            "python_cmd": f'{pathlib.Path(sys.executable).as_posix()} '
                          f'{(ROOT / "tools" / "campaign_run.py").as_posix()}',
@@ -273,6 +278,9 @@ def main() -> int:
     r.add_argument("--max-turns", type=int, default=40)
     r.add_argument("--branches", type=int, default=1, help="proposals per plan (default 1: greedy plus one)")
     r.add_argument("--reply", choices=("cpu", "planner", "none"), default="cpu")
+    r.add_argument("--replan-after", action="store_true",
+                   help="also re-plan after every attack, build and power (slow; default: only after a failed step)")
+    r.add_argument("--reply-on-replan", action="store_true", help="model the reply on re-plans too")
     r.add_argument("--cpu-limit", type=int, default=3000, help="polls of ten frames to wait for the CPU")
     r.add_argument("--timeout", type=int, default=7200, help="Mesen's wall-clock cap in seconds")
     r.set_defaults(fn=cmd_run)
@@ -286,6 +294,8 @@ def main() -> int:
     q.add_argument("--days", type=int, default=30)
     q.add_argument("--branches", type=int, default=1)
     q.add_argument("--reply", choices=("cpu", "planner", "none"), default="cpu")
+    q.add_argument("--reply-on-replan", action="store_true",
+                   help="model the reply on mid-turn re-plans too (slow)")
     q.set_defaults(fn=cmd_plan)
     j = sub.add_parser("judge", help="read a dump: won, lost, or still playing")
     j.add_argument("--dump", required=True)

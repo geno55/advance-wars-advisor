@@ -57,7 +57,11 @@ function M.ask_plan(cfg, turn, replan)
   local cmd = string.format('%s plan --dump "%s" --steps "%s" --player %d --turn %d --replan %d %s > "%s.log" 2>&1',
     cfg.python_cmd, dump, steps, cfg.player, turn, replan, cfg.plan_args or "", steps)
   M.L("  $ " .. cmd)
-  local ok, rc = pcall(os.execute, cmd)
+  -- Mesen has no console, so a plain os.execute pops a window per call;
+  -- the command goes into a .cmd file that wscript runs hidden and waits on
+  local batch = steps .. ".cmd"
+  local bf = assert(io.open(batch, "w")); bf:write("@echo off\r\n" .. cmd .. "\r\n"); bf:close()
+  local ok, rc = pcall(os.execute, string.format('wscript.exe //B //Nologo "%s" "%s"', cfg.hidden_vbs, batch))
   if not ok then return nil, "os.execute failed: " .. tostring(rc) end
   local t, err = load_table(steps)
   if not t then return nil, "no steps file: " .. tostring(err) end
@@ -75,6 +79,31 @@ function M.settle_screen(tag)
   end
   M.shot(tag .. "-stuck")
   return false
+end
+
+-- The match decided, read off RAM while the game is still in it: an HQ's
+-- owner byte (the terrain byte is type + 32 * owner) or a side with no
+-- unit record left. The VS result screen resets the map to day 1, so the
+-- board must be read before the game leaves the match.
+function M.match_status(cfg)
+  local w = M.dims()
+  for _, h in ipairs(cfg.hqs or {}) do
+    local owner = math.floor(M.r8(M.MAP + h.y * w + h.x) / 32)
+    if owner ~= h.owner then
+      if owner == cfg.player then return "win", string.format("the HQ at (%d,%d) is ours", h.x, h.y) end
+      if h.owner == cfg.player then return "loss", string.format("our HQ at (%d,%d) is P%d's", h.x, h.y, owner) end
+    end
+  end
+  local mine, theirs = 0, 0
+  for slot = 0, 4 * M.ARMY_SLOTS - 1 do
+    local u = M.unit(slot)
+    if u then
+      if u.player == cfg.player then mine = mine + 1 elseif u.player == cfg.cpu then theirs = theirs + 1 end
+    end
+  end
+  if mine == 0 then return "loss", "no unit of ours is left" end
+  if theirs == 0 then return "win", "the enemy has no unit left" end
+  return nil
 end
 
 function M.play_game(cfg)
@@ -107,7 +136,17 @@ function M.play_game(cfg)
       local r = M.do_step(s, 1)
       rec.steps[#rec.steps + 1] = { tag = s.tag, kind = s.kind, ok = r.ok, why = r.why }
       M.L(string.format("  step %s %s: %s%s", s.tag, s.kind, r.ok and "ok" or "FAILED", r.why and (" -- " .. r.why) or ""))
-      local replan = (not r.ok) or s.kind == "attack" or s.kind == "build" or s.kind == "power"
+      local decided, dwhy = M.match_status(cfg)
+      if decided then
+        result.over, rec.note = decided, dwhy
+        M.L("  decided on our turn: " .. decided .. " -- " .. dwhy); M.shot(s.tag .. "-decided")
+        break
+      end
+      -- re-plan on a failed step (the driver's read-back caught a stale
+      -- step) and, only if cfg.replan_after says so, after an attack,
+      -- build or power whose real outcome the worst-case plan did not
+      -- know; a plan costs minutes on a fogged 12-unit board
+      local replan = (not r.ok) or (cfg.replan_after and (s.kind == "attack" or s.kind == "build" or s.kind == "power"))
       if not r.ok then M.cancel(4); M.settle_screen(s.tag) end
       if replan and i < #queue or (not r.ok) then
         if rec.replans >= M.MAX_REPLANS then
@@ -129,7 +168,14 @@ function M.play_game(cfg)
                           writes = { { kind = "army", player = cfg.cpu, control = 2 },
                                      { kind = "army", player = cfg.player, control = 2 } } }, 1)
     local c = M.cpu_turn({ kind = "cpu_turn", tag = string.format("t%02d-cpu", turn), empty = cfg.empty,
-                           limit = cfg.cpu_limit or 3000, cpu = cfg.cpu, checks = {} })
+                           limit = cfg.cpu_limit or 3000, cpu = cfg.cpu, checks = {},
+                           watch = function() return M.match_status(cfg) end })
+    if c.result then
+      result.over, rec.note = c.result, c.result_why
+      M.L("  decided on the CPU's turn: " .. c.result .. " -- " .. tostring(c.result_why))
+      M.shot(string.format("t%02d-decided", turn))
+      break
+    end
     rec.cpu_ok, rec.cpu_why, rec.cpu_commands = c.ok, c.why, c.commands and #c.commands or 0
     M.L(string.format("  cpu turn: %s%s, %d command(s)", c.ok and "back" or "NOT BACK", c.why and (" -- " .. c.why) or "", rec.cpu_commands))
     M.dump(string.format("%st%02d.after.json", cfg.run_dir, turn), { note = string.format("turn %d after the CPU", turn) })

@@ -258,9 +258,23 @@ Three decisions, made once so they do not get re-argued:
    command, and the drop selector's start tile is still a recording, so
    a drop can land on the wrong side and is re-planned. The first trial
    on the 15x10 VS state drove 17 of 18 steps first time at about seventy
-   seconds a turn. No campaign savestate is parked yet: mission one needs
-   one (the GUI's slot file, the way every fixture was made), and its
-   first dump also checks DERIVATION 53's profile merge.
+   seconds a turn.
+
+   *The first results.* On the 15x10 VS state as P2 against the real
+   CPU the planner LOST its HQ on day 14, thirteen turns and 52 steps in
+   -- the first honest measurement against the game rather than a
+   model. The game resets the map to day 1 after the result screen, so
+   the loop now reads the match's outcome off RAM as it happens (an HQ's
+   owner byte, a side with no unit left) after every step and every poll
+   of the CPU's turn. Mission one needs the last Field Training mission
+   cleared first; that state is parked as slot 3 (15x10, fog, Nell's
+   twelve units against Olaf's nine, a VS-table record) and the loop
+   plays it. What it cost: a Fire confirm on that state does nothing
+   until a second A and the battle scene needs a third, so the driver now
+   nudges A when nothing changes for 120 frames and retries a failed check
+   three times with an A between; and a plan on a fogged twelve-unit
+   board takes about four minutes with the CPU reply, so the loop
+   re-plans only after a failed step and plans re-plans greedily.
 
 7. **Campaign facts, on demand.** A mission that fails acceptance, or ends
    in a way the standard win conditions do not explain, triggers reading its
