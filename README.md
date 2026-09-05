@@ -518,6 +518,14 @@ foot +1 under power; Grit's indirects +1 range, +3 under power, Max's -1)
 that had never been extracted. They are now read and applied in pathing,
 the action layer and the threat layer.
 
+**The APC's supply record (DERIVATION 51).** A sweep of the harness over
+every parked dump found the port issuing a record no trace had shown, the
+APC's supply, which the record-to-action mapping did not know. Two traces
+pinned it: id 5, the APC beside the unit it refills, that unit's slot in
+byte 6 -- and the refilled unit takes its turn in the trailing direct
+pass. The harness now files a port/action-layer disagreement as an abort
+with its dump instead of dying.
+
 **The enemy reply (ROADMAP step 4).** The planner's plan is now a
 proposal. It and a few variants -- at its closest calls, the same unit's
 next-best action committed and the rest of the turn re-planned -- are each
@@ -696,9 +704,9 @@ data/aw1_ai.json          every table the AI reads, 89 profiles included
                           (tools/extract_ai.py)
 tools/cpu_trace.py        let the game's CPU play a turn, trace its commands
                           and RNG draws, replay them, predict them
-tests/fixtures/cpu/       32 traced CPU turns with their boards and draws:
+tests/fixtures/cpu/       34 traced CPU turns with their boards and draws:
                           seven turns, twelve builds, eight pre-steps, two
-                          fallbacks, three powers
+                          fallbacks, three powers, two supplies
 tests/test_cpu.py         the traces replayed and predicted, record for
                           record and draw for draw
 tools/sim_diff.py         the differential test: dump, apply(), drive one

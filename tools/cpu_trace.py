@@ -40,7 +40,7 @@ OUT = ROOT / "harness" / "out" / "cpu"
 
 # The command ids as the dispatcher's jump table orders them (0x08066A04),
 # named from the routines each arm calls; see DERIVATION 44.
-COMMAND_NAMES = {1: "move", 2: "wait", 3: "capture", 4: "fire", 5: "cmd5",
+COMMAND_NAMES = {1: "move", 2: "wait", 3: "capture", 4: "fire", 5: "supply",
                  6: "cmd6", 7: "drop", 8: "cmd8", 9: "join", 10: "dive",
                  11: "rise", 12: "build", 13: "move13", 14: "cmd14",
                  15: "cmd15", 16: "cmd16", 17: "end"}

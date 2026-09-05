@@ -46,6 +46,10 @@ NOPROP = ["noprop-foot", "noprop-apc"]
 # vs15_p2 -- Andy with a damaged unit, Max, and Eagle whose predicate
 # fires at the end-of-turn pass and sends the refreshed units round again.
 POWER = ["power-andy", "power-max", "power-eagle"]
+# The APC's supply (DERIVATION 51): the foot units removed and the Tank
+# written dry on vs15_p2, so the APC's supply pass has a needy unit to
+# drive to -- the Tank able to reach the APC, then unable to move at all.
+SUPPLY = ["supply-apc", "supply-apc-move"]
 
 
 def trace(name):
@@ -128,7 +132,7 @@ class TestTheReplay(unittest.TestCase):
 
 class TestThePrediction(unittest.TestCase):
     """engine/cpu.predict against every trace (tools/cpu_trace.py predict)."""
-    ALL = EXACT + ["vs15-p1-cpu-fog"] + BUILDS + PRESTEP + NOPROP + POWER
+    ALL = EXACT + ["vs15-p1-cpu-fog"] + BUILDS + PRESTEP + NOPROP + POWER + SUPPLY
 
     def test_every_trace_is_predicted_record_for_record(self):
         for name in self.ALL:
@@ -423,5 +427,32 @@ class TestThePower(unittest.TestCase):
         r = cpu_trace.predict(trace("power-eagle"))
         self.assertEqual([p["subphase"] for p in r["turn"].powers], [17])
         self.assertIn("back to sub-phase 1", "\n".join(r["log"]))
+        self.assertEqual(r["predicted"], r["traced"])
+
+
+class TestTheSupply(unittest.TestCase):
+    """DERIVATION 51: the APC's supply is record id 5 with the refilled
+    unit's slot in byte +6 -- the first record of that id any trace has
+    shown, requested by the sparring sweep's port/action-layer
+    disagreement -- and a unit refilled at the supply pass takes its turn
+    in the trailing direct pass."""
+
+    def test_the_record_is_id_five_naming_the_unit_refilled(self):
+        for name, tile in (("supply-apc", (5, 1)), ("supply-apc-move", (4, 1))):
+            with self.subTest(name=name):
+                recs = [c for c in trace(name)["commands"] if c["id"] == 5]
+                self.assertEqual(len(recs), 1)
+                c = recs[0]
+                self.assertEqual((c["slot"], (c["x"], c["y"]), c["b6"]), (5, tile, 7))
+                self.assertEqual(cpu.from_record(c).name, "supply")   # the fixture
+                self.assertEqual(c["name"], "cmd5")          # keeps the trace-time label
+                after = load(FIX / f"{name}.after.json")
+                self.assertGreaterEqual(sim.unit_in(after, 7).fuel, 65)
+
+    def test_a_unit_refilled_at_the_supply_pass_acts_in_the_trailing_direct_pass(self):
+        cmds = [(cpu.from_record(c).name, c["slot"])
+                for c in trace("supply-apc-move")["commands"]]
+        self.assertEqual(cmds[-2:], [("supply", 5), ("fire", 7)])
+        r = cpu_trace.predict(trace("supply-apc-move"))
         self.assertEqual(r["predicted"], r["traced"])
 

@@ -1950,6 +1950,10 @@ class Turn:
 # weather-gated power predicate (0x08063324); campaign profiles
 # (0x080683B0).
 #
+# The APC's supply (DERIVATION 51, the two supply-* traces): record id 5
+# with the refilled slot in +6, the pass's first appearance in a trace;
+# the refilled unit then acts in the trailing direct pass.
+#
 # The power (DERIVATION 50, the three power-* traces): fired through the
 # forward model's activation when the threshold and the predicate allow --
 # no command, no draw -- and, fired at the end pass (Eagle), the sub-phase

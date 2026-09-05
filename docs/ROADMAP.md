@@ -200,9 +200,27 @@ Three decisions, made once so they do not get re-argued:
    day 13, where it aborted at `0x0801C120`, the CPU firing its power --
    traced and ported in turn (DERIVATION 50). With that, both games on
    this fixture run to the end: routs on day 8 and day 11, and the trace
-   queue from it is empty. The next requests will come from other parked
-   states and from mission states; the command is the same
-   (`tools/sparring.py STATE --both-sides --aborts DIR`) and every game
+   queue from it is empty.
+
+   *The sweep.* The harness over every parked dump the port can load --
+   the 32 before- and 32 after-dumps of the traced turns, both sides, a
+   day cap of 20, eight workers in parallel, about three quarters of an
+   hour -- 96 games once the ones a crash interrupted were rerun. 36 won
+   (28 as P1 in 7 to 16 days, 8 as P2), 2 lost by HQ, 58 aborted. The
+   crash was itself a finding: the port's APC supply record, id 5, had
+   never appeared in a trace and had no mapping to an engine action
+   (DERIVATION 51; the harness now files such a disagreement as an abort
+   with its dump). The aborts, classified by running the port on each
+   dump, are the trace queue in order of size: the retreat-after-move
+   check `0x0806636C` (27 games), the loaded transport's move
+   `0x08060708` / `0x080607C4` (15), and movement modes 3, 5, 2 and 6
+   (16 between them, all on the build states where the CPU has a factory
+   to buy from). The two HQ losses are the next shape question for the
+   planner: on `noprop-foot.after` as P2 a Mech walked onto the HQ while
+   the planner's units were away on the far side, and on
+   `prestep-hp-tank` as P1 an enemy Mech took the HQ on day 17 with the
+   planner reduced to an Infantry and a Recon. The command is the same
+   (`tools/sparring.py STATES --both-sides --aborts DIR`) and every game
    is deterministic.
 
 6. **Acceptance.** A whole-turn driver built on the single-action one, and

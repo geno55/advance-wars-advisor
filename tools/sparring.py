@@ -196,8 +196,14 @@ def spar(board, ctx: cpu_ai.Context, planner: int, *, days: int = 20,
         else:
             try:
                 turn = cpu_ai.predict(board, cpu, ctx, rng=board.rng or 0)
-            except NotImplementedError as e:
+            except (NotImplementedError, RuntimeError) as e:
+                # NotImplementedError: a branch the port has not read.
+                # RuntimeError: the port predicted a command the action
+                # layer offers no Action for -- one of the two is wrong,
+                # and the dump is the case to settle it on.
                 outcome, reason = "abort", str(e)
+                if not isinstance(e, NotImplementedError):   # its subclass
+                    reason = "port/action-layer disagreement: " + reason
                 if abort_dir is not None:
                     abort_dir.mkdir(parents=True, exist_ok=True)
                     path = abort_dir / f"{state_name}-p{planner}-day{board.day}.json"

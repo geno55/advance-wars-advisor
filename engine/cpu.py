@@ -52,7 +52,7 @@ except ImportError:                     # engine/ on the path
 
 Coord = Tuple[int, int]
 
-COMMAND_NAMES = {1: "move", 2: "wait", 3: "capture", 4: "fire", 5: "cmd5",
+COMMAND_NAMES = {1: "move", 2: "wait", 3: "capture", 4: "fire", 5: "supply",
                  6: "load", 7: "drop", 8: "cmd8", 9: "join", 10: "dive",
                  11: "rise", 12: "build", 13: "move13", 14: "cmd14",
                  15: "cmd15", 16: "cmd16", 17: "end"}
@@ -106,13 +106,19 @@ def to_action(board, cmd: Command, warnings: Optional[list] = None,
     every = actions.actions_for(board, unit, warnings=warnings, fog=fog)
     kind = {"move": "wait", "wait": "wait", "capture": "capture", "fire": "attack",
             "load": "load", "drop": "drop", "join": "join", "dive": "dive",
-            "rise": "rise"}.get(cmd.name)
+            "rise": "rise", "supply": "supply"}.get(cmd.name)
     if kind is None:
         warnings.append(f"{cmd.name} #{cmd.slot}: no Action mapping for id {cmd.id}")
         return None
     found = [a for a in every if a.kind == kind and tuple(a.tile) == cmd.tile]
     if kind == "attack":
         found = [a for a in found if a.target is not None and a.target.slot == cmd.arg]
+    if kind == "supply":
+        # id 5, +6 the slot the APC came to refill (the supply-apc traces,
+        # DERIVATION 51); the engine's Supply refills every needy neighbour
+        # of the ending tile, that one among them
+        found = [a for a in found
+                 if any(f.target.slot == cmd.arg for f in a.supplies)]
     if kind == "drop":
         # +6/+7 are per cargo slot: 0 keeps the passenger, 1..4 drops it in
         # a direction (0x08066D64 -> the delta table at 0x083B7ED8; 1 read

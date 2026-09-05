@@ -3367,3 +3367,35 @@ puts the meter at the CO's own threshold for its use count; Andy's
 predicate needs a unit at 90 hp or less, so his trace also writes
 `{"unit": 1, "hp": 50}`.
 
+## 51. The APC's supply record, and the sweep that asked for it
+
+The sparring harness run across every parked dump the port can load (64
+starts, both sides) stopped three of its eight workers not on an unread
+branch but on a disagreement: the port issued its supply pass's record --
+id 5, ported from the listing in DERIVATION 45 -- and `cpu.to_action` had
+no mapping for an id no trace had ever shown. Two traces on `vs15_p2`
+with P1 as the CPU, its four foot units removed and the Tank written dry
+(`tests/fixtures/cpu/supply-apc`, fuel 2; `supply-apc-move`, fuel 0),
+show the record: **id 5, the APC's ending tile beside the unit it
+refills, and that unit's slot in byte `+6`** -- the APC at `(6,2)` drove
+to `(5,1)` for the Tank that had walked to `(5,2)`, and to `(4,1)` for
+the Tank stuck at `(4,2)`. The Tank reads fuel 70 and 65 after. The port
+reproduces both record for record and draw for draw (9 and 17 draws),
+`to_action` maps id 5 to the engine's Supply at that tile whose fills
+include the named slot, and the harness now records a port/action-layer
+disagreement as an abort with its dump rather than dying.
+
+**The trailing direct pass.** The sub-phase list (DERIVATION 45) ends
+`apc_supply, power, direct, end`, and the second trace shows what the
+last `direct` is for: the Tank that could not move at all was refilled at
+sub-phase 15 and then, at sub-phase 17, moved and fired -- a unit
+supplied by the APC gets its turn after all.
+
+**The sweep** (`tools/sparring.py` over the 32 before- and 32 after-dumps
+in `tests/fixtures/cpu/`, both sides, day cap 20): the port's trace queue
+is now dominated by two routines, the retreat-after-move check
+`0x0806636C` and the loaded transport's move `0x08060708` /
+`0x080607C4`, with movement modes 2, 3 and 5 behind them on the states
+where the CPU has a factory to build from. The results are in ROADMAP
+step 5.
+
