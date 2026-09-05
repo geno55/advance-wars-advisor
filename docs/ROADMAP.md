@@ -300,7 +300,14 @@ Three decisions, made once so they do not get re-argued:
    two tiles from its HQ on day 9 the turn they arrived, ground the army
    down from seventeen to three, put a Tank on Olaf's HQ by day 25 and
    killed his last unit the turn after. The ending played out to the
-   campaign map with Grit's mission announced, and the save was written.
+   campaign map with Grit's mission announced -- and the save was NOT
+   written until the third replay of the final turn: the debrief ends
+   in "Save current data over existing data? Yes / No" with the cursor
+   on No, a plain A declines it, and a Left pressed while the prompt
+   slides in is ignored. The ending routine now lets each page settle,
+   presses Left twice, then A, and watches the SRAM range (sixteen
+   thousand writes when the save happens); the run keeps a copy of the
+   save file beside its result.
    The same game against the port in Python aborts on day 3 at Olaf's
    weather-gated power predicate (`0x08063324`), so that predicate is
    the trace queue's next entry. Mission two needs its Day 1 state parked

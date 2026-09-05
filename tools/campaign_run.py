@@ -311,6 +311,11 @@ def cmd_run(a) -> int:
         return 1
     r = json.loads(res_path.read_text(encoding="utf-8"))
     r["wall_seconds"] = round(took)
+    sav = pathlib.Path(sim_diff.MSS_DIR).parent / "Saves" / (pathlib.Path(sim_diff.ROM).stem + ".sav")
+    if sav.exists():                          # the game's own save, as Mesen left it
+        kept = run_dir / f"{sav.stem}.after-{r.get('over')}.sav"
+        kept.write_bytes(sav.read_bytes())
+        r["save_copy"] = kept.as_posix()
     res_path.write_text(json.dumps(r, indent=1), encoding="utf-8")
     print(summary(r))
     return 0 if r.get("over") in ("win", "loss", "daycap") else 1

@@ -142,15 +142,37 @@ end
 -- and an emulator stopped at once records nothing (the Field Training
 -- clear, 2026-09-05). Tap A through the sequence for a while, screenshot,
 -- and give the SRAM time to settle before the run ends.
+M.sram_writes = 0
+pcall(emu.addMemoryCallback, function() M.sram_writes = M.sram_writes + 1 end,
+      emu.callbackType.write, 0x0E000000, 0x0E00FFFF, emu.cpuType.gba, emu.memType.gbaMemory)
+
 function M.play_out(tag)
-  M.L("  playing the ending out")
-  for i = 1, 60 do
-    M.tap("a", 6, 84)
-    if i % 20 == 0 then M.shot(string.format("%s-ending-%d", tag, i)) end
+  -- The ending: the result screens, the debrief, then "Save current data
+  -- over existing data?  Yes / No" with the cursor on NO (mission one,
+  -- 2026-09-05: four hundred plain A presses saved nothing and started the
+  -- next mission). Left then A on every page -- a dialogue page ignores
+  -- Left, the prompt moves to Yes -- until the SRAM has been written and
+  -- has settled, or a new match has begun (day 1 in the match phase), or
+  -- the cap.
+  M.L(string.format("  playing the ending out (sram writes so far %d)", M.sram_writes))
+  local seen, quiet = M.sram_writes, 0
+  for i = 1, 300 do
+    -- let the page settle first: a Left during the prompt's slide-in was
+    -- ignored and the A that followed took No (m01-4)
+    M.wait(60)
+    M.tap("left", 6, 30); M.tap("left", 6, 30)
+    M.tap("a", 6, 60)
+    if i % 20 == 0 or (i >= 10 and i <= 60 and i % 5 == 0) then M.shot(string.format("%s-ending-%d", tag, i)) end
+    if M.sram_writes ~= seen then seen, quiet = M.sram_writes, 0 else quiet = quiet + 1 end
+    if i % 20 == 0 then M.L(string.format("  ending: tap %d, sram writes %d, phase %d day %d", i, M.sram_writes, M.r16(M.MATCH_PHASE), M.r32(M.TURN))) end
+    if M.sram_writes > 0 and quiet >= 40 then break end
+    if i > 20 and M.r16(M.MATCH_PHASE) == 5 and M.r32(M.TURN) == 1 then
+      M.L("  ending: a new match has begun; stopping"); break
+    end
   end
-  M.wait(300)
+  M.wait(600)
   M.shot(tag .. "-ending-final")
-  M.L(string.format("  ending played out: phase %d day %d", M.r16(M.MATCH_PHASE), M.r32(M.TURN)))
+  M.L(string.format("  ending played out: sram writes %d, phase %d day %d", M.sram_writes, M.r16(M.MATCH_PHASE), M.r32(M.TURN)))
 end
 
 function M.play_game(cfg)
