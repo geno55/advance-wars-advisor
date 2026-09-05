@@ -31,6 +31,8 @@ CORPUS = {c["name"]: c for c in sim_diff.load_corpus()}
 class TestTheDumper(unittest.TestCase):
     def test_every_parked_state_matches_the_mgba_dump_tile_for_tile(self):
         for name in sim_diff.STATES:
+            if sim_diff.STATES[name]["mgba"] is None:      # a state parked after mGBA (m01)
+                continue
             with self.subTest(state=name):
                 self.assertTrue((sim_diff.STATES_DIR / f"{name}.json").exists())
                 self.assertEqual(sim_diff.mgba_check(name), [])
@@ -38,7 +40,7 @@ class TestTheDumper(unittest.TestCase):
     def test_the_dumps_load_with_the_full_schema(self):
         for name in sim_diff.STATES:
             b = sim_diff.load(sim_diff.STATES_DIR / f"{name}.json")
-            self.assertEqual((b.width, b.height), (15, 10))
+            self.assertEqual((b.width, b.height), tuple(sim_diff.STATES[name]["dims"]))
             self.assertIsNotNone(b.repair_free)
             self.assertIsNotNone(b.funds_per_property)
             self.assertTrue(all(a.power_uses is not None for a in b.armies))

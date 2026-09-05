@@ -67,6 +67,11 @@ STATES = {
         note="the A15 capture fixture: P1 to move, Infantry #2 one tile south "
              "of the neutral city at (4,1), CO Power rule OFF",
         mgba="fog_vision_15x10.json"),
+    "m01": dict(
+        mss="Advance Wars (USA) (Rev 1)_4.mss", dims=(19, 12),
+        note="campaign mission one, Day 1, Andy (P1, human) to move against "
+             "Olaf (P2, the game's CPU); parked by the user 2026-09-05",
+        mgba=None),
 }
 
 FIX = ROOT / "tests" / "fixtures" / "sim_diff"

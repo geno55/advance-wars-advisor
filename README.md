@@ -542,6 +542,18 @@ byte by byte; the extractor now reads all 133 profile rows and the port
 builds a context on any campaign dump. Read off the ROM, to be checked
 against the live copy the first parked campaign state carries.
 
+**Olaf on mission one (DERIVATION 54).** The port could not play the
+first campaign mission past day 3 because Olaf's power predicate was
+unread. Two traces on the mission's Day 1 state read it -- he fires
+unless it is already snowing -- and four more things besides: a battle
+scene under snow seeds 128 RNG draws before the battle; the mission is a
+no-luck match, where every battle adds a flat five and rolls nothing; a
+CO's record maps each weather to one of seven movement tables, of which
+the data had three (Olaf's units pay clear costs in snow, Sami's foot
+units pay 1 everywhere under her power, Sturm ignores terrain); and the
+AI's foot pass takes its units in slot order, unsorted, where the port
+had sorted them by move. The port now plays the mission.
+
 **The enemy reply (ROADMAP step 4).** The planner's plan is now a
 proposal. It and a few variants -- at its closest calls, the same unit's
 next-best action committed and the rest of the turn re-planned -- are each
@@ -728,10 +740,10 @@ data/aw1_ai.json          every table the AI reads, 89 profiles included
                           (tools/extract_ai.py)
 tools/cpu_trace.py        let the game's CPU play a turn, trace its commands
                           and RNG draws, replay them, predict them
-tests/fixtures/cpu/       39 traced CPU turns with their boards and draws:
+tests/fixtures/cpu/       41 traced CPU turns with their boards and draws:
                           seven turns, twelve builds, eight pre-steps, two
                           fallbacks, three powers, two supplies, five
-                          retreat checks
+                          retreat checks, two of Olaf on mission one
 tests/test_cpu.py         the traces replayed and predicted, record for
                           record and draw for draw
 tools/sim_diff.py         the differential test: dump, apply(), drive one

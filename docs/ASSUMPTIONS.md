@@ -370,6 +370,15 @@ fixtures, and in this file's git history.
   (refused). The sibling move byte at `+7` is measured, once: the CPU's
   APC drove seven tiles under Max's power on the `power-max` trace.
 
+- **A battle scene under snow seeds 128 draws, once per battle.** Two
+  traces, one battle each (DERIVATION 54). Kill by: a snowy CPU turn with
+  two battles, and the draw log's count.
+- **A snow no power made lasts as the game says, not as the model says.**
+  `sim.end_turn` expires Olaf's snow with his block and leaves any other
+  snow alone; the rig's written snow cleared at the next turn change. What
+  the game counts down (`0x0300433D`?) is unread. Kill by: reading the
+  weather change at End Turn.
+
 Everything else this file has carried is either in Established above or in
 the Retired ledger below, each killed by a measurement or a read with its
 account named. The section refills with each composed feature — that is

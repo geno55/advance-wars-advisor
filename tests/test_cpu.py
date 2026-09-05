@@ -55,6 +55,12 @@ SUPPLY = ["supply-apc", "supply-apc-move"]
 # profile's ten percent -- standing safe, nothing changes.
 RETREAT = ["retreat-roll-inf", "retreat-roll-inf2", "retreat-roll-tank",
            "retreat-mech", "retreat-mech2"]
+# Olaf on campaign mission one (DERIVATION 54): his meter written to the
+# threshold on the m01 state -- fires in clear weather, keeps it under a
+# written snow; the snow-only after-board is the rig's snow expiring at the
+# turn change, which the forward model does not model for a written snow.
+OLAF = ["m01-olaf-power", "m01-olaf-snow"]
+BOARD_EXCEPT = {"m01-olaf-snow"}
 
 
 def trace(name):
@@ -138,7 +144,7 @@ class TestTheReplay(unittest.TestCase):
 class TestThePrediction(unittest.TestCase):
     """engine/cpu.predict against every trace (tools/cpu_trace.py predict)."""
     ALL = (EXACT + ["vs15-p1-cpu-fog"] + BUILDS + PRESTEP + NOPROP + POWER + SUPPLY
-           + RETREAT)
+           + RETREAT + OLAF)
 
     def test_every_trace_is_predicted_record_for_record(self):
         for name in self.ALL:
@@ -160,6 +166,8 @@ class TestThePrediction(unittest.TestCase):
 
     def test_the_predicted_turn_leaves_the_game_board(self):
         for name in self.ALL:
+            if name in BOARD_EXCEPT:
+                continue
             with self.subTest(name=name):
                 t = trace(name)
                 r = cpu_trace.predict(t)
@@ -530,4 +538,46 @@ class TestTheRetreatCheck(unittest.TestCase):
                 self.assertIn(("wait", 3, (6, 5)), cmds)
                 self.assertEqual(r["predicted"], r["traced"])
                 self.assertEqual(r["draws"], r["logged_draws"])
+
+
+class TestOlafOnMissionOne(unittest.TestCase):
+    """DERIVATION 54: Olaf's predicate, the snow scene's draws, a no-luck
+    match, the CO's movement table, and the unsorted foot list."""
+
+    def test_olaf_fires_in_clear_weather_and_holds_under_snow(self):
+        power = load(FIX / "m01-olaf-power.after.json").army(2)
+        self.assertEqual((power.power, power.power_uses, power.power_active), (0, 1, True))
+        self.assertEqual(load(FIX / "m01-olaf-power.after.json").weather_index, 1)
+        snow = load(FIX / "m01-olaf-snow.after.json").army(2)
+        self.assertEqual((snow.power, snow.power_uses), (30000, 0))
+        r = cpu_trace.predict(trace("m01-olaf-power"))
+        self.assertEqual([p["subphase"] for p in r["turn"].powers], [1])
+        self.assertEqual(cpu_trace.predict(trace("m01-olaf-snow"))["turn"].powers, [])
+
+    def test_the_snow_scene_draws_128_before_a_battle_and_no_luck_is_rolled(self):
+        t = trace("m01-olaf-power")
+        lrs = [d["lr"] for d in t["draws"]]
+        scene = [i for i, x in enumerate(lrs) if 0x08035480 <= x <= 0x080355F0]
+        self.assertEqual(len(scene), 128)
+        self.assertEqual(scene[0], 20)                      # right where the battle begins
+        r = cpu_trace.predict(t)
+        labels = [d["why"] for d in r["turn"].draws]
+        self.assertEqual(labels.count("snow scene"), 128)
+        self.assertNotIn("battle", labels)                  # settings byte +6: no roll
+        self.assertEqual(r["draws"], r["logged_draws"])
+        # and the damage is the formula's point plus five, as the forecast says
+        before = load(FIX / "m01-olaf-power.before.json")
+        after = load(FIX / "m01-olaf-power.after.json")
+        self.assertEqual(sim.unit_in(after, 8).hp, 32)
+        self.assertEqual(json.loads((FIX / "m01-olaf-power.before.json").read_text(encoding="utf-8"))["settings_6"], 1)
+
+    def test_the_foot_list_is_slot_order_and_olafs_units_pay_clear_costs_in_snow(self):
+        cmds = [c["slot"] for c in trace("m01-olaf-power")["commands"]]
+        foot = [s for s in cmds if s in (76, 77, 78, 79, 80, 81)]
+        self.assertEqual(foot, [76, 77, 78, 79, 80, 81])    # Mechs first: slot order, not move
+        # AntiAir #67 drove six tiles under the snow its own CO made
+        c = next(c for c in trace("m01-olaf-power")["commands"] if c["slot"] == 67)
+        self.assertEqual((c["x"], c["y"]), (11, 3))
+        r = cpu_trace.predict(trace("m01-olaf-power"))
+        self.assertEqual(r["predicted"], r["traced"])
 

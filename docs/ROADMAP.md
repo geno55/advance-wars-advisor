@@ -308,9 +308,11 @@ Three decisions, made once so they do not get re-argued:
    presses Left twice, then A, and watches the SRAM range (sixteen
    thousand writes when the save happens); the run keeps a copy of the
    save file beside its result.
-   The same game against the port in Python aborts on day 3 at Olaf's
-   weather-gated power predicate (`0x08063324`), so that predicate is
-   the trace queue's next entry. Mission two needs its Day 1 state parked
+   The same game against the port in Python aborted on day 3 at Olaf's
+   weather-gated power predicate (`0x08063324`); two traces read it and
+   four things around it (DERIVATION 54: the snow scene's 128 draws, the
+   no-luck match, the CO's seven movement tables, the unsorted foot
+   list), and the port plays the mission. Mission two needs its Day 1 state parked
    the same way, or the loop taught to start a mission from the campaign
    map itself.
 

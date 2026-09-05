@@ -339,6 +339,11 @@ emu.addMemoryCallback(function()
   end
   rec.draws = M.draws and #M.draws or 0
   M.trace[#M.trace + 1] = rec
+  if M.log then                       -- the sub-phase's order list as the game sorted it (DERIVATION 54)
+    local slots, keys = {}, {}
+    for i = 0, 11 do slots[#slots + 1] = M.r8(0x03005020 + i); keys[#keys + 1] = M.r8(0x03005110 + i) end
+    M.L(string.format("  order: flag %d slots [%s] keys [%s]", M.r32(0x030051AC), table.concat(slots, ","), table.concat(keys, ",")))
+  end
   -- the CPU is playing: every other side goes back to human NOW, so the
   -- next-player search at the CPU's End Turn hands to a human (a CPU turn
   -- can finish inside the End Turn tap gaps, so no poll is early enough)

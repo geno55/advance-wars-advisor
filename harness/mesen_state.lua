@@ -171,6 +171,8 @@ function M.state_json(opts)
   -- what the AI reads (DERIVATION 45): the mission id that picks its
   -- profile, the two settings bytes the forecast and move tables switch
   -- on, and the 0x130-byte profile copy the AI's state 0 leaves in EWRAM
+  w_(string.format('  "weather_2d": %d,', M.r8(M.WEATHER + 1)))   -- 0x0300433D, read by Olaf's power predicate (DERIVATION 54)
+  w_(string.format('  "ai_order": %d,', M.r32(0x030051AC)))       -- the in-match option the AI's order list sorts by (DERIVATION 54)
   w_(string.format('  "map_id": %d, "settings_6": %d, "settings_8": %d,',
     M.r8(0x03004310 + 2), M.r8(0x03004310 + 6), M.r8(0x03004310 + 8)))
   local prof = {}

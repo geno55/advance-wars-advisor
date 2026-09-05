@@ -23,7 +23,12 @@ import json
 import pathlib
 import sys
 
-BASES = [0x284548, 0x2845D4, 0x284660]
+# Seven tables at a 0x8C stride: 0..2 the weather set every CO record's
+# +0x10 pointers name for clear / snow / rain, 3..5 Sami's power set (her
+# foot units pay 1 everywhere, DERIVATION 27), 6 Sturm's (his record maps
+# clear and snow to it, DERIVATION 54). A CO record's weather_tables list
+# is the index into THIS list for each weather index.
+BASES = [0x284548 + 0x8C * k for k in range(7)]
 SIZE, WIDTH, ROWS = 140, 20, 7
 IMPASSABLE = 255
 
@@ -34,7 +39,7 @@ MOVE_TYPES = ["Infantry", "Mech", "Treads", "Tires", "Air", "Ships", "Lander"]
 #   table 2 differs in exactly 4 cells: Treads and Tires on
 #     Plain and Wood, +1 each, foot units untouched             -> Rain (mud
 #     slows wheels and tracks on soft ground, not infantry)
-WEATHER = ["Clear", "Snow", "Rain"]
+WEATHER = ["Clear", "Snow", "Rain", "Clear (Sami)", "Snow (Sami)", "Rain (Sami)", "Sturm"]
 TERRAIN_COLS = {1: "Plain", 2: "River", 3: "Mountain", 4: "Wood", 5: "Road",
                 6: "City", 7: "Sea", 8: "HQ", 11: "Port", 12: "Bridge",
                 13: "Shoal", 19: "Reef"}

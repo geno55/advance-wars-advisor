@@ -225,21 +225,30 @@ class Board:
         return self.defence(x, y)
 
     def move_cost(self, x: int, y: int, move_type: str,
-                  weather: Optional[str] = None) -> Optional[int]:
+                  weather: Optional[str] = None, co_id: Optional[int] = None,
+                  power: bool = False) -> Optional[int]:
         """Movement cost, or None if impassable.
 
         Defaults to the board's own weather when the dump supplied one, so
         callers stop having to know it. Pass `weather` explicitly to ask a
-        hypothetical ("what would this cost in snow?").
+        hypothetical ("what would this cost in snow?"). With `co_id` the
+        mover's CO record picks the table: its +0x10 pointers map each
+        weather index to one of the seven tables (DERIVATION 54) -- Olaf's
+        units pay clear costs in snow, Sami's foot units pay 1 everywhere
+        under her power, Sturm's ignore terrain in clear and snow.
         """
         mc = _load("aw1_movecost.json")
         if weather is None:
-            if self.weather_index is not None:
-                table = mc["tables"][self.weather_index]
-            else:
-                table = mc["tables"][0]
+            idx = self.weather_index if self.weather_index is not None else 0
         else:
-            table = next(t for t in mc["tables"] if t["weather"] == weather)
+            idx = next(i for i, t in enumerate(mc["tables"]) if t["weather"] == weather)
+        if co_id is not None:
+            try:
+                from . import co as co_mod
+            except ImportError:
+                import co as co_mod
+            idx = co_mod.weather_tables(co_id, power)[idx]
+        table = mc["tables"][idx]
         cost = table["costs"][move_type][self.terrain[y][x]]
         return None if cost == IMPASSABLE else cost
 

@@ -3483,3 +3483,84 @@ ROM and checked against nothing yet: the dump carries the live copy at
 confirm or refute the merge byte for byte, the way `vs15-p1-cpu.after`
 confirms the VS path.
 
+
+## 54. Olaf on mission one: his predicate, the snow scene, a no-luck match, the CO's weather table, and the foot list
+
+The port could not play campaign mission one past day 3: Olaf's power
+predicate (`0x08063324`) was unread, so the sparring harness stopped at
+his first full meter. Two traces on the mission's parked Day 1 state
+(`tests/fixtures/sim_diff/states/m01.json`, slot 4, Andy the human as P1,
+Olaf the game's CPU as P2, 19x12, no fog) with P2's meter written to its
+threshold: `m01-olaf-power` in clear weather, `m01-olaf-snow` with the
+weather index written to 1 first. Getting the port to reproduce them --
+it now does, record for record and draw for draw, 168 draws each -- read
+five things, only the first of which was the one asked for.
+
+**The predicate.** `0x08063324`: at the first power pass only (the pass
+counter at `0x030051A0` at most 1); fire unless the weather index
+(`0x0300433C`) is already 1, snow; and even then when the byte after it
+(`0x0300433D`) reads 2 or 3. Clear: Olaf fired -- meter 0, one use, the
+block active, the weather index 1 on the after-dump. Snow written: he
+kept his 30000. The dumper now ships the second byte as `weather_2d`
+(0 on both traces; what it counts is not read).
+
+**The snow scene draws 128 times.** Both traces logged 168 draws where
+the port predicted 34: four callers in `0x08035488` and `0x080355B4`,
+32 rounds each, at the same position in both -- draw 20, exactly where
+the Tank's battle begins, in the snow-only trace where no power was
+fired at all. It is the battle scene seeding its snow sprites (two
+layers of 32, an x and a y draw each), not the activation. The port
+draws 128 before each battle fought with the weather index at 1; once
+per battle is the model, one battle per trace being all that was seen.
+
+**A no-luck match.** With the RNG aligned the Tank's shot was still one
+point off, and the record after the battle sat two draws earlier in the
+game than in the port. Mission one's settings byte `+6` is 1, the flag
+the forecast port already branched on: with it set the forecast adds a
+flat 5 instead of rolling (`0x080234xx`, DERIVATION 45), and the battle
+does the same -- `sim.apply(luck=5)` reproduces both traces' damage to
+the point (63 and 68 dealt against the engine's 58 and 63 without it),
+and the battle draws nothing, so the two luck draws the port took after
+every battle are gone in that mode. The acceptance run's twenty-five real
+turns on this mission were all fought without a roll.
+
+**The CO's movement table.** With the power fired Olaf's AntiAir drove
+six tiles through the snow, `(15,1) -> (11,3)`, and the port's fill said
+it could not. The CO record's `+0x10` pointers (DERIVATION 27) map each
+weather index to one of SEVEN cost tables at `0x08284548`, stride 0x8C,
+of which the data file had three: Olaf's map is `[0, 0, 1]` (his units
+pay clear costs in snow), Sami's power set is `[3, 4, 5]` (her foot units
+pay 1 everywhere, DERIVATION 27's measurement, now in the table), Sturm's
+`[6, 1, 6]` (a flat table in clear and snow), Drake's `[0, 1, 0]`.
+`tools/extract_movecost.py` extracts all seven; `Board.move_cost` takes
+the mover's CO and power; `pathing.reachable`, `path`, `trap_tiles` and
+the port's fill pass them. The 63-drive corpus still replays (Andy in
+clear weather never crossed a remap).
+
+**The foot list is not sorted.** Olaf's Mechs (slots 76, 77) moved
+before his Infantry (78..81) where the port, sorting each sub-phase's
+units by move descending (`0x080641CC`), put the Infantry first. The
+routine takes one argument that flips its comparison (the word at
+`0x030051AC`, 0 at match setup, `0x08030798`; toggled 0/1 by an options
+screen handler, `0x0804011C`; 0 on every parked state, shipped as
+`ai_order` for the day it is not) -- but that was not it. Logging the
+game's own arrays at each dispatch settled it: the foot pass's slot list
+`[76,77,78,79,80,81]` sat beside key bytes `[6,5,6,6,6,6,5]` left over
+from the direct pass, while the direct pass's list carried fresh keys
+sorted descending. `0x080641CC` has eight callers -- foot_capture,
+indirect_fire, air_strike, both direct passes, the three transport passes
+and indirect_move -- and the foot pass, the class-3 pass and the APC
+supply pass are not among them: their lists are slot order. Every
+earlier trace had Infantry in lower slots than Mechs, so slot order and
+move order agreed and nothing noticed.
+
+**Not read.** What `0x0300433D` counts; how long a written snow lasts
+(the rig's snow cleared at the turn change, which `sim.end_turn` does not
+model for a snow no power made -- the snow-only trace's after-board is
+excluded from the board test for that reason); whether a second battle
+in one snowy turn seeds another 128.
+
+**Rig notes.** `{"weather": 1}` writes the index for the coming turn.
+The order-list arrays are `0x03005020` (slots) and `0x03005110` (keys);
+`mesen_drive.lua`'s dispatcher hook logs both with the flag on every
+command now, so the next ordering question is a grep.

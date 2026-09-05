@@ -119,6 +119,18 @@ def _occupancy(board) -> Dict[Coord, object]:
     return {(u.x, u.y): u for u in board.units if u.slot not in carried}
 
 
+def co_of(board, unit) -> tuple:
+    """(co_id, power active) of the unit's army, for the CO's movement table
+    (Board.move_cost); (None, False) when the board has no such army."""
+    try:
+        a = board.army(unit.player)
+    except (StopIteration, AttributeError):
+        return None, False
+    if a is None or a.co_id is None:
+        return None, False
+    return a.co_id, bool(a.power_active)
+
+
 def reachable(board, unit, weather: Optional[str] = None) -> Dict[Coord, int]:
     """Every tile this unit can move THROUGH, mapped to the cost of getting there.
 
@@ -131,6 +143,7 @@ def reachable(board, unit, weather: Optional[str] = None) -> Dict[Coord, int]:
     budget = allowance(unit, board)
     occupied = _occupancy(board)
     move_type = unit_stats(unit.type)["move_type"]
+    cid, pw = co_of(board, unit)
 
     best: Dict[Coord, int] = {start: 0}
     queue: List[Tuple[int, Coord]] = [(0, start)]
@@ -141,7 +154,7 @@ def reachable(board, unit, weather: Optional[str] = None) -> Dict[Coord, int]:
         for nx, ny in ((x + 1, y), (x - 1, y), (x, y + 1), (x, y - 1)):
             if not (0 <= nx < board.width and 0 <= ny < board.height):
                 continue
-            step = board.move_cost(nx, ny, move_type, weather)
+            step = board.move_cost(nx, ny, move_type, weather, cid, pw)
             if step is None:                       # impassable terrain
                 continue
             blocker = occupied.get((nx, ny))
@@ -198,7 +211,7 @@ def trap_tiles(board, unit, hidden_slots, weather: Optional[str] = None) -> Dict
         h = (enemy.x, enemy.y)
         if h in reach:
             continue                           # cannot happen: enemies block
-        step = board.move_cost(h[0], h[1], st["move_type"], weather)
+        step = board.move_cost(h[0], h[1], st["move_type"], weather, *co_of(board, unit))
         if step is None:
             continue
         best = None
@@ -276,7 +289,7 @@ def path(board, unit, dest: Coord, weather: Optional[str] = None) -> List[Coord]
     cur = dest
     while cur != (unit.x, unit.y):
         x, y = cur
-        step_in = board.move_cost(x, y, move_type, weather)
+        step_in = board.move_cost(x, y, move_type, weather, *co_of(board, unit))
         for nx, ny in ((x + 1, y), (x - 1, y), (x, y + 1), (x, y - 1)):
             if costs.get((nx, ny)) == costs[cur] - step_in:
                 route.append((nx, ny))

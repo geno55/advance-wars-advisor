@@ -129,6 +129,8 @@ class Context:
     profile: dict                       # {"header": [...], "units": {name: [...]}}
     settings_6: int = 0                 # nonzero: the forecast rolls no luck
     settings_8: int = 1                 # nonzero: CO-specific stat blocks
+    weather_2d: int = 0                 # 0x0300433D, Olaf's predicate (DERIVATION 54)
+    ai_order: int = 0                   # 0x030051AC: 1 sorts each sub-phase's units by move ASCENDING
     fog: bool = False
     # The game's own property list, [(terrain id, x, y)] in its y-then-x
     # order (0x03004500): the AI's factory list walks it, not the terrain
@@ -169,6 +171,7 @@ class Context:
         props = d.get("properties")
         return cls(ai=ai, sides=sides, profile=prof,
                    settings_6=d.get("settings_6", 0), settings_8=d.get("settings_8", 1),
+                   weather_2d=d.get("weather_2d", 0), ai_order=d.get("ai_order", 0),
                    fog=bool(d.get("fog", False)),
                    properties=[(p["t"], p["x"], p["y"]) for p in props] if props else None,
                    army0=list(d.get("army0", [0, 0, 0, 0])),
@@ -294,7 +297,14 @@ class Turn:
         the threat builder is walking an enemy) are not entered."""
         b = self.board
         mt = move_type_of(type_name(tid))
-        enemies = self.side(self.player if side is None else side).enemies
+        mover = self.player if side is None else side
+        enemies = self.side(mover).enemies
+        # the mover's CO picks the movement table for the weather
+        # (0x0801CD00 reads the record's +0x10 pointers): Olaf's units pay
+        # clear costs in snow -- m01-olaf-power, DERIVATION 54
+        army = b.army(mover)
+        cid = army.co_id if self.ctx.settings_8 else 1
+        pw = bool(army.power_active)
         best = {(x, y): 0}
         frontier = [(0, x, y)]
         import heapq
@@ -305,7 +315,7 @@ class Turn:
             for nx, ny in ((cx + 1, cy), (cx - 1, cy), (cx, cy + 1), (cx, cy - 1)):
                 if not (0 <= nx < b.width and 0 <= ny < b.height):
                     continue
-                step = b.move_cost(nx, ny, mt)
+                step = b.move_cost(nx, ny, mt, None, cid, pw)
                 if step is None:
                     continue
                 n = c + step
@@ -1244,8 +1254,9 @@ class Turn:
         (data/aw1_ai.json `cos[].power_fn`): 0x08063298, most COs -- at
         the turn's first power sub-phase only; 0x080632C4, Andy -- only
         with a unit at 90 hp or less to heal; 0x080632AC, co 8 -- at the
-        second (end-of-turn) pass; 0x08063324, co 3 -- only under a
-        settings weather (bytes +0x2C/+0x2D) the traces never set."""
+        second (end-of-turn) pass; 0x08063324, Olaf -- at the first pass
+        unless the weather index (0x0300433C) is already 1, snow, and
+        even then when the byte after it reads 2 or 3 (DERIVATION 54)."""
         army = self.board.army(self.player)
         if army.power_active or army.co_id is None:
             return
@@ -1261,7 +1272,11 @@ class Turn:
         elif fn == "0x080632AC":
             fire = self.subphase > 15
         elif fn == "0x08063324":
-            raise NotImplementedError("0x08063324: a weather-conditioned AI power predicate")
+            # Olaf (DERIVATION 54): at the first pass, unless it is already
+            # snowing (weather index 1) -- and even then when 0x0300433D
+            # reads 2 or 3
+            fire = first and (self.board.weather_index != 1
+                              or self.ctx.weather_2d in (2, 3))
         else:
             raise NotImplementedError(f"AI power predicate {fn}")
         if not fire:
@@ -1279,16 +1294,30 @@ class Turn:
                                warnings=self.warnings)
         self.powers.append({"player": self.player, "subphase": self.subphase,
                             "rng": self.rng})
+
         self.log.append(f"  power fired at sub-phase {self.subphase}: "
                         f"{act.power.co_name}'s")
 
     # -- the turn ------------------------------------------------------------
-    def units_of_class(self, cls: int) -> list:
-        """The sub-phase's order list (0x080641CC): the class's unacted
-        units, by the type's move descending, slot order on ties."""
+    # The sub-phases whose list builder is the sorting one, 0x080641CC (its
+    # eight callers): the class's units in slot order, bubble-sorted by the
+    # type's move (stats +0xC), descending with the word at 0x030051AC
+    # clear and ascending with it set (an in-match option, 0 at match
+    # setup, 0x08030798). The foot pass, the class-3 pass and the APC
+    # supply pass build their lists unsorted, in slot order: mission one's
+    # trace showed the foot list [76..81] beside key bytes left over from
+    # the direct pass, and Olaf's Mechs went before his Infantry
+    # (DERIVATION 54).
+    SORTED_PASSES = ("foot_capture", "indirect_fire", "air_strike", "direct",
+                     "transport_empty", "transport", "transport_loaded", "indirect_move")
+
+    def units_of_class(self, cls: int, sort: bool = True) -> list:
         us = [u for u in sorted(self.board.units_of(self.player), key=lambda u: u.slot)
               if not u.acted and not u.loaded and stats(u.type)["ai_class"] == cls]
-        return sorted(us, key=lambda u: -stats(u.type)["move"])
+        if not sort:
+            return us
+        sign = 1 if self.ctx.ai_order else -1
+        return sorted(us, key=lambda u: sign * stats(u.type)["move"])
 
     def decide(self, unit, behaviour) -> None:
         """State 2 (0x080642C8): the unit's random, the classifier, the
@@ -1529,9 +1558,28 @@ class Turn:
             raise RuntimeError(f"predicted {cmd} names no engine Action")
         kw = {}
         if act.kind == "attack":
-            kw = {"rng_state": cmd.rng, "luck_draw": cpu_mod.AI_STRIKE_DRAW}
+            if self.ctx.settings_6:
+                # settings byte +6 nonzero (campaign mission one): no roll,
+                # a fixed luck of 5 -- what the forecast adds in that mode
+                # (c += 5 above) and what both m01-olaf traces' battles
+                # dealt, to the point (DERIVATION 54)
+                kw = {"luck": 5}
+            else:
+                kw = {"rng_state": cmd.rng, "luck_draw": cpu_mod.AI_STRIKE_DRAW}
+                if self.board.weather_index == 1:
+                    kw["luck_draw"] += 128      # the snow scene's draws come first
+        if act.kind == "attack" and self.board.weather_index == 1:
+            # a battle scene under snow seeds its snow sprites first: two
+            # loops of 32 sprites, an x and a y draw each (0x08035488,
+            # 0x080355B4) -- 128 draws before the battle's own, on both
+            # m01-olaf traces (DERIVATION 54); once per battle is the model
+            for _ in range(128):
+                self.draw("snow scene")
         self.board = sim.apply(self.board, act, warnings=self.warnings, **kw)
-        if act.kind == "attack":
+        if act.kind == "attack" and not self.ctx.settings_6:
+            # the battle's two draws are the luck rolls: none in a no-luck
+            # match (the record after the battle sat two draws earlier on
+            # m01-olaf-power than the port's, DERIVATION 54)
             for _ in range(rng_mod.BATTLE_DRAWS_NO_COUNTER):
                 self.draw("battle")
         if act.kind == "join":
@@ -1579,7 +1627,8 @@ class Turn:
             if name not in plan:
                 units = self.units_of_class({"air_strike": 5, "transport": 2,
                                              "transport_loaded": 2, "lander": 6,
-                                             "apc_supply": 2, "class3": 3}.get(name, -1))
+                                             "apc_supply": 2, "class3": 3}.get(name, -1),
+                                            sort=name in self.SORTED_PASSES)
                 if name == "air_strike":
                     units = [u for u in units if u.type in ("Fighter", "Bomber")]
                 if name == "transport" or name == "transport_loaded":
@@ -1588,7 +1637,7 @@ class Turn:
                     raise NotImplementedError(f"sub-phase {name} with {len(units)} unit(s)")
                 continue
             cls, fn = plan[name]
-            for unit in self.units_of_class(cls):
+            for unit in self.units_of_class(cls, sort=name in self.SORTED_PASSES):
                 unit = sim.unit_in(self.board, unit.slot)
                 if unit is None or unit.acted:
                     continue

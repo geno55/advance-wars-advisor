@@ -399,6 +399,21 @@ def vision_bonus(co_id: int, unit_type: str, power: bool = False) -> int:
     return block["vision_bonus"].get(unit_type, 0)
 
 
+_WEATHER_TABLES: dict = {}
+
+
+def weather_tables(co_id: int, power: bool = False) -> list:
+    """The CO block's +0x10 map from weather index to movement table
+    (DERIVATION 54), cached: Board.move_cost asks on every tile of every
+    fill, and building a CoRecord each time made a fill a hundred times
+    slower."""
+    key = (co_id, bool(power))
+    hit = _WEATHER_TABLES.get(key)
+    if hit is None:
+        hit = _WEATHER_TABLES[key] = list(record(co_id, power).weather_tables)
+    return hit
+
+
 def move_bonus(co_id: int, unit_type: str, power: bool = False) -> int:
     """Per-unit movement adjustment, pool entry +7, added to the stats move
     by the move-budget reader at 0x0801D968 (fuel still caps it). Sami's
