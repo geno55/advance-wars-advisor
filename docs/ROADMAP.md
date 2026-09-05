@@ -274,7 +274,22 @@ Three decisions, made once so they do not get re-argued:
    nudges A when nothing changes for 120 frames and retries a failed check
    three times with an A between; and a plan on a fogged twelve-unit
    board takes about four minutes with the CPU reply, so the loop
-   re-plans only after a failed step and plans re-plans greedily.
+   re-plans only after a failed step and plans re-plans greedily. Two
+   more things the same state taught the driver: the game offers Fire to
+   an unmoved indirect unit with no target in range, so unit menus are
+   now reached with Up presses counted from the end; and the tile the
+   map menu opens on had a unit on it by day 9, so it is chosen again
+   every turn. And the loop spawns nothing from inside Mesen any more --
+   a GUI process's shell-out opens a console window per call -- the
+   plans come from a service beside the emulator through request files.
+
+   **The first win against the game.** The last Field Training mission,
+   Nell against Olaf under fog on 15x10, from the parked state to Olaf's
+   HQ captured on day 13: thirteen turns, three run segments resumed from
+   the loop's own checkpoints while the driver was taught the above, the
+   last segment 23 steps for 23 with no re-plan. Material went from 12
+   against 9 to 10 against 3 by day 8. That clear is what unlocks the
+   campaign; mission one is next.
 
 7. **Campaign facts, on demand.** A mission that fails acceptance, or ends
    in a way the standard win conditions do not explain, triggers reading its
