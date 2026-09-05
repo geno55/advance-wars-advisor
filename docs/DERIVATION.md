@@ -3754,3 +3754,56 @@ grid was not.
 **Not read.** `0x0801E7D8` (whether the mover's side sees the target;
 only fog can make it matter); what record byte `+6` bit 7 is, since
 either value gives the same band.
+
+## 57. Where a planner turn went: a file read 116,000 times and 72,000 reachability fills
+
+Before tuning against the port, one planner turn on mission one's Day 1
+board was profiled (the CPU reply on, one branch): 105 s under cProfile,
+about 30 s plain. Two things were all of it, and neither was the
+planner thinking.
+
+**`co._co_data` read and parsed `data/aw1_co.json` on every call** --
+116,474 times in the turn, from `record`, `modifiers`, `move_bonus` and
+`range_bonus`, and from `pathing.allowance` through `move_bonus` on
+every reachability fill: 52 of the 105 s. One `lru_cache`. The port's
+turn on the same board went from 3.5 s to 1.0 s with it, since every
+one of its fills paid the same read.
+
+**`threats_to` refilled every enemy's reach for every hypothetical
+tile.** `actions_for` asks `focus_fire` about each tile a unit could
+end on; each answer relocated the defender to that tile and called
+`covered_tiles` on every enemy, a fresh fill each: 71,735 fills and
+1.3 million range expansions in the turn, 95% of what the file read
+had left. The defender's hypothetical tile changes an enemy's reach
+only when the enemy could ENTER that tile -- a blocker on a tile the
+fill never expands through blocks nothing -- so the reach on the board
+with the defender and its riders removed is now computed once per enemy
+(a cache keyed by the terrain object, weather, the enemy's type, tile,
+fuel and CO, and every other unit's tile and side) and reused whenever
+the queried tile lies outside it; the near cases recompute on the
+hypothetical board exactly as before. And the sources covering one
+tile are read straight off the firing positions by distance, instead
+of expanding every position's whole range into a map and indexing it.
+4,497 fills in the same turn.
+
+**Exact, shown three ways.** The plans on five boards (Day 1, day 4,
+day 9 and day 16 of mission one, the VS state) are identical step for
+step and in the board they leave, at 15.3 s -> 2.7 s, 6.2 -> 2.0, 1.7
+-> 0.6, 0.9 -> 0.3, 2.7 -> 0.7. The full suite passes -- 511 tests,
+now in 23 s where the CPU sweep alone took four minutes. And the
+baseline sparring game, run before and after: the same win by HQ
+capture on day 27, the same 40000 lost and 117000 taken, the same 13
+properties to 2, in 410 s and then 25 s.
+
+**What is left** is spread thin: the remaining fills (2 s of 7.6
+profiled), the cache key (1.4 s: every unit's tile sorted per query),
+the port's reply (1 s). Nothing over a third. Not taken: a per-terrain
+cost grid for the fill, which would halve the fills' own cost; the key
+could be built once per `threats_to` call rather than per enemy.
+
+**The baseline itself.** Against the port as DERIVATION 56 left it, the
+planner wins mission one from the Day 1 board by HQ capture on day 27
+-- the real game was a rout on day 26 -- taking 117000 of Olaf's
+material for 40000 of its own. The port that drew at the day cap
+(DERIVATION 54) sent its damaged units out to die and chased the wrong
+targets; the fixed one loses the same way the game did.

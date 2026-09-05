@@ -345,6 +345,15 @@ Three decisions, made once so they do not get re-argued:
    and draw for draw, and the one port-side gap left is the forward
    model's counter on day 15, four points heavier than the game's.
 
+   *The baseline, and the planner's turn made cheap (DERIVATION 57).*
+   Against that port the planner wins mission one from the Day 1 board
+   by HQ capture on day 27, a day after the real game's rout. A profile
+   of one planner turn found a data file parsed 116,000 times and the
+   exposure term refilling every enemy's reach for every hypothetical
+   tile; a cache for each, both exact (identical plans on five boards,
+   the identical game), and the game takes 25 s instead of 410. Tuning
+   over the twenty-four saved boards is now minutes a weight set.
+
 7. **Campaign facts, on demand.** A mission that fails acceptance, or ends
    in a way the standard win conditions do not explain, triggers reading its
    objective and events: victory and loss condition, scripted reinforcements

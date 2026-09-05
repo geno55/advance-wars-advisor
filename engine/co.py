@@ -59,6 +59,7 @@ a match where CO abilities are already on. Either way, check it with Max first
 """
 from __future__ import annotations
 
+import functools
 import json
 import pathlib
 from dataclasses import dataclass
@@ -72,7 +73,10 @@ NEUTRAL = (100, 100)
 DEFAULT_LUCK_MAX = 9
 
 
+@functools.lru_cache(maxsize=None)
 def _co_data():
+    # read once: every record(), modifiers() and move_bonus() call came
+    # through here, 116,000 file reads in one planner turn (DERIVATION 57)
     return json.loads((DATA / "aw1_co.json").read_text(encoding="utf-8"))
 
 

@@ -69,6 +69,7 @@ as a warning rather than swallowed.
 """
 from __future__ import annotations
 
+import collections
 import dataclasses
 import itertools
 from dataclasses import dataclass
@@ -158,6 +159,88 @@ def covered_tiles(board, unit, weather: Optional[str] = None) -> Dict[Coord, Set
         for tgt in in_range(board, src, lo, hi):
             out.setdefault(tgt, set()).add(src)
     return out
+
+
+# --------------------------------------------------------------------------
+# the enemies' reach, reused across a unit's hypothetical tiles
+# --------------------------------------------------------------------------
+#
+# actions_for asks focus_fire about every tile a unit could end on, and each
+# answer used to refill every enemy's reach on that hypothetical board:
+# 72,000 fills in one planner turn on mission one, 95% of it (DERIVATION
+# 57). The defender's hypothetical tile changes an enemy's reach only when
+# the enemy could ENTER that tile -- a blocker on a tile the fill never
+# expands through is no blocker -- so the reach on the board with the
+# defender (and its riders) removed is computed once per enemy and reused
+# whenever the queried tile lies outside it; the near cases still recompute
+# on the hypothetical board, exactly as before. The cache is keyed by
+# everything the fill reads: the terrain object, the weather, the enemy's
+# type, tile, fuel and CO, and every other unit's tile and side.
+
+_REACH_CACHE: "collections.OrderedDict" = collections.OrderedDict()
+_REACH_CACHE_MAX = 8192
+
+
+def _carried(board) -> set:
+    return {c for u in board.units for c in (u.cargo, getattr(u, "cargo2", 0)) if c}
+
+
+def _reach_key(board, enemy, weather, excluded: set) -> tuple:
+    carried = _carried(board)
+    others = tuple(sorted((u.x, u.y, u.player) for u in board.units
+                          if u.slot not in excluded and u.slot not in carried
+                          and u.slot != enemy.slot))
+    cid, pw = pathing.co_of(board, enemy)
+    return (id(board.terrain), board.width, board.height, weather, board.weather_index,
+            enemy.type, enemy.x, enemy.y, enemy.fuel, enemy.player, cid, pw, others)
+
+
+def _firing_positions_from(board, enemy, reach: Dict[Coord, int]) -> Dict[Coord, int]:
+    """firing_positions() over a reach already computed."""
+    st = pathing.unit_stats(enemy.type)
+    if enemy.loaded or not st["armed"]:
+        return {}
+    here = (enemy.x, enemy.y)
+    if not st["can_move_and_fire"]:
+        return {here: 0}
+    occupied = pathing._occupancy(board)
+    return {t: c for t, c in reach.items() if t == here or occupied.get(t) is None}
+
+
+def _base_reach(board, enemy, weather, excluded: set, minus):
+    """(reach, firing positions) of `enemy` on `minus`, the board without the
+    defender; cached."""
+    key = _reach_key(board, enemy, weather, excluded)
+    hit = _REACH_CACHE.get(key)
+    if hit is not None and hit[0] is board.terrain:
+        _REACH_CACHE.move_to_end(key)
+        return hit[1], hit[2]
+    st = pathing.unit_stats(enemy.type)
+    if enemy.loaded or not st["armed"] or not st["can_move_and_fire"]:
+        reach = {}
+    else:
+        reach = pathing.reachable(minus, enemy, weather)
+    fp = _firing_positions_from(minus, enemy, reach)
+    _REACH_CACHE[key] = (board.terrain, reach, fp)      # the terrain kept alive with its id
+    if len(_REACH_CACHE) > _REACH_CACHE_MAX:
+        _REACH_CACHE.popitem(last=False)
+    return reach, fp
+
+
+def _sources_on(board, enemy, tile: Coord, fp: Dict[Coord, int]) -> Set[Coord]:
+    """The firing positions in `fp` from which `enemy` puts a shot on `tile`
+    -- covered_tiles(...)[tile] without expanding every position's range."""
+    st = pathing.unit_stats(enemy.type)
+    lo, hi = st["min_range"], st["max_range"]
+    cid = _co_of(board, enemy.player, None)
+    if cid is not None and hi > 1:
+        try:
+            power = bool(board.army(enemy.player).power_active)
+        except (StopIteration, AttributeError):
+            power = False
+        hi += co_mod.range_bonus(cid, enemy.type, power)
+    tx, ty = tile
+    return {src for src in fp if lo <= abs(src[0] - tx) + abs(src[1] - ty) <= hi}
 
 
 def hostiles(board, player: int, ignore_acted: bool = True,
@@ -379,8 +462,18 @@ def threats_to(board, defender, tile: Optional[Coord] = None, *,
     out = []
     enemies = hostiles(hypo, defender.player, ignore_acted,
                        fog=bool(fog_active(hypo, fog)), rule_set=fog_rules)
+    excluded = {defender.slot} | ({defender.cargo} if defender.cargo else set())
+    minus = dataclasses.replace(board, units=[u for u in board.units if u.slot not in excluded],
+                                vision=None)
     for enemy in enemies:
-        sources = covered_tiles(hypo, enemy, weather).get(tile)
+        reach0, fp0 = _base_reach(board, enemy, weather, excluded, minus)
+        if tile in reach0:
+            # the defender standing here can cut the enemy's paths: the
+            # hypothetical board, as before
+            fp = firing_positions(hypo, enemy, weather)
+        else:
+            fp = fp0
+        sources = _sources_on(hypo, enemy, tile, fp)
         if not sources:
             continue
         outcome = dmg.outcome(enemy, moved.hp)
