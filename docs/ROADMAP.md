@@ -365,6 +365,23 @@ Three decisions, made once so they do not get re-argued:
    day 15. The rank is now `engine/rank.py`, and the objective for the
    weight search is tempo, not safety.
 
+   *Tuned for the rank (DERIVATION 59).* The sparring harness scores a
+   win as the debrief would, and `tools/tune.py` searches the weights
+   one at a time against the port. Two things had to be made faithful
+   first: the planner advanced its own board at worst-case luck where
+   this mission adds a flat five (sparring and the loop plan at the
+   match's rule now), and the game's RNG moved through our own battle
+   animations (the loop turns the animation off). With those, the
+   sparring game IS the real one: the set the search found -- no capture
+   weight, no damage-taken weight, twice the kill weight, a small pull
+   toward the HQ -- routed Olaf on day 10 in both, three units lost, the
+   debrief's A 945 to the point. The default table plays a C. One more
+   weight, damage dealt doubled, and the game's own debrief gave an S:
+   a rout on day 10, two units lost, Speed 92, Power 100, Technique 100,
+   total 960. The weights are the mission's, not a general table --
+   the rank counts units, not bars, and the search obliged -- and the
+   game they won is kept as an acceptance fixture (m01e).
+
 7. **Campaign facts, on demand.** A mission that fails acceptance, or ends
    in a way the standard win conditions do not explain, triggers reading its
    objective and events: victory and loss condition, scripted reinforcements

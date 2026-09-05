@@ -53,6 +53,14 @@ class TestSparring(unittest.TestCase):
         self.assertEqual((r.outcome, r.reason, r.days), ("win", "rout", 1))
         self.assertEqual(r.taken, 200)             # two bars of an Infantry
         self.assertEqual(r.lost, 0)
+        # the debrief's counters, and the rank once a par is given
+        self.assertEqual(r.stats, {"days": 1, "best_day": 1, "enemy_fielded": 1,
+                                   "fielded": 1, "lost": 0, "par": None})
+        self.assertIsNone(r.rank)
+        r = sparring.spar(b, context(), 1, days=5, reply=None, par=8)
+        self.assertEqual((r.rank["letter"], r.rank["total"], r.rank["speed"],
+                          r.rank["power"], r.rank["technique"]), ("S", 999, 100, 100, 100))
+        self.assertIn("rank S 999", r.summary())
         self.assertEqual(r.log[0].note, "start")
         self.assertIn("FIRE", r.log[-1].note)
         self.assertEqual(r.held, {1: 0, 2: 0})

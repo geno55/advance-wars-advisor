@@ -30,6 +30,16 @@ KNOWN_GAPS = {
                   "(the forward model: m01-day15 agrees record for record)",
     ("m01b", 16): "not the port: Olaf issued no command on day 20 and the loop let the "
                   "AI play our turn 17 as well (mesen_drive.lua cpu_turn, fixed)",
+    # m01c is the tuned game of DERIVATION 59 (weights.json beside it): a
+    # rout on day 10, the debrief's A 945
+    ("m01c", 9): "not the port (m01s-day9 agrees record for record): our Recon's "
+                 "zero-damage shot at the MdTank was called failed by the driver's "
+                 "read-back and the replay leaves it out; the check is widened now",
+    # m01d is the first tuned set's game (weights.json beside it): a win by
+    # HQ on day 18, the debrief's B 732
+    ("m01d", 11): "not the port: the same zero-damage Recon shot called failed",
+    ("m01d", 15): "not the port: our Mech #3's capture step failed its read-back after "
+                  "the unit had moved, and the replay leaves a failed step out",
 }
 
 
@@ -73,7 +83,9 @@ class TestTheInverse(unittest.TestCase):
 class TestTheCheck(unittest.TestCase):
     def test_the_port_replays_every_turn_the_known_gaps_do_not_cover(self):
         found = {}
-        for run in ("m01a", "m01b"):
+        # m01e is the S-rank game of DERIVATION 59 (weights.json beside it,
+        # also data/weights_m01_s.json): every one of its nine turns agrees
+        for run in ("m01a", "m01b", "m01c", "m01d", "m01e"):
             d = ACC / run
             steps = fidelity.driven_steps(d)
             for t in sorted(steps):

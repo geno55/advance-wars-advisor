@@ -110,8 +110,17 @@ def compile_plan(plan, player: int, tag: str, warnings: list) -> list:
     return steps
 
 
+def load_weights(path) -> dict:
+    """The planner's weight overrides from a JSON file (tools/tune.py writes
+    one as <out>.best.json); {} when no path is given."""
+    if not path:
+        return {}
+    return dict(json.loads(pathlib.Path(path).read_text(encoding="utf-8")))
+
+
 def plan_once(dump, steps, player: int, turn: int, replan: int, start_path,
-              days: int, branches: int, reply: str, reply_on_replan: bool) -> dict:
+              days: int, branches: int, reply: str, reply_on_replan: bool,
+              weights: dict = None) -> dict:
     """Judge the dump, plan the turn, compile the steps, write `steps` (a
     Lua table file, atomically) and its .plan.txt; return what was written."""
     dump = pathlib.Path(dump)
@@ -134,8 +143,13 @@ def plan_once(dump, steps, player: int, turn: int, replan: int, start_path,
             model, ctx = "planner", None
         text.append(f"reply model: {model or 'none'} -- {why}")
         t0 = time.time()
+        # a no-luck match adds a flat 5 to every strike (DERIVATION 54):
+        # the planner's forward model uses it rather than the worst case
+        raw = json.loads(dump.read_text(encoding="utf-8"))
+        luck = 5 if raw.get("settings_6") else "min"
         plan = advisor.plan(board, player, reply=model, cpu_ctx=ctx,
-                            branches=branches, warnings=warnings)
+                            branches=branches, warnings=warnings, weights=weights or None,
+                            luck=luck)
         compiled = compile_plan(plan, player, f"t{turn:02d}r{replan}", warnings)
         out["steps"] = compiled
         out["note"] = "; ".join(st["describe"] for st in compiled) or "nothing to do"
@@ -153,7 +167,7 @@ def plan_once(dump, steps, player: int, turn: int, replan: int, start_path,
 
 def cmd_plan(a) -> int:
     plan_once(a.dump, a.steps, a.player, a.turn, a.replan, a.start, a.days,
-              a.branches, a.reply, a.reply_on_replan)
+              a.branches, a.reply, a.reply_on_replan, load_weights(a.weights))
     return 0
 
 
@@ -164,6 +178,9 @@ def cmd_serve(a) -> int:
     the same console, so nothing inside the emulator ever spawns a process."""
     run_dir = pathlib.Path(a.dir)
     log = open(run_dir / "serve.log", "a", encoding="utf-8")
+    weights = load_weights(a.weights)
+    if weights:
+        log.write(f"serve: weights {json.dumps(weights)}\n")
     log.write(f"serve: P{a.player} in {run_dir}\n"); log.flush()
     while not (run_dir / "result.json").exists() and not (run_dir / "stop").exists():
         reqs = sorted(run_dir.glob("*.req"), key=lambda q: q.stat().st_mtime)
@@ -177,7 +194,7 @@ def cmd_serve(a) -> int:
             turn, replan, dump = head.split(" ", 2)
             t0 = time.time()
             out = plan_once(dump, steps, a.player, int(turn), int(replan), a.start,
-                            a.days, a.branches, a.reply, a.reply_on_replan)
+                            a.days, a.branches, a.reply, a.reply_on_replan, weights)
             log.write(f"{req.name}: {len(out['steps'])} step(s), over={out['over']}, "
                       f"{time.time() - t0:.1f}s\n")
         except Exception as e:                  # noqa: BLE001 -- the loop must go on
@@ -283,7 +300,8 @@ def cmd_run(a) -> int:
            "run_dir": run_dir.as_posix() + "/", "empty": {"x": empty[0], "y": empty[1]},
            "w": dims[0] if dims else None, "h": dims[1] if dims else None,
            "max_turns": a.max_turns, "cpu_limit": a.cpu_limit,
-           "replan_after": bool(a.replan_after), "plan_wait": 36000}
+           "replan_after": bool(a.replan_after), "plan_wait": 36000,
+           "no_anim": not a.animation}
     script = run_dir / "play.lua"
     script.write_text(make_play_script(run_dir, cfg), encoding="utf-8")
     (run_dir / "stop").unlink(missing_ok=True)
@@ -292,6 +310,8 @@ def cmd_run(a) -> int:
                  "--days", str(a.days), "--branches", str(a.branches), "--reply", a.reply]
     if a.reply_on_replan:
         serve_cmd.append("--reply-on-replan")
+    if a.weights:
+        serve_cmd += ["--weights", str(pathlib.Path(a.weights).resolve())]
     service = subprocess.Popen(serve_cmd)        # this console, no window of its own
     t0 = time.time()
     try:
@@ -349,6 +369,9 @@ def main() -> int:
     r.add_argument("--replan-after", action="store_true",
                    help="also re-plan after every attack, build and power (slow; default: only after a failed step)")
     r.add_argument("--reply-on-replan", action="store_true", help="model the reply on re-plans too")
+    r.add_argument("--weights", help="JSON file of planner weight overrides (tools/tune.py's <out>.best.json)")
+    r.add_argument("--animation", action="store_true",
+                   help="keep the battle animations (off by default: settings +9 is written to 0 after the load)")
     r.add_argument("--cpu-limit", type=int, default=3000, help="polls of ten frames to wait for the CPU")
     r.add_argument("--timeout", type=int, default=7200, help="Mesen's wall-clock cap in seconds")
     r.set_defaults(fn=cmd_run)
@@ -364,6 +387,7 @@ def main() -> int:
     q.add_argument("--reply", choices=("cpu", "planner", "none"), default="cpu")
     q.add_argument("--reply-on-replan", action="store_true",
                    help="model the reply on mid-turn re-plans too (slow)")
+    q.add_argument("--weights", help="JSON file of planner weight overrides")
     q.set_defaults(fn=cmd_plan)
     v = sub.add_parser("serve", help="(started by run) answer the loop's plan requests")
     v.add_argument("--dir", required=True)
@@ -373,6 +397,7 @@ def main() -> int:
     v.add_argument("--branches", type=int, default=1)
     v.add_argument("--reply", choices=("cpu", "planner", "none"), default="cpu")
     v.add_argument("--reply-on-replan", action="store_true")
+    v.add_argument("--weights", help="JSON file of planner weight overrides")
     v.set_defaults(fn=cmd_serve)
     j = sub.add_parser("judge", help="read a dump: won, lost, or still playing")
     j.add_argument("--dump", required=True)

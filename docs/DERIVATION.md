@@ -3868,3 +3868,122 @@ were read back in a second run through every page of the debrief. The
 scores are written on the first page of the result phase and the map
 id advances to the next mission during the ending, so a probe that
 reads the par must read it before the debrief, not after.
+
+## 59. The rank as the sparring objective, a first search for Speed, and why the sparring game was not the real one
+
+**The objective.** `tools/sparring.py` now keeps the debrief's counters
+as the game keeps them (DERIVATION 58): every slot each side fielded,
+the planner's slots merged away by joins (not losses), the enemy slots
+gone by the next day (the day's kills, the best day kept), the day the
+game ended on; a win is ranked with the map's par from the dump's
+`map_id`. `tools/tune.py` searches one weight at a time, every
+candidate a game from the start board, the mean rank total the score
+and fewer days the tie-break; a loss or a draw scores 0.
+
+**One lever the table lacked.** `objective_tiles` pulls a foot unit to
+the nearest property it does not own and an armed unit to the nearest
+enemy; nothing pulled anyone toward the HQ, and `win` speaks only on
+the turn it falls. `hq_pull` (advisor.WEIGHTS, 0 by default: no field
+is built) is funds per movement point a foot unit ends closer to an
+enemy HQ. The search did not want it: every value from 25 to 800 was
+worse than none on this map, where the rout comes first.
+
+**The first search.** Seven weights, five candidates each, two passes,
+213 games at 14 to 38 s. Three RNG seeds gave the same game every time
+on this no-luck mission -- the profile's thresholds leave Olaf's
+randoms nothing to decide -- so the objective is one deterministic game
+per weight set, and it is jagged: a weight that wins on day 12 at one
+value draws at the cap at the next. Kept, in order: `objective_pull`
+40 -> 80, `damage_taken` 1 -> 0, `loss` 0.5 -> 0.25, `capture` 1 -> 0
+(day 12, one unit lost: A 920), then `loss` -> 0.5 (day 11: A 940). A
+second pass over ten more weights kept nothing. The set:
+
+    objective_pull 80, damage_taken 0, loss 0.5, capture 0
+
+a rout on day 11 losing one of twelve, Speed 88, Power 100, Technique
+100, 940: an A, one day short of S. It says the planner that wins
+fastest against Olaf here does not capture and does not price the
+damage it will take, only the units it will lose; it keeps the army
+together and kills. `damage_taken` 0 is true for the rank -- Technique
+counts units, not bars -- and false for any longer game.
+
+**Against the game: B 752.** The same weights through the acceptance
+loop from the Day 1 state: a win by rout on day 17, five units lost,
+and the debrief's own line (the loop reads it now) Speed 63, Power 100,
+Technique 79. The port was not the reason: `fidelity.py check` over
+the run's seventeen turns agrees on all but one (a `power_ready` bit on
+our side, the forward model's), and the first two plans of the two
+games are the same steps. The reason was ours, twice over:
+
+- *The planner's board was the worst case.* `advisor.plan` advances
+  its board at `luck="min"`, and the sparring game continued from it,
+  while on this mission every strike lands at the flat 5. From the
+  first battle the two games were on different boards. Sparring and
+  the loop's planner now plan at 5 when settings `+6` is set; replayed
+  so, the tuned set wins the port on day 20 losing two, B 750 -- two
+  points from the game's line -- and the default table on day 26, C 511
+  (the game gave that planner C 487 in DERIVATION 58).
+- *Our own turn moves the RNG.* With the battle animation on, each of
+  our battles seeds the scene's 128 draws (DERIVATION 55); the sparring
+  game advances the RNG only through Olaf's turn, so his unit randoms
+  drift from the game's from day 2. The loop now writes settings `+9`
+  to 0 after loading the state (`--animation` keeps it): a battle
+  resolves on the map in a second instead of a scene of ten, and our
+  turns draw nothing, which is what the sparring game assumes.
+
+**The search again, at the match's luck.** From the A set, seven
+weights, two passes, 90 games: `objective_pull` 80 -> 20, `kill` 0.5
+-> 2, and `hq_pull` 0 -> 50 -- the pull the first search rejected is
+wanted once the planner's board is the game's -- for a rout on day 10
+losing two: S 960. At seed 0. Replayed from the dump's own RNG, the one
+the real game continues from, the same weights rout on day 10 losing
+THREE: A 945. Olaf's randoms do move with the seed after all, by one
+unit's fate here; `tune.py` now searches at the dump's RNG by default,
+since that is the only game the acceptance run can play.
+
+**Two more days the game played for us.** Rerun without the animation,
+the A set's game skipped days 8, 14 and 16 in the loop's own record:
+with a CPU turn over in a few frames, the poll loop never saw Olaf's
+side up, the human's controller byte stayed at 2 from the End Turn
+trick, and the game's AI played our next turn. DERIVATION 55's fix
+had moved the restore from the CPU's first command to the first poll
+that saw his side; it now happens in the turn-change write itself
+(the callback on `0x030036AC`), which no turn is short enough to slip
+past.
+
+**Against the game, with the harness made faithful.** The S set of the
+second search, played from the Day 1 state with the animation off and
+the hand-off fixed: a rout on day 10, three units lost, and the
+debrief's own line Speed 92, Power 100, Technique 95, total 945 -- an
+A, and to the point the line the sparring game at the dump's RNG had
+given. The sparring game is the real one now: `fidelity.py check` over
+its nine saved turns agrees on eight, and the ninth is ours, not the
+port's (`m01s-day9` reproduces Olaf's turn record for record) -- the
+driver's read-back had called our Recon's zero-damage shot at the
+MdTank a failed step, so the replay left it out; a strike that rounds
+to nothing is still a battle, and the check now accepts the counter's
+mark on the attacker or a shell spent. The A set replayed the same way
+made a B 732 (a win by HQ on day 18, five lost) against its sparring
+line of B 750 on day 20, and its two disagreeing turns are the same
+read-back and a capture step the game had half-played. Both games are
+kept under `tests/fixtures/acceptance/` (m01c, m01d) with their
+weights beside them.
+
+**The third search, at the dump's RNG,** kept one more weight:
+`damage_dealt` 0.5 -> 2, a rout on day 10 losing two, S 960 against the
+port. Against the game, from the Day 1 state: a rout on day 10, two
+units lost, the debrief's Speed 92, Power 100, Technique 100 -- total
+960, rank code 5. An S on mission one, from the game's own scorer, with
+the weights
+
+    objective_pull 20, damage_taken 0, loss 0.5, capture 0,
+    kill 2, hq_pull 50, damage_dealt 2
+
+and the default table for everything else. That game is m01e under the
+acceptance fixtures. The port and the game played the same ten days.
+
+**Rig notes.** `campaign_run.py run --weights FILE` takes the search's
+`<out>.best.json` through to its planner service; `mesen_play.play_out`
+logs the debrief's own scores (army `+0x2E..+0x32`) once the result
+phase writes them. A seed changes nothing on a no-luck mission: spend
+the parallel workers on candidates, not seeds.

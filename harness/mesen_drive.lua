@@ -269,7 +269,18 @@ function M.check(checks, snap)
     elseif c.what == "hit" then
       local before, now = snap.units[c.slot], M.unit(c.slot)
       if now and before and now.hp == before.hp and M.r32(M.RNG) == snap.rng then
-        return false, string.format("unit %d untouched and the RNG never drew: no battle", c.slot)
+        -- a strike that rounds to nothing is still a battle: the counter
+        -- moved the attacker's HP or ammo, or the target spent a shell
+        -- (a Recon on a MdTank, m01-s day 9 and m01-a day 11: the step
+        -- was called failed, the game had played it, 2026-09-05)
+        local fought = now.ammo ~= before.ammo
+        if c.attacker then
+          local a0, a1 = snap.units[c.attacker], M.unit(c.attacker)
+          if a0 and a1 and a1.acted and (a1.hp ~= a0.hp or a1.ammo ~= a0.ammo) then fought = true end
+        end
+        if not fought then
+          return false, string.format("unit %d untouched and the RNG never drew: no battle", c.slot)
+        end
       end
     elseif c.what == "captured" then
       local before, now = snap.units[c.slot], M.unit(c.slot)
@@ -401,6 +412,17 @@ local function pc_of()
   return tonumber(st["cpu.r15"]) or -1
 end
 emu.addMemoryCallback(function(addr, value)
+  -- The turn has just passed to the CPU side (cpu_turn wrote both sides'
+  -- controller bytes to 2 so the End Turn's next-player search would land
+  -- on it): give every other side its byte back HERE, in the write, so
+  -- the CPU's turn can be as short as it likes. The poll loop's version
+  -- missed whole turns once the battle animation was off -- the game's AI
+  -- then played the human's next turn as well (m01-tuned-noanim, days 8,
+  -- 14 and 16; 2026-09-05).
+  if M.cpu_side and addr == 0x030036AC and value == M.cpu_side then
+    for p = 1, 4 do M.w8(M.army_addr(p) + 0x1B, (p == M.cpu_side) and 2 or M.control_orig[p]) end
+    M.handed = true
+  end
   if not M.watch_writes then return end
   M.L(string.format("  W idx36AC addr %08X val %d pc %08X phase %d", addr, value, pc_of(), M.r16(M.MATCH_PHASE)))
 end, emu.callbackType.write, 0x030036AC, 0x030036AD, emu.cpuType.gba, emu.memType.gbaMemory)
@@ -424,6 +446,7 @@ function M.cpu_turn(s)
   M.builds = {}
   M.state_log = {}
   M.cpu_side = s.cpu
+  M.handed = false
   -- an exec watch: each address in s.watch_pcs logs who called it (r14)
   -- and when, so a routine's invoker can be read off the run log
   local watchers = {}
@@ -474,7 +497,7 @@ function M.cpu_turn(s)
     -- the human side's 2 stood and the game's AI played the human's next
     -- turn as well; the turn is also back when the day has moved on with
     -- nothing dispatched.
-    if idx ~= before and not handed then
+    if (idx ~= before or M.handed) and not handed then
       handed = true
       for p = 1, 4 do M.w8(M.army_addr(p) + 0x1B, (p == cpu) and 2 or M.control_orig[p]) end
       M.L("  cpu side up: the other sides' control bytes restored")

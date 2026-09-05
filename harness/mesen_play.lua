@@ -164,6 +164,21 @@ function M.play_out(tag)
     M.tap("a", 6, 60)
     if i % 20 == 0 or (i >= 10 and i <= 60 and i % 5 == 0) then M.shot(string.format("%s-ending-%d", tag, i)) end
     if M.sram_writes ~= seen then seen, quiet = M.sram_writes, 0 else quiet = quiet + 1 end
+    -- the debrief's scores, once the result phase has written them
+    -- (army +0x2E rank code, +0x2F speed, +0x30 power, +0x31 technique,
+    -- +0x32 total; DERIVATION 58) -- logged once, with the counters
+    if not M.rank_logged then
+      for p = 1, 2 do
+        local a = M.army_addr(p)
+        if M.r16(a + 0x32) > 0 then
+          local fielded, lost = 0, 0
+          for i = 1, 24 do fielded = fielded + M.r8(a + 0x36 + i); lost = lost + M.r8(a + 0x4F + i) end
+          M.L(string.format("  rank: P%d code %d speed %d power %d technique %d total %d (best day %d, fielded %d, lost %d, day %d)",
+            p, M.r8(a + 0x2E), M.r8(a + 0x2F), M.r8(a + 0x30), M.r8(a + 0x31), M.r16(a + 0x32), M.r16(a + 0x18), fielded, lost, M.r16(0x03004420)))
+          M.rank_logged = true
+        end
+      end
+    end
     if i % 20 == 0 then M.L(string.format("  ending: tap %d, sram writes %d, phase %d day %d", i, M.sram_writes, M.r16(M.MATCH_PHASE), M.r32(M.TURN))) end
     if M.sram_writes > 0 and quiet >= 40 then break end
     if i > 20 and M.r16(M.MATCH_PHASE) == 5 and M.r32(M.TURN) == 1 then
@@ -180,6 +195,14 @@ function M.play_game(cfg)
   local fh = assert(io.open(cfg.mss, "rb")); local bytes = fh:read("*a"); fh:close()
   emu.loadSavestate(bytes); M.wait(30)
   if cfg.w then M.set_dims(cfg.w, cfg.h) end
+  if cfg.no_anim then
+    -- settings +9 is the battle animation (DERIVATION 55): off, a battle
+    -- resolves on the map in a second instead of a scene of ten, and the
+    -- scene's 128 RNG draws go with it -- the dump carries the byte, so
+    -- the port models the same game either way
+    M.w8(0x03004319, 0)
+    M.L("  battle animations off (settings +9 := 0)")
+  end
   M.control_orig = {}
   for p = 1, 4 do M.control_orig[p] = M.army(p).control end
   M.L(string.format("== play: %s as P%d, day %d active %d, control P1=%d P2=%d",

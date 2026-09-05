@@ -1,0 +1,436 @@
+{
+ "_comment": [
+  "The game's own CPU (P2, control byte 2) playing one turn from",
+  "the parked state ck-m01-s-t09, traced at the command dispatcher",
+  "0x080669A0 by harness/mesen_drive.lua (tools/cpu_trace.py).",
+  "`commands` is the ordered list of records it dispatched; the",
+  "before/after dumps are the boards either side of its turn."
+ ],
+ "name": "m01s-day9",
+ "state": "ck-m01-s-t09",
+ "human": 1,
+ "cpu": 2,
+ "writes": [],
+ "setup": [
+  {
+   "kind": "attack",
+   "slot": 5,
+   "tile": [
+    13,
+    7
+   ],
+   "target": 66
+  },
+  {
+   "kind": "attack",
+   "slot": 6,
+   "tile": [
+    15,
+    2
+   ],
+   "target": 75
+  },
+  {
+   "kind": "wait",
+   "slot": 2,
+   "tile": [
+    15,
+    1
+   ]
+  },
+  {
+   "kind": "wait",
+   "slot": 8,
+   "tile": [
+    7,
+    10
+   ]
+  },
+  {
+   "kind": "capture",
+   "slot": 4,
+   "tile": [
+    10,
+    3
+   ]
+  },
+  {
+   "kind": "wait",
+   "slot": 3,
+   "tile": [
+    13,
+    1
+   ]
+  },
+  {
+   "kind": "wait",
+   "slot": 12,
+   "tile": [
+    16,
+    11
+   ]
+  }
+ ],
+ "driven": true,
+ "driver_note": null,
+ "wall_seconds": 55,
+ "before": "m01s-day9.before.json",
+ "after": "m01s-day9.after.json",
+ "commands": [
+  {
+   "ai": [
+    2,
+    78,
+    0
+   ],
+   "fuel": 41,
+   "id": 2,
+   "b13": 34,
+   "tx": 14,
+   "ty": 7,
+   "draws": 2,
+   "uhp": 5,
+   "ux": 14,
+   "uy": 7,
+   "b14": 36,
+   "unit": "MdTank",
+   "sel_y": 7,
+   "slot": 66,
+   "x": 16,
+   "dest_x": 16,
+   "b19": 1,
+   "b15": 65,
+   "rng": 907690878,
+   "sel_x": 14,
+   "dest_y": 10,
+   "b7": 0,
+   "b6": 0,
+   "b17": 0,
+   "b16": 64,
+   "b12": 17,
+   "y": 10,
+   "name": "wait"
+  }
+ ],
+ "draws": [
+  {
+   "lr": 134628257,
+   "unit": 75,
+   "rng": 506587380
+  },
+  {
+   "lr": 134628257,
+   "unit": 66,
+   "rng": 478555909
+  },
+  {
+   "lr": 134628257,
+   "unit": 75,
+   "rng": 907690878
+  }
+ ],
+ "builds": [],
+ "state_log": [
+  {
+   "cmds": 0,
+   "builds": 0,
+   "v": 0,
+   "n": 1,
+   "pc": 134434976
+  },
+  {
+   "cmds": 0,
+   "builds": 0,
+   "v": 1,
+   "n": 1,
+   "pc": 134644626
+  },
+  {
+   "cmds": 0,
+   "builds": 0,
+   "v": 2,
+   "n": 1,
+   "pc": 134626456
+  },
+  {
+   "cmds": 0,
+   "builds": 0,
+   "v": 1,
+   "n": 1,
+   "pc": 134628464
+  },
+  {
+   "cmds": 0,
+   "builds": 0,
+   "v": 2,
+   "n": 1,
+   "pc": 134625588
+  },
+  {
+   "cmds": 0,
+   "builds": 0,
+   "v": 1,
+   "n": 1,
+   "pc": 134628464
+  },
+  {
+   "cmds": 0,
+   "builds": 0,
+   "v": 2,
+   "n": 1,
+   "pc": 134625776
+  },
+  {
+   "cmds": 0,
+   "builds": 0,
+   "v": 1,
+   "n": 1,
+   "pc": 134628464
+  },
+  {
+   "cmds": 0,
+   "builds": 0,
+   "v": 2,
+   "n": 1,
+   "pc": 134625964
+  },
+  {
+   "cmds": 0,
+   "builds": 0,
+   "v": 1,
+   "n": 1,
+   "pc": 134628464
+  },
+  {
+   "cmds": 0,
+   "builds": 0,
+   "v": 2,
+   "n": 1,
+   "pc": 134626144
+  },
+  {
+   "cmds": 0,
+   "builds": 0,
+   "v": 1,
+   "n": 1,
+   "pc": 134628464
+  },
+  {
+   "cmds": 0,
+   "builds": 0,
+   "v": 2,
+   "n": 1,
+   "pc": 134626332
+  },
+  {
+   "cmds": 0,
+   "builds": 0,
+   "v": 3,
+   "n": 1,
+   "pc": 134628464
+  },
+  {
+   "cmds": 1,
+   "builds": 0,
+   "v": 2,
+   "n": 1,
+   "pc": 134638262
+  },
+  {
+   "cmds": 1,
+   "builds": 0,
+   "v": 1,
+   "n": 1,
+   "pc": 134628464
+  },
+  {
+   "cmds": 1,
+   "builds": 0,
+   "v": 2,
+   "n": 1,
+   "pc": 134626332
+  },
+  {
+   "cmds": 1,
+   "builds": 0,
+   "v": 1,
+   "n": 1,
+   "pc": 134628464
+  },
+  {
+   "cmds": 1,
+   "builds": 0,
+   "v": 2,
+   "n": 1,
+   "pc": 134626408
+  },
+  {
+   "cmds": 1,
+   "builds": 0,
+   "v": 1,
+   "n": 1,
+   "pc": 134628464
+  },
+  {
+   "cmds": 1,
+   "builds": 0,
+   "v": 2,
+   "n": 1,
+   "pc": 134626808
+  },
+  {
+   "cmds": 1,
+   "builds": 0,
+   "v": 1,
+   "n": 1,
+   "pc": 134628464
+  },
+  {
+   "cmds": 1,
+   "builds": 0,
+   "v": 2,
+   "n": 1,
+   "pc": 134626620
+  },
+  {
+   "cmds": 1,
+   "builds": 0,
+   "v": 1,
+   "n": 1,
+   "pc": 134628464
+  },
+  {
+   "cmds": 1,
+   "builds": 0,
+   "v": 2,
+   "n": 1,
+   "pc": 134626996
+  },
+  {
+   "cmds": 1,
+   "builds": 0,
+   "v": 1,
+   "n": 1,
+   "pc": 134628464
+  },
+  {
+   "cmds": 1,
+   "builds": 0,
+   "v": 2,
+   "n": 1,
+   "pc": 134627188
+  },
+  {
+   "cmds": 1,
+   "builds": 0,
+   "v": 1,
+   "n": 1,
+   "pc": 134628464
+  },
+  {
+   "cmds": 1,
+   "builds": 0,
+   "v": 2,
+   "n": 1,
+   "pc": 134627380
+  },
+  {
+   "cmds": 1,
+   "builds": 0,
+   "v": 1,
+   "n": 1,
+   "pc": 134628464
+  },
+  {
+   "cmds": 1,
+   "builds": 0,
+   "v": 2,
+   "n": 1,
+   "pc": 134627568
+  },
+  {
+   "cmds": 1,
+   "builds": 0,
+   "v": 1,
+   "n": 1,
+   "pc": 134628464
+  },
+  {
+   "cmds": 1,
+   "builds": 0,
+   "v": 2,
+   "n": 1,
+   "pc": 134627568
+  },
+  {
+   "cmds": 1,
+   "builds": 0,
+   "v": 1,
+   "n": 1,
+   "pc": 134628464
+  },
+  {
+   "cmds": 1,
+   "builds": 0,
+   "v": 2,
+   "n": 1,
+   "pc": 134627736
+  },
+  {
+   "cmds": 1,
+   "builds": 0,
+   "v": 1,
+   "n": 1,
+   "pc": 134628464
+  },
+  {
+   "cmds": 1,
+   "builds": 0,
+   "v": 2,
+   "n": 1,
+   "pc": 134626456
+  },
+  {
+   "cmds": 1,
+   "builds": 0,
+   "v": 1,
+   "n": 1,
+   "pc": 134628464
+  },
+  {
+   "cmds": 1,
+   "builds": 0,
+   "v": 2,
+   "n": 1,
+   "pc": 134626332
+  },
+  {
+   "cmds": 1,
+   "builds": 0,
+   "v": 1,
+   "n": 1,
+   "pc": 134628464
+  },
+  {
+   "cmds": 1,
+   "builds": 0,
+   "v": 5,
+   "n": 1,
+   "pc": 134627784
+  },
+  {
+   "cmds": 1,
+   "builds": 0,
+   "v": 4,
+   "n": 1,
+   "pc": 134639362
+  },
+  {
+   "cmds": 1,
+   "builds": 0,
+   "v": 0,
+   "n": 1,
+   "pc": 134645086
+  }
+ ]
+}

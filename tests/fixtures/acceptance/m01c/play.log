@@ -1,0 +1,417 @@
+  battle animations off (settings +9 := 0)
+== play: m01 as P1, day 1 active 1, control P1=1 P2=2
+  plan requested: turn 1 replan 0
+  step t01r0-1 attack: ok
+  step t01r0-2 attack: ok
+  step t01r0-3 attack: ok
+  step t01r0-4 supply: ok
+  step t01r0-5 wait: ok
+  step t01r0-6 wait: ok
+  step t01r0-7 wait: ok
+  step t01r0-8 wait: ok
+  step t01r0-9 wait: ok
+  step t01r0-10 wait: ok
+  step t01r0-11 wait: ok
+  step t01r0-12 wait: ok
+  cpu_turn: active 1 idx36AC 1 control P1=2 P2=2
+  W idx36AC addr 030036AC val 2 pc 08024D64 phase 3
+  W army P0 +0x1C val 0 pc 0801E19E phase 3 day 1
+  W army P1 +0x1C val 0 pc 0801E1B0 phase 3 day 1
+  W army P2 +0x1C val 0 pc 0801E1B0 phase 3 day 1
+  W army P3 +0x1C val 0 pc 0801E1B0 phase 3 day 1
+  W army P4 +0x1C val 0 pc 0801E1B0 phase 3 day 1
+  W army P2 +0x1C val 1 pc 0801E1F2 phase 3 day 1
+  W army P1 +0x1C val 2 pc 0801E288 phase 3 day 1
+  order: flag 0 slots [70,71,74,75,0,77,0,0,0,0,0,0] keys [5,5,5,5,2,2,0,0,0,0,0,0]
+  order: flag 0 slots [65,67,68,69,72,73,66,0,0,0,0,0] keys [6,6,6,6,6,6,5,0,0,0,0,0]
+  order: flag 0 slots [65,67,68,69,72,73,66,0,0,0,0,0] keys [6,6,6,6,6,6,5,0,0,0,0,0]
+  order: flag 0 slots [65,67,68,69,72,73,66,0,0,0,0,0] keys [6,6,6,6,6,6,5,0,0,0,0,0]
+  order: flag 0 slots [65,67,68,69,72,73,66,0,0,0,0,0] keys [6,6,6,6,6,6,5,0,0,0,0,0]
+  phase 6 idx36AC 2 control P1=1 P2=2 day 1 cmds 5
+  cpu side up: the other sides' control bytes restored
+  order: flag 0 slots [65,67,68,69,72,73,66,0,0,0,0,0] keys [6,6,6,6,6,6,5,0,0,0,0,0]
+  phase 6 idx36AC 2 control P1=1 P2=2 day 1 cmds 6
+  order: flag 0 slots [76,77,78,79,80,81,0,0,0,0,0,0] keys [6,5,6,6,6,6,5,0,0,0,0,0]
+  phase 6 idx36AC 2 control P1=1 P2=2 day 1 cmds 7
+  order: flag 0 slots [76,77,78,79,80,81,0,0,0,0,0,0] keys [6,5,6,6,6,6,5,0,0,0,0,0]
+  phase 6 idx36AC 2 control P1=1 P2=2 day 1 cmds 8
+  order: flag 0 slots [76,77,78,79,80,81,0,0,0,0,0,0] keys [6,5,6,6,6,6,5,0,0,0,0,0]
+  phase 6 idx36AC 2 control P1=1 P2=2 day 1 cmds 9
+  order: flag 0 slots [76,77,78,79,80,81,0,0,0,0,0,0] keys [6,5,6,6,6,6,5,0,0,0,0,0]
+  phase 6 idx36AC 2 control P1=1 P2=2 day 1 cmds 10
+  order: flag 0 slots [76,77,78,79,80,81,0,0,0,0,0,0] keys [6,5,6,6,6,6,5,0,0,0,0,0]
+  phase 6 idx36AC 2 control P1=1 P2=2 day 1 cmds 11
+  order: flag 0 slots [76,77,78,79,80,81,0,0,0,0,0,0] keys [6,5,6,6,6,6,5,0,0,0,0,0]
+  phase 6 idx36AC 2 control P1=1 P2=2 day 1 cmds 12
+  order: flag 0 slots [70,71,75,0,80,81,0,0,0,0,0,0] keys [5,5,5,6,6,6,5,0,0,0,0,0]
+  phase 6 idx36AC 2 control P1=1 P2=2 day 1 cmds 13
+  order: flag 0 slots [70,71,75,0,80,81,0,0,0,0,0,0] keys [5,5,5,6,6,6,5,0,0,0,0,0]
+  phase 6 idx36AC 2 control P1=1 P2=2 day 1 cmds 14
+  W idx36AC addr 030036AC val 3 pc 08024D64 phase 3
+  W idx36AC addr 030036AC val 4 pc 08024D64 phase 3
+  W idx36AC addr 030036AC val 5 pc 08024D64 phase 3
+  W idx36AC addr 030036AC val 1 pc 08024D74 phase 3
+  W army P0 +0x1C val 0 pc 0801E19E phase 3 day 2
+  W army P1 +0x1C val 0 pc 0801E1B0 phase 3 day 2
+  W army P2 +0x1C val 0 pc 0801E1B0 phase 3 day 2
+  W army P3 +0x1C val 0 pc 0801E1B0 phase 3 day 2
+  W army P4 +0x1C val 0 pc 0801E1B0 phase 3 day 2
+  W army P1 +0x1C val 3 pc 0801E1F2 phase 3 day 2
+  phase 4 idx36AC 1 control P1=1 P2=2 day 2 cmds 14
+  phase 7 idx36AC 1 control P1=1 P2=2 day 2 cmds 14
+  phase 10 idx36AC 1 control P1=1 P2=2 day 2 cmds 14
+  phase 5 idx36AC 1 control P1=1 P2=2 day 2 cmds 14
+  cpu turn: back, 14 command(s)
+  plan requested: turn 2 replan 0
+  step t02r0-1 attack: ok
+  step t02r0-2 attack: ok
+  step t02r0-3 attack: ok
+  step t02r0-4 attack: ok
+  step t02r0-5 attack: ok
+  step t02r0-6 attack: ok
+  step t02r0-7 attack: ok
+  step t02r0-8 supply: ok
+  step t02r0-9 attack: ok
+  step t02r0-10 wait: ok
+  step t02r0-11 wait: ok
+  step t02r0-12 wait: ok
+  cpu_turn: active 1 idx36AC 1 control P1=2 P2=2
+  W idx36AC addr 030036AC val 2 pc 08024D64 phase 3
+  W army P0 +0x1C val 0 pc 0801E19E phase 3 day 2
+  W army P1 +0x1C val 0 pc 0801E1B0 phase 3 day 2
+  W army P2 +0x1C val 0 pc 0801E1B0 phase 3 day 2
+  W army P3 +0x1C val 0 pc 0801E1B0 phase 3 day 2
+  W army P4 +0x1C val 0 pc 0801E1B0 phase 3 day 2
+  W army P2 +0x1C val 1 pc 0801E1F2 phase 3 day 2
+  W army P1 +0x1C val 2 pc 0801E288 phase 3 day 2
+  phase 6 idx36AC 2 control P1=1 P2=2 day 2 cmds 0
+  cpu side up: the other sides' control bytes restored
+  order: flag 0 slots [78,79,80,81,76,77,0,0,0,0,0,0] keys [3,3,3,3,2,2,5,0,0,0,0,0]
+  phase 6 idx36AC 2 control P1=1 P2=2 day 2 cmds 1
+  order: flag 0 slots [78,79,80,81,76,77,0,0,0,0,0,0] keys [3,3,3,3,2,2,5,0,0,0,0,0]
+  phase 13 idx36AC 2 control P1=1 P2=2 day 2 cmds 2
+  phase 6 idx36AC 2 control P1=1 P2=2 day 2 cmds 2
+  order: flag 0 slots [78,79,80,81,76,77,0,0,0,0,0,0] keys [3,3,3,3,2,2,5,0,0,0,0,0]
+  phase 13 idx36AC 2 control P1=1 P2=2 day 2 cmds 3
+  phase 6 idx36AC 2 control P1=1 P2=2 day 2 cmds 3
+  order: flag 0 slots [74,75,0,81,76,77,0,0,0,0,0,0] keys [5,5,3,3,2,2,5,0,0,0,0,0]
+  phase 6 idx36AC 2 control P1=1 P2=2 day 2 cmds 4
+  order: flag 0 slots [65,67,68,66,0,77,0,0,0,0,0,0] keys [6,6,6,5,2,2,5,0,0,0,0,0]
+  phase 6 idx36AC 2 control P1=1 P2=2 day 2 cmds 5
+  order: flag 0 slots [65,67,68,66,0,77,0,0,0,0,0,0] keys [6,6,6,5,2,2,5,0,0,0,0,0]
+  phase 6 idx36AC 2 control P1=1 P2=2 day 2 cmds 6
+  order: flag 0 slots [76,77,81,0,0,77,0,0,0,0,0,0] keys [6,5,6,5,2,2,5,0,0,0,0,0]
+  phase 6 idx36AC 2 control P1=1 P2=2 day 2 cmds 7
+  order: flag 0 slots [76,77,81,0,0,77,0,0,0,0,0,0] keys [6,5,6,5,2,2,5,0,0,0,0,0]
+  phase 6 idx36AC 2 control P1=1 P2=2 day 2 cmds 8
+  order: flag 0 slots [76,77,81,0,0,77,0,0,0,0,0,0] keys [6,5,6,5,2,2,5,0,0,0,0,0]
+  phase 6 idx36AC 2 control P1=1 P2=2 day 2 cmds 9
+  W idx36AC addr 030036AC val 3 pc 08024D64 phase 3
+  W idx36AC addr 030036AC val 4 pc 08024D64 phase 3
+  W idx36AC addr 030036AC val 5 pc 08024D64 phase 3
+  W idx36AC addr 030036AC val 1 pc 08024D74 phase 3
+  W army P0 +0x1C val 0 pc 0801E19E phase 3 day 3
+  W army P1 +0x1C val 0 pc 0801E1B0 phase 3 day 3
+  W army P2 +0x1C val 0 pc 0801E1B0 phase 3 day 3
+  W army P3 +0x1C val 0 pc 0801E1B0 phase 3 day 3
+  W army P4 +0x1C val 0 pc 0801E1B0 phase 3 day 3
+  W army P1 +0x1C val 3 pc 0801E1F2 phase 3 day 3
+  phase 4 idx36AC 1 control P1=1 P2=2 day 3 cmds 9
+  phase 7 idx36AC 1 control P1=1 P2=2 day 3 cmds 9
+  phase 10 idx36AC 1 control P1=1 P2=2 day 3 cmds 9
+  phase 5 idx36AC 1 control P1=1 P2=2 day 3 cmds 9
+  cpu turn: back, 9 command(s)
+  plan requested: turn 3 replan 0
+  step t03r0-1 attack: ok
+  settle: cursor not answering, tap 1
+  settle: cursor not answering, tap 11
+  settle: cursor answers after 15 tap(s)
+  step t03r0-2 power: ok
+  step t03r0-3 attack: ok
+  step t03r0-4 attack: ok
+  step t03r0-5 attack: ok
+  step t03r0-6 attack: ok
+  step t03r0-7 wait: ok
+  step t03r0-8 supply: ok
+  step t03r0-9 wait: ok
+  step t03r0-10 wait: ok
+  step t03r0-11 wait: ok
+  step t03r0-12 wait: ok
+  cpu_turn: active 1 idx36AC 1 control P1=2 P2=2
+  W idx36AC addr 030036AC val 2 pc 08024D64 phase 3
+  W army P0 +0x1C val 0 pc 0801E19E phase 3 day 3
+  W army P1 +0x1C val 0 pc 0801E1B0 phase 3 day 3
+  W army P2 +0x1C val 0 pc 0801E1B0 phase 3 day 3
+  W army P3 +0x1C val 0 pc 0801E1B0 phase 3 day 3
+  W army P4 +0x1C val 0 pc 0801E1B0 phase 3 day 3
+  W army P2 +0x1C val 1 pc 0801E1F2 phase 3 day 3
+  W army P1 +0x1C val 2 pc 0801E288 phase 3 day 3
+  order: flag 0 slots [78,79,81,76,77,0,0,0,0,0,0,0] keys [3,3,3,2,2,2,5,0,0,0,0,0]
+  order: flag 0 slots [78,79,81,76,77,0,0,0,0,0,0,0] keys [3,3,3,2,2,2,5,0,0,0,0,0]
+  phase 13 idx36AC 2 control P1=1 P2=2 day 3 cmds 2
+  cpu side up: the other sides' control bytes restored
+  phase 6 idx36AC 2 control P1=1 P2=2 day 3 cmds 2
+  order: flag 0 slots [78,79,81,76,77,0,0,0,0,0,0,0] keys [3,3,3,2,2,2,5,0,0,0,0,0]
+  phase 6 idx36AC 2 control P1=1 P2=2 day 3 cmds 3
+  order: flag 0 slots [74,75,0,76,77,0,0,0,0,0,0,0] keys [5,5,3,2,2,2,5,0,0,0,0,0]
+  phase 6 idx36AC 2 control P1=1 P2=2 day 3 cmds 4
+  order: flag 0 slots [65,68,66,0,77,0,0,0,0,0,0,0] keys [6,6,5,2,2,2,5,0,0,0,0,0]
+  phase 6 idx36AC 2 control P1=1 P2=2 day 3 cmds 5
+  order: flag 0 slots [76,77,0,0,77,0,0,0,0,0,0,0] keys [6,5,5,2,2,2,5,0,0,0,0,0]
+  phase 6 idx36AC 2 control P1=1 P2=2 day 3 cmds 6
+  order: flag 0 slots [76,77,0,0,77,0,0,0,0,0,0,0] keys [6,5,5,2,2,2,5,0,0,0,0,0]
+  phase 6 idx36AC 2 control P1=1 P2=2 day 3 cmds 7
+  W idx36AC addr 030036AC val 3 pc 08024D64 phase 3
+  W idx36AC addr 030036AC val 4 pc 08024D64 phase 3
+  W idx36AC addr 030036AC val 5 pc 08024D64 phase 3
+  W idx36AC addr 030036AC val 1 pc 08024D74 phase 3
+  W army P0 +0x1C val 0 pc 0801E19E phase 3 day 4
+  W army P1 +0x1C val 0 pc 0801E1B0 phase 3 day 4
+  W army P2 +0x1C val 0 pc 0801E1B0 phase 3 day 4
+  W army P3 +0x1C val 0 pc 0801E1B0 phase 3 day 4
+  W army P4 +0x1C val 0 pc 0801E1B0 phase 3 day 4
+  W army P1 +0x1C val 3 pc 0801E1F2 phase 3 day 4
+  phase 4 idx36AC 1 control P1=1 P2=2 day 4 cmds 7
+  phase 7 idx36AC 1 control P1=1 P2=2 day 4 cmds 7
+  phase 10 idx36AC 1 control P1=1 P2=2 day 4 cmds 7
+  phase 5 idx36AC 1 control P1=1 P2=2 day 4 cmds 7
+  cpu turn: back, 7 command(s)
+  plan requested: turn 4 replan 0
+  step t04r0-1 attack: ok
+  step t04r0-2 attack: ok
+  step t04r0-3 attack: ok
+  step t04r0-4 attack: ok
+  step t04r0-5 attack: ok
+  step t04r0-6 supply: ok
+  step t04r0-7 join: ok
+  step t04r0-8 capture: ok
+  step t04r0-9 wait: ok
+  step t04r0-10 wait: ok
+  cpu_turn: active 1 idx36AC 1 control P1=2 P2=2
+  W idx36AC addr 030036AC val 2 pc 08024D64 phase 3
+  W army P0 +0x1C val 0 pc 0801E19E phase 3 day 4
+  W army P1 +0x1C val 0 pc 0801E1B0 phase 3 day 4
+  W army P2 +0x1C val 0 pc 0801E1B0 phase 3 day 4
+  W army P3 +0x1C val 0 pc 0801E1B0 phase 3 day 4
+  W army P4 +0x1C val 0 pc 0801E1B0 phase 3 day 4
+  W army P2 +0x1C val 1 pc 0801E1F2 phase 3 day 4
+  W army P1 +0x1C val 2 pc 0801E288 phase 3 day 4
+  order: flag 0 slots [65,68,66,0,77,0,0,0,0,0,0,0] keys [6,6,5,2,2,2,5,0,0,0,0,0]
+  order: flag 0 slots [77,78,79,0,77,0,0,0,0,0,0,0] keys [6,5,5,2,2,2,5,0,0,0,0,0]
+  order: flag 0 slots [77,78,79,0,77,0,0,0,0,0,0,0] keys [6,5,5,2,2,2,5,0,0,0,0,0]
+  order: flag 0 slots [77,78,79,0,77,0,0,0,0,0,0,0] keys [6,5,5,2,2,2,5,0,0,0,0,0]
+  W idx36AC addr 030036AC val 3 pc 08024D64 phase 3
+  W idx36AC addr 030036AC val 4 pc 08024D64 phase 3
+  W idx36AC addr 030036AC val 5 pc 08024D64 phase 3
+  W idx36AC addr 030036AC val 1 pc 08024D74 phase 3
+  W army P0 +0x1C val 0 pc 0801E19E phase 3 day 5
+  W army P1 +0x1C val 0 pc 0801E1B0 phase 3 day 5
+  W army P2 +0x1C val 0 pc 0801E1B0 phase 3 day 5
+  W army P3 +0x1C val 0 pc 0801E1B0 phase 3 day 5
+  W army P4 +0x1C val 0 pc 0801E1B0 phase 3 day 5
+  W army P1 +0x1C val 3 pc 0801E1F2 phase 3 day 5
+  phase 4 idx36AC 1 control P1=1 P2=2 day 5 cmds 4
+  cpu side up: the other sides' control bytes restored
+  phase 7 idx36AC 1 control P1=1 P2=2 day 5 cmds 4
+  phase 10 idx36AC 1 control P1=1 P2=2 day 5 cmds 4
+  phase 5 idx36AC 1 control P1=1 P2=2 day 5 cmds 4
+  cpu turn: back, 4 command(s)
+  plan requested: turn 5 replan 0
+  step t05r0-1 attack: ok
+  step t05r0-2 wait: ok
+  step t05r0-3 attack: ok
+  step t05r0-4 attack: ok
+  step t05r0-5 attack: ok
+  step t05r0-6 supply: ok
+  step t05r0-7 wait: ok
+  step t05r0-8 wait: ok
+  step t05r0-9 wait: ok
+  step t05r0-10 wait: ok
+  cpu_turn: active 1 idx36AC 1 control P1=2 P2=2
+  W idx36AC addr 030036AC val 2 pc 08024D64 phase 3
+  W army P0 +0x1C val 0 pc 0801E19E phase 3 day 5
+  W army P1 +0x1C val 0 pc 0801E1B0 phase 3 day 5
+  W army P2 +0x1C val 0 pc 0801E1B0 phase 3 day 5
+  W army P3 +0x1C val 0 pc 0801E1B0 phase 3 day 5
+  W army P4 +0x1C val 0 pc 0801E1B0 phase 3 day 5
+  W army P2 +0x1C val 1 pc 0801E1F2 phase 3 day 5
+  W army P1 +0x1C val 2 pc 0801E288 phase 3 day 5
+  order: flag 0 slots [65,66,0,0,77,0,0,0,0,0,0,0] keys [6,5,5,2,2,2,5,0,0,0,0,0]
+  order: flag 0 slots [77,78,0,0,77,0,0,0,0,0,0,0] keys [5,5,5,2,2,2,5,0,0,0,0,0]
+  order: flag 0 slots [77,78,0,0,77,0,0,0,0,0,0,0] keys [5,5,5,2,2,2,5,0,0,0,0,0]
+  W idx36AC addr 030036AC val 3 pc 08024D64 phase 3
+  W idx36AC addr 030036AC val 4 pc 08024D64 phase 3
+  W idx36AC addr 030036AC val 5 pc 08024D64 phase 3
+  W idx36AC addr 030036AC val 1 pc 08024D74 phase 3
+  W army P0 +0x1C val 0 pc 0801E19E phase 3 day 6
+  W army P1 +0x1C val 0 pc 0801E1B0 phase 3 day 6
+  W army P2 +0x1C val 0 pc 0801E1B0 phase 3 day 6
+  W army P3 +0x1C val 0 pc 0801E1B0 phase 3 day 6
+  W army P4 +0x1C val 0 pc 0801E1B0 phase 3 day 6
+  W army P1 +0x1C val 3 pc 0801E1F2 phase 3 day 6
+  phase 7 idx36AC 1 control P1=1 P2=2 day 6 cmds 3
+  cpu side up: the other sides' control bytes restored
+  phase 10 idx36AC 1 control P1=1 P2=2 day 6 cmds 3
+  phase 5 idx36AC 1 control P1=1 P2=2 day 6 cmds 3
+  cpu turn: back, 3 command(s)
+  plan requested: turn 6 replan 0
+  step t06r0-1 attack: ok
+  step t06r0-2 attack: ok
+  step t06r0-3 attack: ok
+  step t06r0-4 wait: ok
+  step t06r0-5 supply: ok
+  step t06r0-6 wait: ok
+  step t06r0-7 wait: ok
+  step t06r0-8 wait: ok
+  step t06r0-9 wait: ok
+  step t06r0-10 wait: ok
+  cpu_turn: active 1 idx36AC 1 control P1=2 P2=2
+  W idx36AC addr 030036AC val 2 pc 08024D64 phase 3
+  W army P0 +0x1C val 0 pc 0801E19E phase 3 day 6
+  W army P1 +0x1C val 0 pc 0801E1B0 phase 3 day 6
+  W army P2 +0x1C val 0 pc 0801E1B0 phase 3 day 6
+  W army P3 +0x1C val 0 pc 0801E1B0 phase 3 day 6
+  W army P4 +0x1C val 0 pc 0801E1B0 phase 3 day 6
+  W army P2 +0x1C val 1 pc 0801E1F2 phase 3 day 6
+  W army P1 +0x1C val 2 pc 0801E288 phase 3 day 6
+  order: flag 0 slots [65,66,0,0,77,0,0,0,0,0,0,0] keys [6,5,5,2,2,2,5,0,0,0,0,0]
+  W idx36AC addr 030036AC val 3 pc 08024D64 phase 3
+  W idx36AC addr 030036AC val 4 pc 08024D64 phase 3
+  W idx36AC addr 030036AC val 5 pc 08024D64 phase 3
+  W idx36AC addr 030036AC val 1 pc 08024D74 phase 3
+  W army P0 +0x1C val 0 pc 0801E19E phase 3 day 7
+  W army P1 +0x1C val 0 pc 0801E1B0 phase 3 day 7
+  W army P2 +0x1C val 0 pc 0801E1B0 phase 3 day 7
+  W army P3 +0x1C val 0 pc 0801E1B0 phase 3 day 7
+  W army P4 +0x1C val 0 pc 0801E1B0 phase 3 day 7
+  W army P1 +0x1C val 3 pc 0801E1F2 phase 3 day 7
+  phase 7 idx36AC 1 control P1=1 P2=2 day 7 cmds 1
+  cpu side up: the other sides' control bytes restored
+  phase 10 idx36AC 1 control P1=1 P2=2 day 7 cmds 1
+  phase 5 idx36AC 1 control P1=1 P2=2 day 7 cmds 1
+  cpu turn: back, 1 command(s)
+  plan requested: turn 7 replan 0
+  step t07r0-1 attack: ok
+  step t07r0-2 wait: ok
+  step t07r0-3 wait: ok
+  step t07r0-4 wait: ok
+  step t07r0-5 supply: ok
+  step t07r0-6 wait: ok
+  step t07r0-7 wait: ok
+  step t07r0-8 wait: ok
+  step t07r0-9 wait: ok
+  cpu_turn: active 1 idx36AC 1 control P1=2 P2=2
+  W idx36AC addr 030036AC val 2 pc 08024D64 phase 3
+  W army P0 +0x1C val 0 pc 0801E19E phase 3 day 7
+  W army P1 +0x1C val 0 pc 0801E1B0 phase 3 day 7
+  W army P2 +0x1C val 0 pc 0801E1B0 phase 3 day 7
+  W army P3 +0x1C val 0 pc 0801E1B0 phase 3 day 7
+  W army P4 +0x1C val 0 pc 0801E1B0 phase 3 day 7
+  W army P2 +0x1C val 1 pc 0801E1F2 phase 3 day 7
+  W army P1 +0x1C val 2 pc 0801E288 phase 3 day 7
+  order: flag 0 slots [66,0,0,0,77,0,0,0,0,0,0,0] keys [5,5,5,2,2,2,5,0,0,0,0,0]
+  W idx36AC addr 030036AC val 3 pc 08024D64 phase 3
+  W idx36AC addr 030036AC val 4 pc 08024D64 phase 3
+  W idx36AC addr 030036AC val 5 pc 08024D64 phase 3
+  W idx36AC addr 030036AC val 1 pc 08024D74 phase 3
+  W army P0 +0x1C val 0 pc 0801E19E phase 3 day 8
+  W army P1 +0x1C val 0 pc 0801E1B0 phase 3 day 8
+  W army P2 +0x1C val 0 pc 0801E1B0 phase 3 day 8
+  W army P3 +0x1C val 0 pc 0801E1B0 phase 3 day 8
+  W army P4 +0x1C val 0 pc 0801E1B0 phase 3 day 8
+  W army P1 +0x1C val 3 pc 0801E1F2 phase 3 day 8
+  phase 10 idx36AC 1 control P1=1 P2=2 day 8 cmds 1
+  cpu side up: the other sides' control bytes restored
+  phase 5 idx36AC 1 control P1=1 P2=2 day 8 cmds 1
+  cpu turn: back, 1 command(s)
+  plan requested: turn 8 replan 0
+  step t08r0-1 attack: ok
+  step t08r0-2 attack: ok
+  step t08r0-3 wait: ok
+  step t08r0-4 capture: ok
+  step t08r0-5 wait: ok
+  step t08r0-6 wait: ok
+  step t08r0-7 wait: ok
+  step t08r0-8 wait: ok
+  step t08r0-9 wait: ok
+  cpu_turn: active 1 idx36AC 1 control P1=2 P2=2
+  W idx36AC addr 030036AC val 2 pc 08024D64 phase 3
+  W army P0 +0x1C val 0 pc 0801E19E phase 3 day 8
+  W army P1 +0x1C val 0 pc 0801E1B0 phase 3 day 8
+  W army P2 +0x1C val 0 pc 0801E1B0 phase 3 day 8
+  W army P3 +0x1C val 0 pc 0801E1B0 phase 3 day 8
+  W army P4 +0x1C val 0 pc 0801E1B0 phase 3 day 8
+  W army P2 +0x1C val 1 pc 0801E1F2 phase 3 day 8
+  W army P1 +0x1C val 2 pc 0801E288 phase 3 day 8
+  phase 6 idx36AC 2 control P1=1 P2=2 day 8 cmds 0
+  cpu side up: the other sides' control bytes restored
+  order: flag 0 slots [66,0,0,0,77,0,0,0,0,0,0,0] keys [5,5,5,2,2,2,5,0,0,0,0,0]
+  phase 6 idx36AC 2 control P1=1 P2=2 day 8 cmds 1
+  W idx36AC addr 030036AC val 3 pc 08024D64 phase 3
+  W idx36AC addr 030036AC val 4 pc 08024D64 phase 3
+  W idx36AC addr 030036AC val 5 pc 08024D64 phase 3
+  W idx36AC addr 030036AC val 1 pc 08024D74 phase 3
+  W army P0 +0x1C val 0 pc 0801E19E phase 3 day 9
+  W army P1 +0x1C val 0 pc 0801E1B0 phase 3 day 9
+  W army P2 +0x1C val 0 pc 0801E1B0 phase 3 day 9
+  W army P3 +0x1C val 0 pc 0801E1B0 phase 3 day 9
+  W army P4 +0x1C val 0 pc 0801E1B0 phase 3 day 9
+  W army P1 +0x1C val 3 pc 0801E1F2 phase 3 day 9
+  phase 4 idx36AC 1 control P1=1 P2=2 day 9 cmds 1
+  phase 7 idx36AC 1 control P1=1 P2=2 day 9 cmds 1
+  phase 10 idx36AC 1 control P1=1 P2=2 day 9 cmds 1
+  phase 5 idx36AC 1 control P1=1 P2=2 day 9 cmds 1
+  cpu turn: back, 1 command(s)
+  plan requested: turn 9 replan 0
+  step t09r0-1 attack: ok
+  step t09r0-2 attack: ok
+  step t09r0-3 wait: ok
+  step t09r0-4 wait: ok
+  step t09r0-5 capture: ok
+  check failed (unit 66 untouched and the RNG never drew: no battle); nudge 1
+  check failed (unit 66 untouched and the RNG never drew: no battle); nudge 2
+  check failed (unit 66 untouched and the RNG never drew: no battle); nudge 3
+  step t09r0-6 attack: FAILED -- unit 66 untouched and the RNG never drew: no battle
+  plan requested: turn 9 replan 1
+  step t09r1-1 wait: ok
+  step t09r1-2 wait: ok
+  cpu_turn: active 1 idx36AC 1 control P1=2 P2=2
+  W idx36AC addr 030036AC val 2 pc 08024D64 phase 3
+  W army P0 +0x1C val 0 pc 0801E19E phase 3 day 9
+  W army P1 +0x1C val 0 pc 0801E1B0 phase 3 day 9
+  W army P2 +0x1C val 0 pc 0801E1B0 phase 3 day 9
+  W army P3 +0x1C val 0 pc 0801E1B0 phase 3 day 9
+  W army P4 +0x1C val 0 pc 0801E1B0 phase 3 day 9
+  W army P2 +0x1C val 1 pc 0801E1F2 phase 3 day 9
+  W army P1 +0x1C val 2 pc 0801E288 phase 3 day 9
+  phase 10 idx36AC 2 control P1=1 P2=2 day 9 cmds 0
+  cpu side up: the other sides' control bytes restored
+  phase 6 idx36AC 2 control P1=1 P2=2 day 9 cmds 0
+  order: flag 0 slots [66,0,0,0,77,0,0,0,0,0,0,0] keys [5,5,5,2,2,2,5,0,0,0,0,0]
+  phase 6 idx36AC 2 control P1=1 P2=2 day 9 cmds 1
+  W idx36AC addr 030036AC val 3 pc 08024D64 phase 3
+  W idx36AC addr 030036AC val 4 pc 08024D64 phase 3
+  W idx36AC addr 030036AC val 5 pc 08024D64 phase 3
+  W idx36AC addr 030036AC val 1 pc 08024D74 phase 3
+  W army P0 +0x1C val 0 pc 0801E19E phase 3 day 10
+  W army P1 +0x1C val 0 pc 0801E1B0 phase 3 day 10
+  W army P2 +0x1C val 0 pc 0801E1B0 phase 3 day 10
+  W army P3 +0x1C val 0 pc 0801E1B0 phase 3 day 10
+  W army P4 +0x1C val 0 pc 0801E1B0 phase 3 day 10
+  W army P1 +0x1C val 3 pc 0801E1F2 phase 3 day 10
+  phase 4 idx36AC 1 control P1=1 P2=2 day 10 cmds 1
+  phase 7 idx36AC 1 control P1=1 P2=2 day 10 cmds 1
+  phase 10 idx36AC 1 control P1=1 P2=2 day 10 cmds 1
+  phase 5 idx36AC 1 control P1=1 P2=2 day 10 cmds 1
+  cpu turn: back, 1 command(s)
+  plan requested: turn 10 replan 0
+  step t10r0-1 attack: ok
+  step t10r0-2 attack: ok
+  step t10r0-3 attack: ok
+  decided on our turn: win -- the enemy has no unit left
+  playing the ending out (sram writes so far 0)
+  rank: P1 code 4 speed 92 power 100 technique 95 total 945 (best day 5, fielded 12, lost 3, day 10)
+  ending: tap 20, sram writes 0, phase 0 day 10
+  ending: tap 40, sram writes 16390, phase 0 day 10
+  ending: a new match has begun; stopping
+  ending played out: sram writes 16390, phase 5 day 1

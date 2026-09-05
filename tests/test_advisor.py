@@ -388,6 +388,26 @@ class TestScenarios(unittest.TestCase):
         self.assertIn("nearest visible enemy", pull[0].fact)
         self.assertGreater(pull[0].value, 0)
 
+    def test_hq_pull_draws_a_foot_unit_toward_an_enemy_hq_only_when_weighted(self):
+        """DERIVATION 59: the rank's Speed is bought by marching on the HQ.
+        Off by default -- no term, no field built -- and on, a foot unit's
+        step toward the enemy HQ carries the term with its two distances."""
+        rows = [[PLAIN] * 9 + [advisor.TERRAIN_HQ]]
+        owner = [[0] * 9 + [2]]
+        b = board(rows, [unit("Infantry", 0, 0, slot=1),
+                         unit("Infantry", 9, 0, player=2, slot=70)],
+                  owner=owner, armies=two_armies(0))
+        off = advisor.plan(b)
+        self.assertEqual([t for t in off.steps[0].scored.terms if t.name == "hq pull"], [])
+        on = advisor.plan(b, weights={"hq_pull": 100})
+        s = on.steps[0]
+        pull = [t for t in s.scored.terms if t.name == "hq pull"]
+        self.assertEqual(len(pull), 1)
+        self.assertEqual(pull[0].weight, 100)
+        self.assertGreater(pull[0].value, 0)
+        self.assertIn("an enemy HQ", pull[0].fact)
+        self.assertGreater(s.action.tile[0], 0)
+
     def test_the_morning_facts_score_a_repair_and_a_crash(self):
         rows = [[CITY, PLAIN, PLAIN]]
         owner = [[1, 0, 0]]

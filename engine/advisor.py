@@ -192,6 +192,9 @@ WEIGHTS: Dict[str, float] = {
     "enemy_property": 2.0,    # a property taken FROM an enemy is worth this x
     "win": 1_000_000,         # an HQ that falls this turn
     "objective_pull": 40,     # funds per movement point closer
+    "hq_pull": 0,             # funds per movement point a FOOT unit ends
+                              #   closer to an enemy HQ -- the rank's Speed
+                              #   is bought with it (DERIVATION 59); 0 is off
     "property_exposure": 1.0, # x a property's worth x the share of it an
                               #   enemy foot unit can hold by the end of
                               #   its next turn (delta per action)
@@ -634,6 +637,27 @@ def _objective_term(ctx: Context, unit, end_tile: Coord) -> List[Term]:
                  f"{label}: {before} -> {after} movement points away")]
 
 
+def _hq_term(ctx: Context, unit, end_tile: Coord) -> List[Term]:
+    """A foot unit ending closer to an enemy HQ, x hq_pull funds a movement
+    point. Off at weight 0 (no field is built)."""
+    if not ctx.w.get("hq_pull") or end_tile == (unit.x, unit.y):
+        return []
+    if pathing.unit_stats(unit.type)["unit_class"] != "foot":
+        return []
+    b = ctx.board
+    hqs = frozenset((x, y) for y in range(b.height) for x in range(b.width)
+                    if b.terrain[y][x] == TERRAIN_HQ and b.owner[y][x] not in (0, unit.player))
+    if not hqs:
+        return []
+    move_type = pathing.unit_stats(unit.type)["move_type"]
+    fieldd = distance_field(b, hqs, move_type, ctx.weather)
+    before, after = fieldd.get((unit.x, unit.y)), fieldd.get(end_tile)
+    if before is None or after is None or before == after:
+        return []
+    return [Term("hq pull", ctx.w["hq_pull"], before - after,
+                 f"an enemy HQ: {before} -> {after} movement points away")]
+
+
 # --------------------------------------------------------------------------
 # property exposure: which of a side's properties a foot unit of the other
 # side can step onto next turn, and how much of each it can hold by then
@@ -841,6 +865,7 @@ def score_action(ctx: Context, a) -> Scored:
                                    a.hp_after, a.turn_start)
         terms += _capture_terms(ctx, a)
         terms += _objective_term(ctx, u, a.tile)
+        terms += _hq_term(ctx, u, a.tile)
         terms += _exposure_terms(ctx, a)
         return Scored(a, tuple(terms))
 
@@ -858,6 +883,7 @@ def score_action(ctx: Context, a) -> Scored:
                               f"worst case loses this {u.type} with its ride"))
         terms += _capture_terms(ctx, a)
         terms += _objective_term(ctx, u, a.tile)
+        terms += _hq_term(ctx, u, a.tile)
         terms += _exposure_terms(ctx, a)
         return Scored(a, tuple(terms))
 
@@ -866,7 +892,9 @@ def score_action(ctx: Context, a) -> Scored:
         terms += _damage_terms(ctx, a, p, p.hp, a.exposure)
         terms += _turn_start_terms(ctx, p, p.hp, a.turn_start)
         terms += _objective_term(ctx, p, a.drop_tile)
+        terms += _hq_term(ctx, p, a.drop_tile)
         terms += _objective_term(ctx, u, a.tile)
+        terms += _hq_term(ctx, u, a.tile)
         terms += _exposure_terms(ctx, a)
         return Scored(a, tuple(terms))
 
@@ -881,6 +909,7 @@ def score_action(ctx: Context, a) -> Scored:
                               f"the join refunds {m.refund}"))
         terms += _capture_terms(ctx, a)
         terms += _objective_term(ctx, u, a.tile)
+        terms += _hq_term(ctx, u, a.tile)
         terms += _exposure_terms(ctx, a)
         return Scored(a, tuple(terms))
 
@@ -896,6 +925,7 @@ def score_action(ctx: Context, a) -> Scored:
         terms += _damage_terms(ctx, a, u, u.hp, a.exposure)
         terms += _turn_start_terms(ctx, u, u.hp, a.turn_start)
         terms += _objective_term(ctx, u, a.tile)
+        terms += _hq_term(ctx, u, a.tile)
         terms += _exposure_terms(ctx, a)
         return Scored(a, tuple(terms))
 
@@ -910,6 +940,7 @@ def score_action(ctx: Context, a) -> Scored:
     terms += _turn_start_terms(ctx, actor, u.hp, a.turn_start)
     terms += _capture_terms(ctx, a)
     terms += _objective_term(ctx, u, end)
+    terms += _hq_term(ctx, u, end)
     terms += _exposure_terms(ctx, a)
     return Scored(a, tuple(terms))
 

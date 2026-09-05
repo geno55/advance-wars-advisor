@@ -515,7 +515,7 @@ def compile_action(board, act, every, tag, warnings):
             if k == "attack":
                 t = act.target
                 step["target"] = {"slot": t.slot, "x": t.x, "y": t.y}
-                checks = [{"what": "hit", "slot": t.slot}]
+                checks = [{"what": "hit", "slot": t.slot, "attacker": unit.slot}]
             elif k == "capture":
                 checks.append({"what": "captured", "slot": unit.slot,
                                "x": dest[0], "y": dest[1], "player": unit.player})

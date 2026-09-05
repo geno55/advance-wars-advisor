@@ -40,7 +40,7 @@ from typing import List, Optional
 
 ROOT = pathlib.Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT))
-from engine import advisor, cpu_ai, economy, sim               # noqa: E402
+from engine import advisor, cpu_ai, economy, rank, sim         # noqa: E402
 from engine.state import load                                   # noqa: E402
 
 TERRAIN_HQ = 8
@@ -73,13 +73,25 @@ class Result:
     warnings: List[str] = field(default_factory=list)
     abort_dump: Optional[str] = None
     seconds: float = 0.0
+    # the debrief's counters as the game keeps them (DERIVATION 58): the
+    # day the game ended on, the best day's kills, units the enemy fielded,
+    # units we fielded and lost (a join is not a loss)
+    stats: dict = field(default_factory=dict)
+    # the rank a WIN earns (engine/rank.py), when the map's par is known
+    rank: Optional[dict] = None
 
     def summary(self) -> str:
         hp = ", ".join(f"P{p} {n}" for p, n in sorted(self.held.items()))
-        return (f"{self.state}: planner P{self.planner} vs port P{self.cpu} -- "
-                f"{self.outcome} by {self.reason} after {self.days} day"
-                f"{'s' if self.days != 1 else ''}; lost {self.lost}, took "
-                f"{self.taken}; properties {hp}; {self.seconds:.0f}s")
+        s = (f"{self.state}: planner P{self.planner} vs port P{self.cpu} -- "
+             f"{self.outcome} by {self.reason} after {self.days} day"
+             f"{'s' if self.days != 1 else ''}; lost {self.lost}, took "
+             f"{self.taken}; properties {hp}; {self.seconds:.0f}s")
+        if self.rank:
+            r = self.rank
+            s += (f"; rank {r['letter']} {r['total']} (speed {r['speed']}, power {r['power']}, "
+                  f"technique {r['technique']}: day {r['days']}, best day {r['best_day']} of "
+                  f"{r['enemy_fielded']}, lost {r['lost']} of {r['fielded']})")
+        return s
 
 
 def worth(board, player: int) -> int:
@@ -169,9 +181,10 @@ def spar(board, ctx: cpu_ai.Context, planner: int, *, days: int = 20,
          weights=None, reply: Optional[str] = "cpu", branches: int = 1,
          seed: Optional[int] = None, state_name: str = "board",
          abort_dir: Optional[pathlib.Path] = None,
-         verbose: bool = False) -> Result:
+         verbose: bool = False, par: Optional[int] = None) -> Result:
     """One game from `board`: the planner plays `planner`, the port the
-    other side, until decided or `days` days from the start day."""
+    other side, until decided or `days` days from the start day. `par`,
+    the map's par in days, lets a win be ranked as the debrief would."""
     t0 = time.time()
     start = board
     players = sim.players_in_order(board)
@@ -179,20 +192,41 @@ def spar(board, ctx: cpu_ai.Context, planner: int, *, days: int = 20,
     if seed is not None:
         board = dataclasses.replace(board, rng=seed)
     ctx = advisor._fresh_ctx(ctx)
+    # a no-luck match (settings +6, DERIVATION 54) adds a flat 5 to every
+    # strike: the planner's own forward model uses it, so the game played
+    # here is the game the loop plays -- the tuned set of DERIVATION 59
+    # routed the port on day 11 at worst-case luck and the real game on
+    # day 17, from the same weights
+    luck = 5 if getattr(ctx, "settings_6", 0) else "min"
     warnings: List[str] = []
     log = [snapshot(board, players, 0, "start")]
     lost = taken = 0
     outcome = reason = None
     abort_dump = None
+    # the debrief's counters: every slot each side ever fielded, the
+    # planner's slots merged away by joins, the enemy slots alive at each
+    # day's start (the day's kills are those gone by the next day)
+    enemy_seen = {u.slot for u in board.units_of(cpu)}
+    own_seen = {u.slot for u in board.units_of(planner)}
+    joined: set = set()
+    kills_by_day: dict = {}
+    day_start_enemy = set(enemy_seen)
+    current_day = board.day
     while board.day - start.day < days:
         mover = board.active_player
+        if board.day != current_day:
+            alive = {u.slot for u in board.units_of(cpu)}
+            kills_by_day[current_day] = len(day_start_enemy - alive)
+            day_start_enemy, current_day = alive, board.day
         before_w = {p: worth(board, p) for p in (planner, cpu)}
         if mover == planner:
             pl = advisor.plan(board, planner, weights=weights, reply=reply,
                               cpu_ctx=ctx if reply == "cpu" else None,
-                              branches=branches, warnings=warnings)
+                              branches=branches, warnings=warnings, luck=luck)
             note = "; ".join(advisor.describe_action(s.action) for s in pl.steps
                              if s.action.kind in ("attack", "capture", "build", "power"))
+            joined |= {s.action.target.slot for s in pl.steps
+                       if s.action.kind == "join" and s.action.target is not None}
             board = pl.board_after
         else:
             try:
@@ -219,6 +253,8 @@ def spar(board, ctx: cpu_ai.Context, planner: int, *, days: int = 20,
             ctx = turn.ctx
             board = dataclasses.replace(turn.board, rng=turn.rng)
         after_w = {p: worth(board, p) for p in (planner, cpu)}
+        enemy_seen |= {u.slot for u in board.units_of(cpu)}
+        own_seen |= {u.slot for u in board.units_of(planner)}
         if mover == planner:
             taken += max(0, before_w[cpu] - after_w[cpu])
         else:
@@ -236,12 +272,33 @@ def spar(board, ctx: cpu_ai.Context, planner: int, *, days: int = 20,
         board = sim.end_turn(board, warnings=warnings)
     if outcome is None:
         outcome, reason = "draw", "day cap"
+    alive = {u.slot for u in board.units_of(cpu)}
+    kills_by_day[current_day] = len(day_start_enemy - alive)
+    own_alive = {u.slot for u in board.units_of(planner)}
+    stats = {"days": board.day, "best_day": max(kills_by_day.values(), default=0),
+             "enemy_fielded": len(enemy_seen), "fielded": len(own_seen),
+             "lost": len(own_seen - own_alive - joined), "par": par}
+    ranked = None
+    if outcome == "win" and par is not None:
+        r = rank.score(days=stats["days"], par=par, best_day=stats["best_day"],
+                       enemy_fielded=stats["enemy_fielded"], fielded=stats["fielded"],
+                       lost=stats["lost"])
+        ranked = dict(dataclasses.asdict(r), **stats)
     return Result(state=state_name, planner=planner, cpu=cpu, outcome=outcome,
                   reason=reason, days=board.day - start.day + 1, lost=lost,
                   taken=taken,
                   held={p: economy.properties(board, p) for p in players},
                   log=log, warnings=sorted(set(warnings)), abort_dump=abort_dump,
-                  seconds=time.time() - t0)
+                  seconds=time.time() - t0, stats=stats, rank=ranked)
+
+
+def par_of(path) -> Optional[int]:
+    """The map's par in days from the dump's map_id, for the rank."""
+    try:
+        mid = json.loads(pathlib.Path(path).read_text(encoding="utf-8")).get("map_id")
+        return rank.par_for(int(mid)) if mid is not None else None
+    except (ValueError, IndexError, KeyError, TypeError):
+        return None
 
 
 def parse_weight(text: str) -> tuple:
@@ -295,7 +352,7 @@ def main():
                      reply=None if a.reply == "none" else a.reply,
                      branches=a.branches, seed=a.seed, state_name=name,
                      abort_dir=pathlib.Path(a.aborts) if a.aborts else None,
-                     verbose=a.verbose)
+                     verbose=a.verbose, par=par_of(path))
             print("  " + r.summary())
             if r.abort_dump:
                 print(f"  trace request written: {r.abort_dump}")

@@ -742,7 +742,16 @@ tests/fixtures/acceptance/ the two mission-one runs, 24 turns: start dumps,
 tests/test_fidelity.py    4 tests: the steps file, the step-to-action inverse,
                           and every turn against its known gaps
 tools/sparring.py         the planner against the CPU port to the end: the
-                          result a weight set is judged by (ROADMAP step 5)
+                          result a weight set is judged by (ROADMAP step 5),
+                          now with the debrief's counters and the rank a win
+                          earns (engine/rank.py)
+tools/tune.py             the weight search: one weight at a time against the
+                          port, the rank total as the score, games in parallel,
+                          every game appended to its JSON as it finishes
+data/weights_m01_s.json   the seven weights that earned the game's own S on
+                          mission one (DERIVATION 59): `campaign_run.py run
+                          --weights` and `sparring.py --weight` take them
+tests/test_tune.py        5 tests: the search's score and candidate rules
 tests/test_sparring.py    4 tests: the rout, the day cap, the abort's dump, the HQ
 tests/test_advisor.py     36 tests: the arithmetic, invariance, scenarios, the reply,
                           property exposure
