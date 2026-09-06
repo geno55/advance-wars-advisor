@@ -59,11 +59,23 @@ function M.cancel(n) for _ = 1, (n or 3) do M.tap("b", 8, 40) end end
 function M.cursor() return M.r8(M.CURX), M.r8(M.CURY) end
 
 function M.goto_tile(x, y)
-  for _ = 1, 90 do
+  -- A cursor that stops answering mid-turn is a scripted lesson that
+  -- opened over the map (mission two, day 2: Nell on Grit, after the
+  -- turn's first step had already been planned; 2026-09-05): after six
+  -- taps that moved nothing, an A turns its page, and the walk goes on.
+  local stuck = 0
+  for _ = 1, 150 do
     local cx, cy = M.cursor()
     if cx == x and cy == y then return true end
     if cx < x then M.tap("right") elseif cx > x then M.tap("left")
     elseif cy < y then M.tap("down") else M.tap("up") end
+    local nx, ny = M.cursor()
+    if nx == cx and ny == cy then
+      stuck = stuck + 1
+      if stuck >= 6 then M.tap("a", 6, 30); stuck = 0 end
+    else
+      stuck = 0
+    end
   end
   return false
 end

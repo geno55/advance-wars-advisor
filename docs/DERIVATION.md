@@ -4026,3 +4026,98 @@ that in the harness, and roll our own strike from the state that
 leaves (`sim.apply(rng_state=...)`), as the port already does for its
 side. `M.TARGET_LINGER` in mesen_drive is the probe's knob for those
 frames and is nil in play.
+
+## 61. Mission two: a luck mission, a six-seed objective, and an A
+
+**The state.** Slot 5, parked by the user at mission two's Day 1: map
+131, 18x12, Andy's five units and a base against Grit's thirteen, luck
+ON (settings `+6` is 0: the campaign's scripts turn luck off only for
+the Field Training arc and mission one, DERIVATION 59's probe found
+mission two's block set up with it on), the animation off. The par is
+10, so S is a win by day 13 and A by day 19 with Power and Technique
+at 100. The port plays it without an abort: Grit is CO 5, and nothing
+in his profile reaches a branch the port has not read.
+
+**One seed is not a game here.** The mission-one recipe -- a search at
+the dump's own RNG -- found an A 870 (a win by HQ on day 18) in two
+passes. Over sixteen seeds the same weights average a B around day 27,
+with one draw at the cap: on a luck mission the port's rolls vary the
+game enough that a set fitted to one roll sequence says nothing about
+the next. Played against the real game, that set won by HQ on day 26,
+B 720, fourteen of fifty-five units lost -- the seed spread's median,
+as it should be. `tune.py` runs a weight's candidates in parallel now
+(one seed on one board is one game, and the old loop had run them one
+after another), and the search was rerun on the mean rank over six
+seeds, the dump's and five more.
+
+**What the six-seed search kept**, from the single-seed set: `hq_pull`
+800 -> 50, `objective_pull` 20 -> 80, `kill` 4 then back to 1,
+`damage_dealt` 0.5 -> 1, `build_matchup` 0.5 -> 4, `enemy_property` 2
+-> 4, `build_spend` 0.3 -> 0.075. Three of those are weights the
+mission-one search never moved: on a map with a base and two factories
+the planner is now told to buy by matchup and to spend, and to prize
+the properties Grit holds. The set (`data/weights_m02_a.json`):
+
+    objective_pull 80, damage_taken 0, loss 1, capture 0, kill 1,
+    hq_pull 50, damage_dealt 1, build_matchup 4, enemy_property 4,
+    build_spend 0.075
+
+is an A on fourteen of sixteen seeds against the port (days 15 to 19,
+no unit lost on most) and a B on the other two (day 20, one day past
+the line); no seed loses or draws. Nothing in the search reached day
+13: S on this map needs a faster kill than these weights buy, and the
+grind -- Mechs from both bases every day -- is what the table knows.
+
+**Against the game: B 802.** The six-seed set from the Day 1 state: a
+rout on day 19, five of thirty-nine units lost, the debrief's Speed 70,
+Technique 100 -- both on the A line -- and Power 76. Power is the
+term the sparring game had wrong. The game credits a kill to the side
+whose turn it is: on day 4 two of Grit's units died, one to a counter
+on his own turn, and the debrief's best day read 1 where the harness
+had counted 2. `sparring.py` now counts the enemy units destroyed on
+the planner's own turn, as `0x08024B88` bumps `+0x16`. Counted that
+way the port games still show a best day of two or three on every
+seed, so the real game's single-kill days are a divergence of course,
+not of counting: our strikes rolled where the planner had planned at
+the worst case, Grit's rolled too, and the game ran a different
+nineteen days. Which of our planned kills the game denied is what the
+End Turn dumps, kept from the next run on, will show turn by turn.
+
+**The search again, Power counted the game's way.** From the six-seed
+set it kept `loss` 1 -> 0.5 -> 1 and `damage_dealt` 1 -> 4 -> 8 ->
+16: the planner is now paid sixteen times the funds of the bars it
+takes, which on this map buys the kills, and the mean over six seeds
+is 910 with days 14 to 17. Over sixteen seeds against the port the set
+(`data/weights_m02_a.json`) is an A on every one, no unit lost on any,
+best days of two or three on all but one.
+
+**Against the game: S 950.** The corrected set from the Day 1 state,
+across a shutdown (the loop resumed from its day-12 checkpoint with the
+same weights, which is the same game): a rout on day 13, four of
+twenty-nine units lost, the debrief's Speed 90, Power 100, Technique
+100, total 950, rank code 5. Two of the port's eleven turns before the
+break disagreed with the game, and the End Turn dumps made them
+readable; the rest agreed, with luck on and the port rolling Grit's
+side from the RNG.
+
+**What day 5 read.** Grit's 1-HP Artillery, needing repair, had its
+repair move voided by the retreat check, and the port then fired it at
+our APC where the game issued nothing: a voided pre-step ends the
+unit's decision for that pass, which is what the retreat-mech trace's
+"issued nothing at the visit" had said all along. In the indirect_move
+pass the game then moved it to (10,9) -- the very tile the retreat
+check would have picked -- and the port had voided that too; a move
+that ends on the check's pick stands. Both rules hold on every earlier
+retreat trace. One draw is still over: the trailing direct pass, the
+same routine as the two before it, re-decides both of Grit's idle
+vehicles in the port and one of them in the game. Which units that
+pass takes is unread; the records agree and the board differs only in
+our own power-ready bit.
+
+**Two rig facts.** A scripted lesson can open over the map in the
+middle of a turn (Nell on Grit, day 2, after the first step had been
+planned): the cursor stops answering, and `goto_tile` now presses A
+after six taps that moved nothing. And on a luck mission the fidelity
+check cannot replay our steps -- our strikes rolled -- so the loop dumps
+the board at our End Turn (`tNN.end.json`) and the check hands that to
+the port directly, RNG and all.

@@ -263,6 +263,10 @@ function M.play_game(cfg)
                                      { kind = "army", player = cfg.player, control = 2 } } }, 1)
     local empty = M.find_empty(cfg)
     M.settle_tile = empty
+    -- the board the CPU will see, dumped at our End Turn: on a luck match
+    -- our strikes rolled, so tools/fidelity.py cannot replay them and reads
+    -- this instead (DERIVATION 61)
+    M.dump(string.format("%st%02d.end.json", cfg.run_dir, turn), { note = string.format("turn %d at End Turn, campaign_run", turn) })
     local c = M.cpu_turn({ kind = "cpu_turn", tag = string.format("t%02d-cpu", turn), empty = empty,
                            limit = cfg.cpu_limit or 3000, cpu = cfg.cpu, checks = {},
                            watch = function() return M.match_status(cfg) end })

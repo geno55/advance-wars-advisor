@@ -1,0 +1,12 @@
+{
+ "objective_pull": 80,
+ "damage_taken": 0,
+ "loss": 1,
+ "capture": 0,
+ "kill": 1,
+ "hq_pull": 50,
+ "damage_dealt": 16,
+ "build_matchup": 4,
+ "enemy_property": 4,
+ "build_spend": 0.075
+}

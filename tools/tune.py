@@ -108,37 +108,55 @@ def main() -> int:
     out.parent.mkdir(parents=True, exist_ok=True)
     played: list = []
 
-    def evaluate(pool, weights: dict, label: str) -> list:
-        jobs = [{"state": s, "planner": a.planner, "seed": seed, "days": a.days, "weights": dict(weights)}
-                for s in a.states for seed in seeds]
+    def evaluate_all(pool, trials: list) -> list:
+        """Every (label, weights) trial's games in one parallel batch -- one
+        seed on one board is one game, so a weight's candidates run
+        together rather than one after another. Returns the trials' result
+        lists in order."""
+        jobs, owner = [], []
+        for i, (label, weights) in enumerate(trials):
+            for s in a.states:
+                for seed in seeds:
+                    jobs.append({"state": s, "planner": a.planner, "seed": seed, "days": a.days,
+                                 "weights": dict(weights)})
+                    owner.append(i)
         t0 = time.time()
         results = list(pool.map(play, jobs))
-        for r in results:
-            r["label"] = label
+        per = [[] for _ in trials]
+        for i, r in zip(owner, results):
+            r["label"] = trials[i][0]
+            per[i].append(r)
         played.extend(results)
         out.write_text(json.dumps(played, indent=1), encoding="utf-8")
-        sc = score_of(results)
-        print(f"  {label:32s} score {sc[0]:6.1f} mean day {-sc[1]:5.1f}  {describe(results)}  ({time.time() - t0:.0f}s)")
-        return results
+        for (label, _), res in zip(trials, per):
+            sc = score_of(res)
+            print(f"  {label:32s} score {sc[0]:6.1f} mean day {-sc[1]:5.1f}  {describe(res)}", flush=True)
+        print(f"  ({len(jobs)} game(s) in {time.time() - t0:.0f}s)", flush=True)
+        return per
+
+    def evaluate(pool, weights: dict, label: str) -> list:
+        return evaluate_all(pool, [(label, weights)])[0]
 
     with concurrent.futures.ProcessPoolExecutor(max_workers=a.workers) as pool:
-        print(f"baseline: {current or 'advisor.WEIGHTS'}")
+        print(f"baseline: {current or 'advisor.WEIGHTS'}", flush=True)
         best_results = evaluate(pool, current, "baseline")
         best = score_of(best_results)
         for p in range(1, a.passes + 1):
             improved = False
-            print(f"== pass {p}")
+            print(f"== pass {p}", flush=True)
             for name in names:
                 cur = current.get(name, advisor.WEIGHTS[name])
-                print(f"-- {name} (now {cur})")
+                print(f"-- {name} (now {cur})", flush=True)
+                trials = []
                 for v in candidates(name, cur):
                     trial = dict(current); trial[name] = v
-                    res = evaluate(pool, trial, f"{name}={v}")
+                    trials.append((f"{name}={v}", trial))
+                for (label, trial), res in zip(trials, evaluate_all(pool, trials)):
                     sc = score_of(res)
                     if sc > best:
                         best, best_results, current = sc, res, trial
                         improved = True
-                        print(f"   ^ kept: {name}={v}")
+                        print(f"   ^ kept: {label}", flush=True)
             if not improved:
                 print("no weight improved the score this pass; stopping")
                 break

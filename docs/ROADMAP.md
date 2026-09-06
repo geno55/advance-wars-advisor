@@ -382,6 +382,18 @@ Three decisions, made once so they do not get re-argued:
    the rank counts units, not bars, and the search obliged -- and the
    game they won is kept as an acceptance fixture (m01e).
 
+   *Mission two: S 950 (DERIVATION 61).* Slot 5, map 131, luck on, par
+   10. A luck mission is not one game: the set a single-seed search
+   found was an A at its seed and a B on most others, and a B against
+   the game. Searched on the mean rank over six seeds, with Power
+   counted as the game counts it (kills on our own turn), a ten-weight
+   set (`data/weights_m02_a.json`) is an A on every seed against the
+   port and, against the game, a rout on day 13 with four of
+   twenty-nine units lost: Speed 90, Power 100, Technique 100, an S.
+   The port held on nine of its eleven traced turns with Grit rolling
+   from the RNG; the two that differed taught the retreat check two
+   rules and left one draw unread.
+
 7. **Campaign facts, on demand.** A mission that fails acceptance, or ends
    in a way the standard win conditions do not explain, triggers reading its
    objective and events: victory and loss condition, scripted reinforcements

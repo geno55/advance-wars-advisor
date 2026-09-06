@@ -204,20 +204,17 @@ def spar(board, ctx: cpu_ai.Context, planner: int, *, days: int = 20,
     outcome = reason = None
     abort_dump = None
     # the debrief's counters: every slot each side ever fielded, the
-    # planner's slots merged away by joins, the enemy slots alive at each
-    # day's start (the day's kills are those gone by the next day)
+    # planner's slots merged away by joins, and the enemy units destroyed
+    # on the PLANNER'S OWN turn each day -- the game credits a kill to the
+    # side whose turn it is (mission two's real game: two of Grit's units
+    # died on day 4, one of them to a counter on his turn, and the
+    # debrief's best day read 1; DERIVATION 61)
     enemy_seen = {u.slot for u in board.units_of(cpu)}
     own_seen = {u.slot for u in board.units_of(planner)}
     joined: set = set()
     kills_by_day: dict = {}
-    day_start_enemy = set(enemy_seen)
-    current_day = board.day
     while board.day - start.day < days:
         mover = board.active_player
-        if board.day != current_day:
-            alive = {u.slot for u in board.units_of(cpu)}
-            kills_by_day[current_day] = len(day_start_enemy - alive)
-            day_start_enemy, current_day = alive, board.day
         before_w = {p: worth(board, p) for p in (planner, cpu)}
         if mover == planner:
             pl = advisor.plan(board, planner, weights=weights, reply=reply,
@@ -227,7 +224,9 @@ def spar(board, ctx: cpu_ai.Context, planner: int, *, days: int = 20,
                              if s.action.kind in ("attack", "capture", "build", "power"))
             joined |= {s.action.target.slot for s in pl.steps
                        if s.action.kind == "join" and s.action.target is not None}
+            before_enemy = {u.slot for u in board.units_of(cpu)}
             board = pl.board_after
+            kills_by_day[board.day] = len(before_enemy - {u.slot for u in board.units_of(cpu)})
         else:
             try:
                 turn = cpu_ai.predict(board, cpu, ctx, rng=board.rng or 0)
@@ -272,8 +271,6 @@ def spar(board, ctx: cpu_ai.Context, planner: int, *, days: int = 20,
         board = sim.end_turn(board, warnings=warnings)
     if outcome is None:
         outcome, reason = "draw", "day cap"
-    alive = {u.slot for u in board.units_of(cpu)}
-    kills_by_day[current_day] = len(day_start_enemy - alive)
     own_alive = {u.slot for u in board.units_of(planner)}
     stats = {"days": board.day, "best_day": max(kills_by_day.values(), default=0),
              "enemy_fielded": len(enemy_seen), "fielded": len(own_seen),

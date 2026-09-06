@@ -751,6 +751,9 @@ tools/tune.py             the weight search: one weight at a time against the
 data/weights_m01_s.json   the seven weights that earned the game's own S on
                           mission one (DERIVATION 59): `campaign_run.py run
                           --weights` and `sparring.py --weight` take them
+data/weights_m02_a.json   the ten weights for mission two, searched on the mean
+                          rank over six seeds -- a luck mission, where one seed
+                          is not a game (DERIVATION 61)
 tests/test_tune.py        5 tests: the search's score and candidate rules
 tests/test_sparring.py    4 tests: the rout, the day cap, the abort's dump, the HQ
 tests/test_advisor.py     36 tests: the arithmetic, invariance, scenarios, the reply,

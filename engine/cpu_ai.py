@@ -241,6 +241,7 @@ class Turn:
     draws: List[dict] = field(default_factory=list)
     warnings: List[str] = field(default_factory=list)
     targeted: Dict[int, int] = field(default_factory=dict)      # 0x03005160
+    refilled: set = field(default_factory=set)                  # slots the supply pass filled this turn
     counters: Dict[int, List[int]] = field(default_factory=dict)  # 0x08282CC4 +3..
     flags_5008: int = 0
     _side_flags: Optional[int] = None                           # 0x030050E4, computed once
@@ -682,6 +683,7 @@ class Turn:
         if not self.threatened(unit, unit.x, unit.y):
             self.log.append(f"  {unit.type}#{unit.slot}: retreat check, standing safe")
             return
+        pending = self.commands[-1] if self.command_issued(unit) and self.commands             and self.commands[-1].slot == unit.slot else None
         reach = self.own_reach(unit)
         best, pick = 0x7FFF, None
         for x, y in self.scan():
@@ -696,6 +698,14 @@ class Turn:
         self.log.append(f"  {unit.type}#{unit.slot}: retreat check, threatened at "
                         f"({unit.x},{unit.y}) -> safe tile {pick} cost {best}")
         if pick is not None:
+            # the pending move stands when it already ends on the tile the
+            # check picks -- Grit's Artillery walking to (10,9), the safe
+            # tile itself, on day 5 of mission two (m02-day5, DERIVATION
+            # 61) -- and is voided otherwise (the retreat-mech traces: a
+            # move to (7,4) with (7,5) picked, nothing issued)
+            if pending is not None and tuple(pending.tile) == tuple(pick):
+                self.log.append(f"  {unit.type}#{unit.slot}: the move ends on the safe tile; kept")
+                return
             self.void_command(unit)
         if self.flags_5008 & 2:
             return
@@ -711,9 +721,14 @@ class Turn:
         and lets the unit fall through to its next pass."""
         if self.commands and self.commands[-1].slot == unit.slot                 and getattr(self, "_issued_for", None) == unit.slot:
             self.commands.pop()
-        self._issued_for = None
-        self._stayed = None
-        self.log.append(f"  {unit.type}#{unit.slot}: command voided by the retreat check")
+        # ... and the unit is done for THIS pass -- no behaviour runs after
+        # the void -- while a later pass decides it afresh (the retreat-mech
+        # traces' "issued nothing at the visit", and Grit's 1-HP Artillery
+        # on day 5 of mission two, which the port had fired after the void
+        # where the game issued nothing; m02-day5, DERIVATION 61)
+        self._issued_for = unit.slot
+        self._stayed = unit.slot
+        self.log.append(f"  {unit.type}#{unit.slot}: command voided by the retreat check; done for this pass")
 
     def settle(self, unit):
         """0x08066248: a unit that may not stay where it stands moves to
@@ -1231,6 +1246,7 @@ class Turn:
             frm = self.from_tile(unit, target, g)
             if frm is not None:
                 self.ai(target)[0] &= ~8
+                self.refilled.add(slot)
                 self.emit(unit, 5, frm, slot)
                 return
         g = self.fill(unit.x, unit.y, type_id(unit.type), WHOLE_MAP, True)
@@ -1696,7 +1712,14 @@ class Turn:
                     raise NotImplementedError(f"sub-phase {name} with {len(units)} unit(s)")
                 continue
             cls, fn = plan[name]
-            for unit in self.units_of_class(cls, sort=name in self.SORTED_PASSES):
+            units = self.units_of_class(cls, sort=name in self.SORTED_PASSES)
+            # NOT read: which units the trailing direct pass (entry 17, the
+            # same routine as 5 and 6) takes. Every unacted vehicle fits
+            # m01-day4 (three re-decided) and supply-apc-move; on day 5 of
+            # mission two the game re-decided one of Grit's two idle
+            # vehicles where this takes both (m02-day5: one draw over,
+            # the records agree; DERIVATION 61)
+            for unit in units:
                 unit = sim.unit_in(self.board, unit.slot)
                 if unit is None or unit.acted:
                     continue

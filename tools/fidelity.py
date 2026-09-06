@@ -172,13 +172,23 @@ def check_turn(run: pathlib.Path, turn: int, player: int, steps: list, *, verbos
     specs = step_specs(run, turn)
     warnings: list = []
     ours = []
-    for tag, kind, ok in steps:
-        if not ok:
-            continue
-        act = action_for(board, specs[tag], player)
-        kw = {"luck": NO_LUCK} if act.kind == "attack" else {}
-        board = sim.apply(board, act, warnings=warnings, **kw)
-        ours.append(advisor.describe_action(act))
+    end_dump = run / f"t{turn:02d}.end.json"
+    if end_dump.exists():
+        # the loop's dump at our End Turn: the board the CPU saw, no replay
+        # needed -- the only exact route on a luck match, where our strikes
+        # rolled (DERIVATION 61)
+        board = load(end_dump)
+        raw = json.loads(end_dump.read_text(encoding="utf-8"))   # its RNG: our battles moved it
+        dump = end_dump
+        ours = [f"{kind} {tag}" for tag, kind, ok in steps if ok]
+    else:
+        for tag, kind, ok in steps:
+            if not ok:
+                continue
+            act = action_for(board, specs[tag], player)
+            kw = {"luck": NO_LUCK} if act.kind == "attack" else {}
+            board = sim.apply(board, act, warnings=warnings, **kw)
+            ours.append(advisor.describe_action(act))
     handed = sim.end_turn(board, warnings=warnings)
     cpu_player = handed.active_player
     ctx = cpu_ai.Context.from_dump(dump, player=cpu_player)
