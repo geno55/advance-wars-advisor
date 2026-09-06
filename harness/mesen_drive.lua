@@ -665,6 +665,7 @@ function M.do_step(s, attempt)
         local _, note = M.select_target(s.target, attempt)
         r.target_note = note
         M.wait(10); M.shot(s.tag .. "-target")
+        if M.TARGET_LINGER then M.wait(M.TARGET_LINGER) end   -- a probe's knob: frames spent on the target
         r.rng_at_confirm = M.r32(M.RNG)
         M.tap("a", 6, 30)
         local ok3, why3 = M.wait_battle(s.slot, s.target.slot)

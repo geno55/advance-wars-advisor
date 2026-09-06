@@ -3987,3 +3987,42 @@ acceptance fixtures. The port and the game played the same ten days.
 logs the debrief's own scores (army `+0x2E..+0x32`) once the result
 phase writes them. A seed changes nothing on a no-luck mission: spend
 the parallel workers on candidates, not seeds.
+
+## 60. The RNG moves only in the target selector: the forecast rolls twice a frame
+
+Reloading a savestate and making the same attack gives different damage,
+which sat badly with DERIVATION 59's claim that the RNG never advances
+on its own. Both are true, and the seam between them is measured.
+
+**Nothing in the interface draws.** From mission one's Day 1 state, with
+the draw hook on: 300 idle frames on the map, cursor moves, a unit's
+move range up for 300 frames, moves inside it, a cancel, the action
+menu up for 300 frames -- zero draws, the RNG byte for byte where the
+load left it. Mission two's opening dialogue, forty pages of it, the
+same (DERIVATION 59's probe). Time does not turn the RNG.
+
+**The battle forecast does, twice a frame, while a target is
+highlighted.** On the VS state (luck on) the same Tank-on-Mech attack,
+driven identically after four reloads, drew 202 times and left the
+Mech on 29 every time -- idling 900 frames before it or wandering the
+cursor and opening a menu changed nothing. Then the confirm was
+delayed on the target: one extra frame, 204 draws; ten, 222; sixty,
+322; a hundred and eighty, 562 -- two draws a frame, all from
+`0x0802333A` inside the forecast (`0x08023330`), and the Mech left on
+29, 21, 23, 21. The forecast recomputes each frame the target selector
+shows its estimate, and each recomputation rolls the luck through the
+game's one RNG; the strike then takes its roll from wherever that left
+it. On mission one the forecast's roll is skipped outright (settings
+`+6` set: the `bne` at `0x08023336`, the flat 5 of DERIVATION 54), so
+there nothing draws at all and the mission is one game.
+
+**What it means for the harness.** The acceptance loop is reproducible
+because its target selection takes a fixed number of frames per step
+(`select_target`'s waits plus its steering taps), and the rig has
+always read `rng_at_confirm` for this reason. A sparring game on a
+luck mission can be made faithful the same way: fix the frames spent
+on the target to a constant in the driver, advance the RNG by twice
+that in the harness, and roll our own strike from the state that
+leaves (`sim.apply(rng_state=...)`), as the port already does for its
+side. `M.TARGET_LINGER` in mesen_drive is the probe's knob for those
+frames and is nil in play.
