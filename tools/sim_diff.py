@@ -72,6 +72,11 @@ STATES = {
         note="campaign mission one, Day 1, Andy (P1, human) to move against "
              "Olaf (P2, the game's CPU); parked by the user 2026-09-05",
         mgba=None),
+    "m02": dict(
+        mss="Advance Wars (USA) (Rev 1)_5.mss", dims=(18, 12),
+        note="campaign mission two (map 131, 18x12, luck on), Day 1, Andy's five "
+             "against Grit's thirteen; parked by the user 2026-09-05",
+        mgba=None),
 }
 
 FIX = ROOT / "tests" / "fixtures" / "sim_diff"
@@ -685,6 +690,9 @@ def cmd_dump(a) -> int:
               f"repair_free {b.repair_free}")
         for w in b.warnings:
             print(f"  !! {w}")
+        if not STATES[n]["mgba"]:
+            print("  no mGBA dump for this state")
+            continue
         probs = mgba_check(n)
         print(f"  against mGBA {STATES[n]['mgba']}: "
               + ("tile for tile" if not probs else f"{len(probs)} difference(s)"))
