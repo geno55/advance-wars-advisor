@@ -529,9 +529,13 @@ written.
   Capt, 0x1F Join, 0x0F an attack resolved, 0x11 the map menu, 0x15
   Options, 0x29 End. The driver calls a handler a nag when it re-registers
   the same event set with no branch, and the rest wanted; the tile a
-  lesson means is the last cursor placement (op 0x28) before its wait,
-  since the cursor bytes never see the script's own placements. The
-  fourteen lessons' other predicates and events are read as they come.
+  lesson means is read off its wait: a native wait (op 0x1C) compares the
+  game's TRUE cursor, the u32 at `0x030036A4` (x low, y high, driven by
+  every selector and by the script), with tile literals in its own pool,
+  and the driver decodes those and steers there (DERIVATION 63); the byte
+  pair at `0x030033F0` tracks the pad on the map only. Events measured
+  since: 0x20 Supply, 0x1C Load, 0x1D Drop. The fourteen lessons' other
+  predicates and events are read as they come.
 
 ## Retired — measured, and compressed into Established above
 

@@ -737,7 +737,7 @@ tools/fidelity.py         the CPU port against the real CPU's turns of an
                           acceptance run: our steps replayed, the port's
                           reply diffed with the after-dump (`check`), and
                           the rig re-run from a turn's checkpoint (`trace`)
-tests/fixtures/acceptance/ the mission-one runs and Field Training 2, 3 and 4:
+tests/fixtures/acceptance/ the mission-one runs and Field Training 2 to 7:
                           start dumps, driven steps, after-dumps, logs
 tools/ft_script.py        a mission's tutorial script decoded: texts, event
                           tables, cursor placements, branches (DERIVATION 62)

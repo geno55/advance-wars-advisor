@@ -4255,3 +4255,58 @@ six lost), total 876, an A. The port agreed on every one of the eleven
 CPU turns. All three parked Field Training missions are A-ranks from
 the game's own debrief, which is the ceiling the mode allows; the
 acceptance fixtures `ft2b`, `ft3c` and `ft4b` hold the games.
+
+## 63. Field Training 5 to 7: the waits name their tiles, and the cursor the lessons read
+
+**The states.** `AWFT/5.mss` to `7.mss` (states `ft5`, `ft6`, `ft7`):
+Field Training 5 (map 120, par 6), the supply and transport lesson,
+parked at day 1 with the Tank, APC, Mech and Artillery already placed by
+the script; 6 (map 121, par 7), Olaf's Medium Tanks, free play from day 1
+with hints; 7 (map 122, par 3), the transport copter, parked with the
+Infantry already dropped on Olaf's HQ. Three new events in their
+lessons -- 0x20 Supply, 0x1C Load, 0x1D Drop -- are unit-menu items, so
+the follower's row-by-event rule already covered them. Against the port
+mission one's set is an S or A on mission 5 (day 7 to 9), a B or C on
+mission 6 (the HQ on day 12 to 25, three or four lost) and an S 999 on
+mission 7 (the HQ on day 3); a search on the rank for mission 6 over
+four seeds kept the set and moved `hq_pull` 50 -> 200 and
+`damage_dealt` 2 -> 1 (`data/weights_ft6.json`, days 8 to 11).
+
+**Two lessons stalled the follower, and both were the same fault.** On
+mission 5's day 2 the script waited (op 0x1C, 0x08036F28) after "Please
+move the unit to this space" and the follower pressed A on the tile with
+nothing selected; on mission 7 it waited on 0x08037078 after "This
+Tank is in the perfect spot! Fire!" with the copter selected and the
+placement on the Tank itself. The predicates are short and say exactly
+what they take: each compares the u32 at 0x030036A4 -- the game's TRUE
+CURSOR, x in the low halfword and y in the high, the one the script's
+op 0x28 moves and every selector (move, drop, target) drives -- against
+tile literals in its pool (0x08036D90 is (5,4); 0x08037078 is (6,5) or
+(5,6), the two tiles beside the Tank) and sets the flag at 0x03003200
+that the branch predicate 0x08037F10 reads. The byte pair at 0x030033F0
+the driver had used tracks the pad on the map only (DERIVATION 29), so
+it never saw a placement. The follower now decodes a wait's tiles off
+its code (`M.wait_tiles`: the `ldr rN, [pc]` literals with both
+halfwords under 40), selects the unit at the last map placement when
+nothing is selected, steers the true cursor to the nearest accepted
+tile by taps in whatever mode the game is in (`M.steer`), and presses
+A; a wanted attack with the unit's menu open picks Fire and lets the
+next wait name the target. Mission 5's load, move and drop then ran in
+seven actions and mission 7's copter stood beside the Tank in one.
+(`M.selected_unit` also had to accept a carrying transport: its state
+byte carries bit 4 over the selection's bits 1 and 2.)
+
+**The games.** Mission 5 with mission one's set: the lesson's seven
+actions, then a rout on day 7 -- Speed 95, Power 100, Technique 100,
+total 975 at code 4, the port agreeing on all five CPU turns. Mission 6
+with its own set: a rout on day 11, total 869, ten of ten CPU turns
+agreed. Mission 7 with mission one's set: the copter's shot, then the
+Infantry finished the HQ on day 3 -- total 999, code 4. Its two CPU
+turns are the open ones: on day 1 the copter's fuel after its first
+move reads 93 where the port says 91, and on day 2 Olaf's Medium Tank
+#68 went to (7,2) where the port sends it to (8,2) after Mech #6, and
+the rolls differ from there; the enemy's foot soldiers there carry
+movement mode 3, which the port has not read, though the game ends
+before it would matter. Six of the fourteen Field Training missions are
+now A-ranks from the game's debrief, the ceiling the mode gives, and
+their games are the acceptance fixtures `ft2b` to `ft7d`.

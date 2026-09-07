@@ -35,7 +35,7 @@ RECORD_SIZE = 60
 FT_TABLE = 0x08287210            # the fourteen Field Training scripts, in order
 
 EVENT_NAMES = {0x0F: "attack", 0x11: "map-menu", 0x15: "Options", 0x18: "Capt", 0x19: "Fire",
-               0x1F: "Join", 0x21: "Wait", 0x22: "map-item", 0x25: "map-item", 0x27: "map-item",
+               0x1C: "Load", 0x1D: "Drop", 0x1F: "Join", 0x20: "Supply", 0x21: "Wait", 0x22: "map-item", 0x25: "map-item", 0x27: "map-item",
                0x29: "End", 0x2A: "map-item", 0x2C: "select"}
 
 

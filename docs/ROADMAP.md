@@ -291,6 +291,10 @@ Three decisions, made once so they do not get re-argued:
    game's debrief (999, 876, 870), the ceiling the mode allows; mission
    three needed its own weight set (the Tanks are penned, the HQ is the
    way) and the meter's gate (settings +7) read for the port to agree.
+   Missions 5 to 7 followed (975, 869, 999) once the follower read a
+   wait's accepted tiles off its predicate and steered the game's true
+   cursor there (DERIVATION 63); mission 7's two CPU turns are the open
+   fidelity gaps.
 
    **The first win against the game.** The last Field Training mission,
    Nell against Olaf under fog on 15x10, from the parked state to Olaf's

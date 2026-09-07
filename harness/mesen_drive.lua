@@ -814,7 +814,8 @@ M.MENU_HOOK = 0x08018EA0          -- the open menu's per-frame handler: r0 = the
 M.EVENT_HOOK = 0x08018BA8         -- raise(event): r0 = the event code
 M.MAP_ITEMS = { [0x15] = true, [0x22] = true, [0x25] = true, [0x27] = true, [0x29] = true, [0x2A] = true }
 M.EVENT_NAMES = { [0x0F] = "attack", [0x11] = "map-menu", [0x15] = "Options", [0x18] = "Capt", [0x19] = "Fire",
-                  [0x1F] = "Join", [0x21] = "Wait", [0x29] = "End", [0x2C] = "select" }
+                  [0x1C] = "Load", [0x1D] = "Drop", [0x1F] = "Join", [0x20] = "Supply", [0x21] = "Wait",
+                  [0x29] = "End", [0x2C] = "select" }
 M.menu_struct, M.menu_frame = nil, -100
 M.watch_events = false
 
@@ -915,16 +916,28 @@ local function tile_of(rec)
   local v = M.r32(rec + 8)
   return { x = math.floor((v % 0x10000) / 16), y = math.floor(math.floor(v / 0x10000) / 16), mode = M.r32(rec + 12) }
 end
+-- the cursor placements before a native wait, nearest first
+function M.lesson_placements(waiting)
+  local out = {}
+  local a = waiting.pc
+  for _ = 1, 24 do
+    a = a - 16
+    local op = M.r32(a)
+    if op == 0x28 then out[#out + 1] = tile_of(a) end
+    if op == 5 or op == 4 or op == 0x27 then break end
+  end
+  return out
+end
+function M.unit_at(x, y)
+  for slot = 0, 4 * M.ARMY_SLOTS - 1 do
+    local u = M.unit(slot)
+    if u and not u.loaded and u.x == x and u.y == y then return u end
+  end
+  return nil
+end
 function M.lesson_target(waiting, hs, ev)
   if waiting then
-    local a = waiting.pc
-    for _ = 1, 24 do
-      a = a - 16
-      local op = M.r32(a)
-      if op == 0x28 then return tile_of(a) end
-      if op == 5 or op == 4 or op == 0x27 then break end
-    end
-    return nil
+    return M.lesson_placements(waiting)[1]
   end
   for _, h in ipairs(hs or {}) do
     if h.ev == ev then
@@ -944,9 +957,47 @@ function M.selected_unit()
   local me = M.active_player()
   for slot = 0, 4 * M.ARMY_SLOTS - 1 do
     local u = M.unit(slot)
-    if u and u.player == me and u.state == 6 then return u end
+    -- bits 1 and 2 of the state byte (a carrying transport adds bit 4)
+    if u and u.player == me and not u.loaded and math.floor(u.state / 2) % 2 == 1 and math.floor(u.state / 4) % 2 == 1 then return u end
   end
   return nil
+end
+-- The cursor the lesson predicates read: the u32 at 0x030036A4, x in the
+-- low halfword, y in the high one. It follows the script's placements and
+-- the pad in every mode (map, move-select, the drop selector, the target
+-- selector), where the byte pair at 0x030033F0 tracks the map only.
+M.TRUE_CURSOR = 0x030036A4
+function M.true_cursor() return M.r16(M.TRUE_CURSOR), M.r16(M.TRUE_CURSOR + 2) end
+function M.steer(t)
+  local stuck = 0
+  for _ = 1, 60 do
+    local cx, cy = M.true_cursor()
+    if cx == t.x and cy == t.y then return true end
+    if cx < t.x then M.tap("right", 6, 16) elseif cx > t.x then M.tap("left", 6, 16)
+    elseif cy < t.y then M.tap("down", 6, 16) else M.tap("up", 6, 16) end
+    local nx, ny = M.true_cursor()
+    if nx == cx and ny == cy then stuck = stuck + 1; if stuck >= 4 then return false end else stuck = 0 end
+  end
+  return false
+end
+-- The tiles a native wait accepts, read off its code: the predicates
+-- (0x08036D90 and its neighbours) compare the true cursor with u32
+-- literals of the form y << 16 | x and set the flag at 0x03003200.
+function M.wait_tiles(fn)
+  local base = fn - (fn % 2)
+  local out = {}
+  for i = 0, 63 do
+    local pc = base + 2 * i
+    local ins = M.r16(pc)
+    if ins == 0x4770 then break end                      -- bx lr
+    if math.floor(ins / 0x800) == 9 then                  -- ldr rN, [pc, #imm]
+      local lit = (pc + 4) - ((pc + 4) % 4) + (ins % 256) * 4
+      local v = M.r32(lit)
+      local x, y = v % 0x10000, math.floor(v / 0x10000)
+      if x < 40 and y < 40 and v ~= 0 then out[#out + 1] = { x = x, y = y } end
+    end
+  end
+  return out
 end
 -- Walk the cursor to a tile. In map mode the cursor bytes track and
 -- goto_tile does it; in move-select mode they do not (DERIVATION 29), so
@@ -1005,6 +1056,10 @@ function M.follow_lesson(cfg, tag)
     local ev = nil
     for _, e in ipairs(wanted) do
       if e == 0x2C or e == 0x11 or (e >= 0x15 and e <= 0x2A and e ~= 0x29) then ev = e; break end
+      -- an attack wanted with the unit's menu already open: Fire, then the
+      -- target the selector offers (a wait names the target's tile if the
+      -- lesson minds which)
+      if e == 0x0F and M.menu_open() then ev = 0x19 end
     end
     if not ev and not waiting and last_acted then
       -- the script reacts to an action over a few frames (a cursor walk,
@@ -1022,13 +1077,83 @@ function M.follow_lesson(cfg, tag)
     if ev == 0x2C or (not ev and waiting) then
       if M.menu_open() then M.tap("b", 8, 40) end
       local t = M.lesson_target(waiting, hs, ev)
-      if t then
-        local u = M.selected_unit()
+      local u = t and M.selected_unit()
+      local foe = t and M.unit_at(t.x, t.y)
+      local tiles = waiting and M.wait_tiles(waiting.fn) or {}
+      if #tiles > 0 then
+        -- the wait says which tiles it takes: the nearest to where the
+        -- cursor is, steered by the true cursor in whatever mode the
+        -- game is in (a move, a drop, a target), then A
+        local cx, cy = M.true_cursor()
+        local pick, bd = nil, 999
+        local names = {}
+        for _, tt in ipairs(tiles) do
+          names[#names + 1] = string.format("(%d,%d)", tt.x, tt.y)
+          local d = math.abs(tt.x - cx) + math.abs(tt.y - cy)
+          if d < bd then pick, bd = tt, d end
+        end
+        u = M.selected_unit()
+        M.L(string.format("  lesson: the wait takes %s; cursor (%d,%d)%s", table.concat(names, " "), cx, cy,
+          u and string.format(", %s selected at (%d,%d)", u.name or "unit", u.x, u.y) or ""))
+        if not u and not M.menu_open() then
+          -- nothing selected: the unit to select is the last map placement
+          for _, pl in ipairs(M.lesson_placements(waiting)) do
+            if pl.mode == 7 and M.unit_at(pl.x, pl.y) and not (pl.x == pick.x and pl.y == pick.y) then
+              M.L(string.format("  lesson: select the unit at (%d,%d) first", pl.x, pl.y))
+              M.goto_tile(pl.x, pl.y); M.tap("a", 8, 60)
+              break
+            end
+          end
+        end
+        if not M.steer(pick) then M.L("  lesson: the cursor would not reach the tile"); M.shot(tag .. "-lesson-steer") end
+        M.tap("a", 8, 60)
+      elseif t and u and foe and foe.player ~= M.active_player() then
+        -- "Fire on this unit": the placement is the target and one of ours
+        -- is selected -- stand beside it, Fire, confirm the target
+        M.L(string.format("  lesson: attack %s at (%d,%d) with the selected unit at (%d,%d)", foe.type or "?", t.x, t.y, u.x, u.y))
+        local best, bd = nil, 999
+        for _, d in ipairs({ { 1, 0 }, { -1, 0 }, { 0, 1 }, { 0, -1 } }) do
+          local nx, ny = t.x + d[1], t.y + d[2]
+          local w, h = M.dims()
+          if nx >= 0 and ny >= 0 and nx < w and ny < h and (M.unit_at(nx, ny) == nil or (nx == u.x and ny == u.y)) then
+            local dist = math.abs(nx - u.x) + math.abs(ny - u.y)
+            if dist < bd then best, bd = { x = nx, y = ny }, dist end
+          end
+        end
+        if best then M.walk_to(best) end
+        M.tap("a", 8, 60)
+        if M.menu_open() then
+          local rows, sel = M.menu_rows()
+          local idx = nil
+          for i, r in ipairs(rows) do if r == 0x19 then idx = i - 1 end end
+          if idx then
+            while sel < idx do M.tap("down", 6, 16); sel = sel + 1 end
+            M.tap("a", 8, 60)
+            M.select_target(t, 1)
+            M.tap("a", 8, 60)
+            M.wait(120)
+          end
+        end
+      elseif t then
+        if not u and t.mode ~= 7 and waiting then
+          -- a destination with nothing selected: the unit is the last
+          -- map placement before it ("Would you select it? ... move it here")
+          for _, pl in ipairs(M.lesson_placements(waiting)) do
+            if pl.mode == 7 then
+              M.L(string.format("  lesson: select the unit at (%d,%d) first", pl.x, pl.y))
+              M.goto_tile(pl.x, pl.y); M.tap("a", 8, 60)
+              u = M.selected_unit()
+              break
+            end
+          end
+        end
         M.L(string.format("  lesson: the tile it means is (%d,%d) mode %d%s", t.x, t.y, t.mode,
           u and string.format(", walked from the selected unit at (%d,%d)", u.x, u.y) or ""))
         M.walk_to(t)
+        M.tap("a", 8, 60)             -- A where the lesson put the cursor
+      else
+        M.tap("a", 8, 60)
       end
-      M.tap("a", 8, 60)               -- A where the lesson put the cursor
     elseif ev == 0x11 then
       local e = M.find_empty(cfg); M.goto_tile(e.x, e.y); M.tap("a", 8, 60)
     elseif M.menu_open() then
@@ -1039,6 +1164,14 @@ function M.follow_lesson(cfg, tag)
         while sel < idx do M.tap("down", 6, 16); sel = sel + 1 end
         while sel > idx do M.tap("up", 6, 16); sel = sel - 1 end
         M.tap("a", 8, 90)
+        if ev == 0x19 then
+          -- the target selector: a wait may name the tile, else the first target
+          M.wait(20)
+          local w2 = M.lesson_waits()
+          local tiles = w2 and M.wait_tiles(w2.fn) or {}
+          if #tiles > 0 then M.steer(tiles[1]) end
+          M.tap("a", 8, 60); M.wait(120)
+        end
       else
         local names = {}
         for _, r in ipairs(rows) do names[#names + 1] = ev_name(r) end

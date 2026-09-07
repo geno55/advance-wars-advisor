@@ -40,6 +40,12 @@ KNOWN_GAPS = {
     ("m01d", 11): "not the port: the same zero-damage Recon shot called failed",
     ("m01d", 15): "not the port: our Mech #3's capture step failed its read-back after "
                   "the unit had moved, and the replay leaves a failed step out",
+    # ft7d is Field Training 7 (DERIVATION 63): Olaf's air unit and Medium
+    # Tanks, luck on, the enemy's foot units in movement mode 3
+    ("ft7d", 1): "the BCopter's fuel after its first move reads 93 where the port says 91: "
+                 "an air unit's fuel on the day it first moves, unread",
+    ("ft7d", 2): "ten differences: MdTank #68 went to (7,2) where the port sends it to "
+                 "(8,2) at Mech #6, and the rolls differ from there -- the day is untraced",
 }
 
 
@@ -85,10 +91,10 @@ class TestTheCheck(unittest.TestCase):
         found = {}
         # m01e is the S-rank game of DERIVATION 59 (weights.json beside it,
         # also data/weights_m01_s.json): every one of its nine turns agrees.
-        # ft2b, ft3c and ft4b are Field Training 2, 3 and 4 played through their
+        # ft2b, ft3c, ft4b, ft5c, ft6b and ft7d are Field Training 2 to 7 played through their
         # lessons (DERIVATION 62); their dumps carry settings +7 = 0, the
         # meter rule off, which the port must honour
-        for run in ("m01a", "m01b", "m01c", "m01d", "m01e", "ft2b", "ft3c", "ft4b"):
+        for run in ("m01a", "m01b", "m01c", "m01d", "m01e", "ft2b", "ft3c", "ft4b", "ft5c", "ft6b", "ft7d"):
             d = ACC / run
             steps = fidelity.driven_steps(d)
             for t in sorted(steps):
