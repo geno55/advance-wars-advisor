@@ -42,3 +42,28 @@ class TestTheCandidates(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class TestMissionWeightsIndex(unittest.TestCase):
+    """data/mission_weights.json names files that exist, load, and match the
+    fixtures that played them."""
+
+    def test_every_entry_resolves(self):
+        import json
+        import pathlib
+        root = pathlib.Path(__file__).resolve().parent.parent
+        sys.path.insert(0, str(root))
+        from engine import advisor
+        idx = json.loads((root / "data" / "mission_weights.json").read_text(encoding="utf-8"))
+        self.assertTrue(idx["missions"])
+        for m in idx["missions"]:
+            with self.subTest(mission=m["name"]):
+                w = advisor.load_weights(root / m["weights"]) if m["weights"] else {}
+                if m["fixture"]:
+                    fx = root / "tests" / "fixtures" / "acceptance" / m["fixture"]
+                    self.assertTrue(fx.is_dir(), fx)
+                    played = fx / "weights.json"
+                    if played.exists():
+                        self.assertEqual(advisor.load_weights(played), w)
+                    else:
+                        self.assertEqual(w, {})

@@ -1,0 +1,27 @@
+{
+  "_comment": [
+    "Which weight file each mission played with when the game gave the rank below.",
+    "map: settings +2; state: the parked savestate's name in tools/sim_diff.py STATES;",
+    "weights: null means the advisor's default table (engine/advisor.py WEIGHTS);",
+    "rank: the debrief's total and code (Field Training caps at code 4 = A);",
+    "fixture: the acceptance run under tests/fixtures/acceptance; notes: what else the run needed."
+  ],
+  "missions": [
+    {"name": "Field Training 2",  "map": 117, "state": "ft2",  "weights": null,                       "rank": "999 (A, code 4)", "fixture": "ft2b"},
+    {"name": "Field Training 3",  "map": 118, "state": "ft3",  "weights": "data/weights_ft3.json",    "rank": "876 (A)",         "fixture": "ft3c"},
+    {"name": "Field Training 4",  "map": 119, "state": "ft4",  "weights": "data/weights_m01_s.json",  "rank": "870 (A)",         "fixture": "ft4b"},
+    {"name": "Field Training 5",  "map": 120, "state": "ft5",  "weights": "data/weights_m01_s.json",  "rank": "975 (A)",         "fixture": "ft5c"},
+    {"name": "Field Training 6",  "map": 121, "state": "ft6",  "weights": "data/weights_ft6.json",    "rank": "869 (A)",         "fixture": "ft6b"},
+    {"name": "Field Training 7",  "map": 122, "state": "ft7",  "weights": "data/weights_m01_s.json",  "rank": "999 (A)",         "fixture": "ft7d"},
+    {"name": "Field Training 8",  "map": 123, "state": "ft8",  "weights": "data/weights_m01_s.json",  "rank": "955 (A)",         "fixture": "ft8a"},
+    {"name": "Field Training 9",  "map": 124, "state": "ft9",  "weights": "data/weights_m01_s.json",  "rank": "922 (A)",         "fixture": "ft9b"},
+    {"name": "Field Training 10", "map": 125, "state": "ft10", "weights": "data/weights_m01_s.json",  "rank": "999 (A)",         "fixture": "ft10a"},
+    {"name": "Field Training 11", "map": 126, "state": "ft11", "weights": "data/weights_m01_s.json",  "rank": "980 (A)",         "fixture": "ft11a"},
+    {"name": "Field Training 12", "map": 127, "state": "ft12", "weights": "data/weights_ft12.json",   "rank": "892 (A)",         "fixture": "ft12b"},
+    {"name": "Field Training 13", "map": 128, "state": "ft13", "weights": "data/weights_ft13.json",   "rank": "975 (A)",         "fixture": "ft13s",
+     "notes": "second attempt: campaign_run.py run --recall harness/out/play/ft13b (DERIVATION 66)"},
+    {"name": "mission one (It's War!)", "map": 130, "state": "m01", "weights": "data/weights_m01_s.json", "rank": "960 (S)", "fixture": "m01e"},
+    {"name": "mission two (Gunfighter!)", "map": 131, "state": "m02", "weights": "data/weights_m02_a.json", "rank": "950 (S)", "fixture": null,
+     "notes": "the run m02-c + m02-c2 (DERIVATION 61); not an acceptance fixture"}
+  ]
+}

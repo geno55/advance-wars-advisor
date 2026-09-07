@@ -757,6 +757,10 @@ data/weights_m01_s.json   the seven weights that earned the game's own S on
 data/weights_m02_a.json   the ten weights for mission two, searched on the mean
                           rank over six seeds -- a luck mission, where one seed
                           is not a game (DERIVATION 61)
+data/weights_ft*.json     the sets Field Training 3, 6, 12 and 13 needed
+data/mission_weights.json which file each mission played with for the rank
+                          below, its parked state and its fixture -- the table
+                          under "Which weights for which mission"
 tests/test_tune.py        5 tests: the search's score and candidate rules
 tests/test_sparring.py    4 tests: the rout, the day cap, the abort's dump, the HQ
 tests/test_advisor.py     36 tests: the arithmetic, invariance, scenarios, the reply,
@@ -927,6 +931,30 @@ wait on. Attacks print hardest-hitting first and waits least-exposed first,
 which is a filing convention, not advice: the numbers are composed from
 measured tables, a recommendation would not be, and the tool stops at that
 line on purpose.
+
+## Which weights for which mission
+
+`data/mission_weights.json` is the same list for tools. The default table
+is the advisor's own (engine/advisor.py WEIGHTS); Field Training caps at
+code 4, an A. Mission one's set (`data/weights_m01_s.json`) is the one to
+try first on a new map -- it carried eight of the twelve missions here.
+
+| mission | map | state | weights | debrief | fixture |
+|---|---|---|---|---|---|
+| Field Training 2 | 117 | `ft2` | `default table` | 999 (A, code 4) | ft2b |
+| Field Training 3 | 118 | `ft3` | `data/weights_ft3.json` | 876 (A) | ft3c |
+| Field Training 4 | 119 | `ft4` | `data/weights_m01_s.json` | 870 (A) | ft4b |
+| Field Training 5 | 120 | `ft5` | `data/weights_m01_s.json` | 975 (A) | ft5c |
+| Field Training 6 | 121 | `ft6` | `data/weights_ft6.json` | 869 (A) | ft6b |
+| Field Training 7 | 122 | `ft7` | `data/weights_m01_s.json` | 999 (A) | ft7d |
+| Field Training 8 | 123 | `ft8` | `data/weights_m01_s.json` | 955 (A) | ft8a |
+| Field Training 9 | 124 | `ft9` | `data/weights_m01_s.json` | 922 (A) | ft9b |
+| Field Training 10 | 125 | `ft10` | `data/weights_m01_s.json` | 999 (A) | ft10a |
+| Field Training 11 | 126 | `ft11` | `data/weights_m01_s.json` | 980 (A) | ft11a |
+| Field Training 12 | 127 | `ft12` | `data/weights_ft12.json` | 892 (A) | ft12b |
+| Field Training 13 | 128 | `ft13` | `data/weights_ft13.json` | 975 (A) | ft13s -- second attempt: campaign_run.py run --recall harness/out/play/ft13b (DERIVATION 66) |
+| mission one (It's War!) | 130 | `m01` | `data/weights_m01_s.json` | 960 (S) | m01e |
+| mission two (Gunfighter!) | 131 | `m02` | `data/weights_m02_a.json` | 950 (S) | - -- the run m02-c + m02-c2 (DERIVATION 61); not an acceptance fixture |
 
 ## Getting a plan
 
