@@ -298,10 +298,12 @@ Three decisions, made once so they do not get re-argued:
    day-one fuel, and a capturer's owner -- after which every CPU turn of
    the nine Field Training games agrees (DERIVATION 64). Missions 11 and
    12 followed (980; 892 with its own set), the port reading the idle
-   Lander and leaving the rest of the navy unread; mission 13 is a B in
-   the game where the port says S, the real game's own rolls, and its
-   search widened to eight seeds with the sparring game rolling our
-   strikes (DERIVATION 65).
+   Lander and leaving the rest of the navy unread; mission 13 stays a B
+   821 in the game where the port says S on every seed, rolled strikes
+   included -- eight sets, one deterministic game each, all losing the
+   same two units on day 3 to the real rolls. Lifting it wants a planner
+   that keeps hurt units out of indirect range, not another set
+   (DERIVATION 65).
 
    **The first win against the game.** The last Field Training mission,
    Nell against Olaf under fog on 15x10, from the parked state to Olaf's

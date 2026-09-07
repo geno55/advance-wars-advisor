@@ -4443,3 +4443,16 @@ range -- the port's seeds spare them -- and the two losses cost the
 Technique the A needed. The user's decision stands: the planner does
 not model the RNG. So the search widened instead: eight seeds with
 rolled strikes, whose baseline is an A or S on all eight (mean 928).
+
+**What the real game answered.** Seven more sets, each a distinct
+weight from the S-tier neighbourhood, went into the game: `capture` 2,
+`hq_pull` 800 and `objective_pull` 2.5 played the identical B 821;
+`kill` 2 a B 796 (day 11); `loss` 1 and `loss` 2 a B 681 (day 15);
+`damage_taken` 5 a B 790 and `damage_taken` 10 the day cap, the two
+the port had already called collapses. The real game's rolls are one
+fixed sequence, so a set is one deterministic game there, and every
+one of them loses the same Recon and Tank on day 3. Mission 13 is
+recorded as a B 821 (`ft13b`, the port agreeing on all nine CPU turns)
+with its set kept as `data/weights_ft13.json`; lifting it wants a
+planner that keeps hurt units out of indirect range without the
+threat term that stalls it, not another set.
