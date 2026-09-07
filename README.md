@@ -943,8 +943,9 @@ the opponent's modelled reply — the CPU port when the dump says the opponent
 is the CPU, the planner itself otherwise — and the board at your next turn
 start as terms, with every proposal the reply judged and its score.
 `--reply cpu|planner|none` forces the model, `--branches N` how many
-variants are proposed, `--weight name=value` overrides one weight for a
-run, `--luck max` plans in the kindest world instead of the worst, `--board`
+variants are proposed, `--weights FILE` loads a mission's set
+(`data/weights_*.json`, or a tune's `<out>.best.json`) and `--weight
+name=value` overrides one weight on top of it for a run, `--luck max` plans in the kindest world instead of the worst, `--board`
 prints the board the plan leaves behind. Read `docs/ADVISOR.md` for where
 the planner is naive before trusting it.
 

@@ -109,7 +109,7 @@ def main() -> int:
     unknown = set(names) - set(advisor.WEIGHTS)
     if unknown:
         raise SystemExit(f"unknown weight(s) {sorted(unknown)}")
-    current = dict(json.loads(pathlib.Path(a.start).read_text(encoding="utf-8"))) if a.start else {}
+    current = dict(advisor.load_weights(a.start)) if a.start else {}
     out = pathlib.Path(a.out)
     out.parent.mkdir(parents=True, exist_ok=True)
     played: list = []

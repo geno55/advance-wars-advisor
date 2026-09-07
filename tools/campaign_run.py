@@ -117,7 +117,7 @@ def load_weights(path) -> dict:
     one as <out>.best.json); {} when no path is given."""
     if not path:
         return {}
-    return dict(json.loads(pathlib.Path(path).read_text(encoding="utf-8")))
+    return advisor.load_weights(path)
 
 
 def recalled(recall: pathlib.Path, player: int):

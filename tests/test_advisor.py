@@ -747,3 +747,33 @@ class TestReply(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class TestWeightsFile(unittest.TestCase):
+    """advisor.load_weights: the file form of --weight, checked like it."""
+
+    def test_a_missions_file_loads_and_flags_apply_on_top(self):
+        import json
+        import tempfile
+        with tempfile.TemporaryDirectory() as tmp:
+            f = pathlib.Path(tmp) / "w.json"
+            f.write_text(json.dumps({"hq_pull": 50, "kill": 2}), encoding="utf-8")
+            w = advisor.load_weights(f)
+            self.assertEqual(w, {"hq_pull": 50.0, "kill": 2.0})
+            w.update([("kill", 4.0)])
+            self.assertEqual(w["kill"], 4.0)
+
+    def test_an_unknown_name_or_a_non_number_is_refused(self):
+        import json
+        import tempfile
+        with tempfile.TemporaryDirectory() as tmp:
+            bad = pathlib.Path(tmp) / "bad.json"
+            bad.write_text(json.dumps({"hq_pulll": 50}), encoding="utf-8")
+            with self.assertRaises(ValueError):
+                advisor.load_weights(bad)
+            bad.write_text(json.dumps({"hq_pull": "fifty"}), encoding="utf-8")
+            with self.assertRaises(ValueError):
+                advisor.load_weights(bad)
+            bad.write_text(json.dumps([1, 2]), encoding="utf-8")
+            with self.assertRaises(ValueError):
+                advisor.load_weights(bad)

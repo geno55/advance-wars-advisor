@@ -152,6 +152,7 @@ differential test of apply() (ROADMAP step 2), not to this file.
 """
 from __future__ import annotations
 
+import pathlib
 import dataclasses
 import heapq
 from dataclasses import dataclass, field
@@ -1145,6 +1146,26 @@ REPLY_MODELS = ("cpu", "planner")
 
 # The terms the worst case has a say in: a step whose winner and runner-up
 # differ in one of these is a call the modelled reply may overturn.
+def load_weights(path) -> dict:
+    """Weight overrides from a JSON file -- {name: value} over WEIGHTS, the
+    form tools/tune.py writes as <out>.best.json and data/weights_*.json
+    keep per mission. A name outside the table or a value that is not a
+    number is an error, as it is for a --weight flag."""
+    import json
+    raw = json.loads(pathlib.Path(path).read_text(encoding="utf-8"))
+    if not isinstance(raw, dict):
+        raise ValueError(f"{path}: a weights file is a JSON object of name: value")
+    out = {}
+    for name, value in raw.items():
+        if name not in WEIGHTS:
+            raise ValueError(f"{path}: no weight named {name!r}; the table is "
+                             f"{', '.join(sorted(WEIGHTS))}")
+        if isinstance(value, bool) or not isinstance(value, (int, float)):
+            raise ValueError(f"{path}: weight {name} wants a number, got {value!r}")
+        out[name] = float(value)
+    return out
+
+
 STAKE_TERMS = ("damage_dealt", "kill", "damage_taken", "loss", "capture", "win",
                "property_exposure", "hq_exposure")
 

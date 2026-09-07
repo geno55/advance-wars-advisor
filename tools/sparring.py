@@ -3,6 +3,7 @@
     python tools/sparring.py state.json
     python tools/sparring.py state.json --planner 2 --days 15
     python tools/sparring.py a.json b.json --both-sides --weight damage_taken=0.5
+    python tools/sparring.py a.json --weights data/weights_ft3.json
     python tools/sparring.py state.json --json results.json --aborts aborts/
 
 ROADMAP step 5's harness. From a dumped state the planner (engine/advisor,
@@ -370,6 +371,8 @@ def main():
                    help="the planner's reply model (default cpu)")
     p.add_argument("--branches", type=int, default=1,
                    help="the planner's variant budget per turn (default 1)")
+    p.add_argument("--weights", metavar="FILE",
+                   help="a JSON file of weight overrides; --weight flags apply on top")
     p.add_argument("--weight", type=parse_weight, action="append", default=[],
                    metavar="NAME=VALUE")
     p.add_argument("--seed", type=int, help="override the dump's RNG state")
@@ -379,6 +382,8 @@ def main():
     p.add_argument("--aborts", help="directory for the boards the port could not play")
     p.add_argument("-v", "--verbose", action="store_true", help="print each turn")
     a = p.parse_args()
+    weights = advisor.load_weights(a.weights) if a.weights else {}
+    weights.update(a.weight)
 
     results = []
     for path in a.states:
@@ -397,7 +402,7 @@ def main():
                 continue
             name = pathlib.Path(path).stem.replace(".before", "")
             print(f"{name}: planner P{planner}, port P{cpu}, day {board.day}")
-            r = spar(board, ctx, planner, days=a.days, weights=dict(a.weight) or None,
+            r = spar(board, ctx, planner, days=a.days, weights=weights or None,
                      reply=None if a.reply == "none" else a.reply,
                      branches=a.branches, seed=a.seed, state_name=name, roll_strikes=a.roll_strikes,
                      abort_dir=pathlib.Path(a.aborts) if a.aborts else None,

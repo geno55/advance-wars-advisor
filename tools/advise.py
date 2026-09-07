@@ -3,6 +3,7 @@
     python tools/advise.py state.json
     python tools/advise.py state.json --player 2 --no-fog
     python tools/advise.py state.json --weight kill=1.0 --weight objective_pull=0
+    python tools/advise.py state.json --weights data/weights_m01_s.json
     python tools/advise.py state.json --reply none          # the greedy plan alone
     python tools/advise.py state.json --reply planner --branches 5
 
@@ -94,6 +95,9 @@ def main():
                    help="fog is on; only visible enemies count")
     p.add_argument("--no-fog", dest="fog", action="store_false",
                    help="fog is off; silences the unknown warning")
+    p.add_argument("--weights", metavar="FILE",
+                   help="a JSON file of weight overrides (data/weights_*.json, a tune's "
+                        "<out>.best.json); --weight flags apply on top of it")
     p.add_argument("--weight", type=parse_weight, action="append", default=[],
                    metavar="NAME=VALUE",
                    help="override one weight for this run (repeatable)")
@@ -140,7 +144,9 @@ def main():
 
     warnings = []
     t0 = time.time()
-    plan = advisor.plan(board, player, weights=dict(a.weight) or None,
+    weights = advisor.load_weights(a.weights) if a.weights else {}
+    weights.update(a.weight)
+    plan = advisor.plan(board, player, weights=weights or None,
                         weather=a.weather, fog=a.fog, luck=luck,
                         warnings=warnings, reply=model, cpu_ctx=cpu_ctx,
                         branches=a.branches)
@@ -148,9 +154,10 @@ def main():
 
     print()
     print(advisor.render(plan, terms=not a.no_terms))
-    if a.weight:
-        print("\n  weights overridden for this run: "
-              + ", ".join(f"{k}={v:g}" for k, v in a.weight))
+    if weights:
+        print("\n  weights overridden for this run"
+              + (f" ({a.weights})" if a.weights else "") + ": "
+              + ", ".join(f"{k}={v:g}" for k, v in sorted(weights.items())))
 
     if a.board:
         print("\nthe board the plan leaves behind (worst case for you):")
