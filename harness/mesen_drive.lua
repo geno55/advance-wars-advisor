@@ -792,3 +792,277 @@ function M.json(v)
   end
   return "null"
 end
+
+-- ---------------------------------------------------------------------------
+-- Field Training lessons (DERIVATION 62)
+-- ---------------------------------------------------------------------------
+-- A mission's tutorial script (mission record +0x2C, interpreter threads at
+-- 0x03001D50) waits for the player by registering EVENT HANDLERS: 8-byte
+-- entries at 0x03004280 (kind 2 = a script handler, +1 the event code, +4
+-- the handler's script). The game raises an event code through 0x08018BA8
+-- for what the player does -- 0x2C a unit selected, 0x19 Fire chosen, 0x21
+-- Wait, 0x18 Capt, 0x1F Join, 0x0F an attack resolved, 0x11 the map menu
+-- opened, 0x15/0x22/0x25/0x27/0x2A its items, 0x29 End -- and a registered
+-- handler runs: a NAG re-registers the same table after its text, the
+-- wanted one branches on (op 0x1E/0x0D) and goes on. While a script holds
+-- the input (text pages, cursor moves) the halfword at 0x03000DA4 is 1.
+M.LESSON_TABLE = 0x03004280
+M.LESSON_LOCK = 0x03000DA4
+M.LESSON_THREADS = 0x03001D50     -- 24-byte thread entries: +0 active, +4 the script PC, +0xC a delay
+M.WAIT_NAMES = { [0x08036D91] = "a unit selected", [0x08036C1D] = "a destination chosen" }   -- THUMB addresses
+M.MENU_HOOK = 0x08018EA0          -- the open menu's per-frame handler: r0 = the menu object
+M.EVENT_HOOK = 0x08018BA8         -- raise(event): r0 = the event code
+M.MAP_ITEMS = { [0x15] = true, [0x22] = true, [0x25] = true, [0x27] = true, [0x29] = true, [0x2A] = true }
+M.EVENT_NAMES = { [0x0F] = "attack", [0x11] = "map-menu", [0x15] = "Options", [0x18] = "Capt", [0x19] = "Fire",
+                  [0x1F] = "Join", [0x21] = "Wait", [0x29] = "End", [0x2C] = "select" }
+M.menu_struct, M.menu_frame = nil, -100
+M.watch_events = false
+
+function M.frame()
+  local ok, st = pcall(emu.getState)
+  return ok and (st["frameCount"] or 0) or 0
+end
+emu.addMemoryCallback(function()
+  local ok, st = pcall(emu.getState)
+  if ok then M.menu_struct = tonumber(st["cpu.r0"]); M.menu_frame = st["frameCount"] or 0 end
+end, emu.callbackType.exec, M.MENU_HOOK, M.MENU_HOOK, emu.cpuType.gba, emu.memType.gbaMemory)
+emu.addMemoryCallback(function()
+  if not M.watch_events then return end
+  local ok, st = pcall(emu.getState)
+  if ok then M.L(string.format("  event %02X raised (from %08X)", tonumber(st["cpu.r0"]) or -1, tonumber(st["cpu.r14"]) or -1)) end
+end, emu.callbackType.exec, M.EVENT_HOOK, M.EVENT_HOOK, emu.cpuType.gba, emu.memType.gbaMemory)
+
+function M.menu_open() return M.menu_struct ~= nil and (M.frame() - M.menu_frame) <= 2 end
+-- the open menu's rows as event codes, and the highlighted row
+function M.menu_rows()
+  local s = M.menu_struct
+  local tbl = M.r32(s + 0x20)
+  local rows = {}
+  for i = 0, 7 do
+    local item = M.r8(s + 0x30 + i)
+    if item == 255 then break end
+    rows[#rows + 1] = M.r8(tbl + item * 32)
+  end
+  return rows, M.r8(s + 0x40)
+end
+
+function M.lesson_handlers()
+  local out = {}
+  for i = 0, 14 do
+    local e = M.LESSON_TABLE + 8 * i
+    local kind = M.r8(e)
+    if kind == 0xFF then break end
+    if kind == 2 then out[#out + 1] = { ev = M.r8(e + 1), handler = M.r32(e + 4) } end
+  end
+  return out
+end
+local function event_set(hs)
+  local s = {}
+  for _, h in ipairs(hs) do s[h.ev] = true end
+  return s
+end
+-- a handler that only re-registers the table it was raised from, with no
+-- branch on the way, is a nag
+local function handler_is_nag(h, hs)
+  local mine = event_set(hs)
+  local a, branch, again = h, false, false
+  for _ = 1, 96 do
+    local op = M.r32(a)
+    if op == 5 or op == 4 then break end
+    if op == 0x0C or op == 0x0D or op == 0x0E or op == 0x1E then branch = true end
+    if op == 0x27 then
+      local t = M.r32(a + 4)
+      local theirs, n = {}, 0
+      for k = 0, 14 do
+        local ev = M.r8(t + 8 * k)
+        if ev == 0xFF then break end
+        theirs[ev] = true; n = n + 1
+      end
+      local same = (n == #hs)
+      if same then for ev in pairs(mine) do if not theirs[ev] then same = false end end end
+      if same then again = true end
+    end
+    a = a + 16
+  end
+  return again and not branch
+end
+function M.lesson_wanted()
+  local hs = M.lesson_handlers()
+  local wanted = {}
+  for _, h in ipairs(hs) do
+    if not handler_is_nag(h.handler, hs) then wanted[#wanted + 1] = h.ev end
+  end
+  return wanted, hs
+end
+-- A lesson can also wait on op 0x1C, a native predicate polled every frame
+-- (0x08036D90: has the player selected a unit; 0x08036C1C: chosen a
+-- destination): the thread's PC stays on that record until it holds.
+function M.lesson_waits()
+  for i = 0, 7 do
+    local e = M.LESSON_THREADS + 24 * i
+    if M.r32(e) ~= 0 then
+      local pc = M.r32(e + 4)
+      if pc >= 0x08000000 and pc < 0x0A000000 and M.r32(pc) == 0x1C then
+        return { thread = i, pc = pc, fn = M.r32(pc + 4) }
+      end
+    end
+  end
+  return nil
+end
+-- The tile a lesson means: the last op 0x28 before a native wait, or the
+-- op 0x28 a handler re-places the cursor with before its nag.
+local function tile_of(rec)
+  local v = M.r32(rec + 8)
+  return { x = math.floor((v % 0x10000) / 16), y = math.floor(math.floor(v / 0x10000) / 16), mode = M.r32(rec + 12) }
+end
+function M.lesson_target(waiting, hs, ev)
+  if waiting then
+    local a = waiting.pc
+    for _ = 1, 24 do
+      a = a - 16
+      local op = M.r32(a)
+      if op == 0x28 then return tile_of(a) end
+      if op == 5 or op == 4 or op == 0x27 then break end
+    end
+    return nil
+  end
+  for _, h in ipairs(hs or {}) do
+    if h.ev == ev then
+      local a = h.handler
+      for _ = 1, 96 do
+        local op = M.r32(a)
+        if op == 0x28 then return tile_of(a) end
+        if op == 5 or op == 4 then break end
+        a = a + 16
+      end
+    end
+  end
+  return nil
+end
+-- the unit the game holds selected (its state byte is 6 in move-select mode)
+function M.selected_unit()
+  local me = M.active_player()
+  for slot = 0, 4 * M.ARMY_SLOTS - 1 do
+    local u = M.unit(slot)
+    if u and u.player == me and u.state == 6 then return u end
+  end
+  return nil
+end
+-- Walk the cursor to a tile. In map mode the cursor bytes track and
+-- goto_tile does it; in move-select mode they do not (DERIVATION 29), so
+-- the walk is counted taps from the selected unit's tile.
+function M.walk_to(t)
+  local u = M.selected_unit()
+  if not u then return M.goto_tile(t.x, t.y) end
+  local dx, dy = t.x - u.x, t.y - u.y
+  for _ = 1, math.abs(dx) do M.tap(dx > 0 and "right" or "left", 6, 16) end
+  for _ = 1, math.abs(dy) do M.tap(dy > 0 and "down" or "up", 6, 16) end
+  return true
+end
+local function ev_name(ev) return string.format("%02X%s", ev, M.EVENT_NAMES[ev] and ("=" .. M.EVENT_NAMES[ev]) or "") end
+function M.lesson_line()
+  local wanted, hs = M.lesson_wanted()
+  local all, want = {}, {}
+  for _, h in ipairs(hs) do all[#all + 1] = ev_name(h.ev) end
+  for _, ev in ipairs(wanted) do want[#want + 1] = ev_name(ev) end
+  local cx, cy = M.cursor()
+  local w = M.lesson_waits()
+  local waiting = w and string.format(" waiting on %08X (%s)", w.fn, M.WAIT_NAMES[w.fn] or "?") or ""
+  return string.format("registered [%s] wanted [%s]%s lock %d cursor %d,%d menu %s",
+    table.concat(all, " "), table.concat(want, " "), waiting, M.r16(M.LESSON_LOCK), cx, cy, tostring(M.menu_open()))
+end
+
+-- Does the map cursor answer the pad?  A step aside and back, so a lesson's
+-- cursor placement survives the question.
+function M.cursor_answers()
+  local cx, cy = M.cursor()
+  local w = M.dims()
+  local there, back = "right", "left"
+  if cx >= w - 1 then there, back = "left", "right" end
+  M.tap(there, 6, 16)
+  local nx, ny = M.cursor()
+  if nx == cx and ny == cy then return false end
+  M.tap(back, 6, 16)
+  return true
+end
+
+-- Play the lesson's part of the turn: page through its text, then do what
+-- the registered handlers want -- select the unit under the cursor, press A
+-- where the cursor was put, pick the wanted menu row, open the map menu --
+-- until the script leaves the turn to the player (no handler, or only nags,
+-- End or an attack the planner will make). Returns the number of actions.
+function M.follow_lesson(cfg, tag)
+  local acted, last_acted = 0, false
+  for round = 1, 40 do
+    local taps = 0
+    while M.r16(M.LESSON_LOCK) ~= 0 and taps < 200 do M.tap("a", 6, 24); taps = taps + 1 end
+    if taps >= 200 then
+      M.L("  lesson: the script still holds the input after 200 taps"); M.shot(tag .. "-lesson-held")
+      return acted
+    end
+    local wanted, hs = M.lesson_wanted()
+    local waiting = M.lesson_waits()
+    local ev = nil
+    for _, e in ipairs(wanted) do
+      if e == 0x2C or e == 0x11 or (e >= 0x15 and e <= 0x2A and e ~= 0x29) then ev = e; break end
+    end
+    if not ev and not waiting and last_acted then
+      -- the script reacts to an action over a few frames (a cursor walk,
+      -- a timer, a native wait): give it a moment before calling it free
+      for _ = 1, 8 do
+        M.wait(20)
+        if M.r16(M.LESSON_LOCK) ~= 0 or #M.lesson_handlers() > 0 or M.lesson_waits() then break end
+      end
+      last_acted = false
+      if M.r16(M.LESSON_LOCK) ~= 0 or #M.lesson_handlers() > 0 or M.lesson_waits() then goto continue end
+    end
+    if round == 1 or ev or waiting then M.L("  lesson: " .. M.lesson_line()) end
+    if not ev and not waiting then break end
+    M.shot(string.format("%s-lesson-%d", tag, round))
+    if ev == 0x2C or (not ev and waiting) then
+      if M.menu_open() then M.tap("b", 8, 40) end
+      local t = M.lesson_target(waiting, hs, ev)
+      if t then
+        local u = M.selected_unit()
+        M.L(string.format("  lesson: the tile it means is (%d,%d) mode %d%s", t.x, t.y, t.mode,
+          u and string.format(", walked from the selected unit at (%d,%d)", u.x, u.y) or ""))
+        M.walk_to(t)
+      end
+      M.tap("a", 8, 60)               -- A where the lesson put the cursor
+    elseif ev == 0x11 then
+      local e = M.find_empty(cfg); M.goto_tile(e.x, e.y); M.tap("a", 8, 60)
+    elseif M.menu_open() then
+      local rows, sel = M.menu_rows()
+      local idx = nil
+      for i, r in ipairs(rows) do if r == ev then idx = i - 1 end end
+      if idx then
+        while sel < idx do M.tap("down", 6, 16); sel = sel + 1 end
+        while sel > idx do M.tap("up", 6, 16); sel = sel - 1 end
+        M.tap("a", 8, 90)
+      else
+        local names = {}
+        for _, r in ipairs(rows) do names[#names + 1] = ev_name(r) end
+        M.L("  lesson: the open menu [" .. table.concat(names, " ") .. "] has no row for " .. ev_name(ev))
+        M.shot(tag .. "-lesson-menu"); M.tap("b", 8, 40)
+      end
+    elseif M.MAP_ITEMS[ev] then
+      local e = M.find_empty(cfg); M.goto_tile(e.x, e.y); M.tap("a", 8, 60)
+    else
+      local t = M.lesson_target(nil, hs, ev)
+      if t and t.mode ~= 7 then
+        M.L(string.format("  lesson: the tile it means is (%d,%d) mode %d", t.x, t.y, t.mode))
+        M.walk_to(t)
+      end
+      M.tap("a", 8, 60)               -- a unit item: A where the lesson put the cursor
+    end
+    acted = acted + 1
+    last_acted = true
+    M.wait(40)
+    ::continue::
+  end
+  if acted > 0 then
+    M.L(string.format("  lesson: %d action(s); %s", acted, M.lesson_line()))
+    if M.menu_open() then M.tap("b", 8, 40) end
+  end
+  return acted
+end

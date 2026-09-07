@@ -183,7 +183,9 @@ fixtures, and in this file's git history.
   Kanbei/Eagle/Sturm 50000, rest 30000) × (100 + 20 per use, capped 200%)
   / 100; uses at `+0x25`, ready latch at `+0x24`. Charging requires
   `[0x03004317]` (the VS CO Power rule; the rule also sets the modifier gate
-  `0x03004318`, closing that unknown) and stops while a power runs.
+  `0x03004318`, closing that unknown) and stops while a power runs. The
+  dump carries the flag as `settings_7` and the sim charges nothing while
+  it is 0: every Field Training mission has it off (DERIVATION 62).
   Activation (map-menu Power item): meter to 0, `+0x1E` = 1 until the start
   of the caster's next turn. One-shots, all measured: Andy +2 display HP
   free via the repair path; Olaf snow to the end of his next turn; Drake −10
@@ -517,6 +519,19 @@ written.
   free landed north, and the validity mask is ordered W,E,N,S — so the
   default is not the mask's first bit and is not modelled; the advisor
   offers every valid tile instead.
+
+- **Field Training lessons are a script the driver can follow** (DERIVATION
+  62). A mission record's +8 is its lesson script; the interpreter's
+  threads are at `0x03001D50`, its registered event handlers at
+  `0x03004280` (8-byte entries: kind 2, the event at +1, the handler at
+  +4), its input lock the halfword at `0x03000DA4`. Events measured by a
+  hook on `0x08018BA8`: 0x2C a unit selected, 0x19 Fire, 0x21 Wait, 0x18
+  Capt, 0x1F Join, 0x0F an attack resolved, 0x11 the map menu, 0x15
+  Options, 0x29 End. The driver calls a handler a nag when it re-registers
+  the same event set with no branch, and the rest wanted; the tile a
+  lesson means is the last cursor placement (op 0x28) before its wait,
+  since the cursor bytes never see the script's own placements. The
+  fourteen lessons' other predicates and events are read as they come.
 
 ## Retired — measured, and compressed into Established above
 

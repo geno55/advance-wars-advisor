@@ -4121,3 +4121,137 @@ after six taps that moved nothing. And on a luck mission the fidelity
 check cannot replay our steps -- our strikes rolled -- so the loop dumps
 the board at our End Turn (`tNN.end.json`) and the check hands that to
 the port directly, RNG and all.
+
+## 62. Field Training: the tutorial script, its events, and a driver that follows it
+
+**The states.** The user parked Day 1 of Field Training missions 2, 3
+and 4 (maps 117, 118, 119; `AWFT/2.mss` to `4.mss`, states `ft2`, `ft3`,
+`ft4`), each after the scripted opening moves: mission two at day 2 with
+four hurt Infantry against two Mechs, luck off, par 3; mission three at
+day 1 with an Infantry half-way through a capture, luck on, par 9;
+mission four at day 1 with two hurt Tanks parked, luck on, par 5. The
+mission records for the fourteen Field Training maps sit at 0x08287478
++ 60 * map (116 to 129) with pars 3, 3, 9, 5, 6, 7, 3, 7, 5, 3, 7, 8,
+6, 3. Against the port, the default table routs mission two on its
+first day (S 999 by the arithmetic) and mission one's set is an A 900 on
+mission four over three seeds (day 8, none or one lost); mission three
+is a loss by rout in the port with either table, four Tanks against
+foot soldiers -- and its enemy's control byte is 1, not the CPU's 2, so
+the port's model of that side is a guess to be checked in the game.
+
+**The first game stalled on a lesson.** Mission two's day 3 opens with
+Nell asking for the map menu; the driver walked to Infantry #4 and
+pressed A, and the game answered "Excuse me, could you please display
+the Map Menu now?" until the replan budget was spent. The lesson is a
+script, and the driver has to know what it wants.
+
+**The script.** A mission record's +8 is its lesson script and +0xC its
+ending texts (0x08287210 lists the fourteen lessons in order). A script
+is 16-byte records `[op, ptr, a, b]`, run by an interpreter whose
+threads live at 0x03001D50 (24 bytes each: +0 active, +4 the script PC,
++0xC a delay) and whose opcode handlers are the table at 0x08281BA0;
+the run loop at 0x0801844C keeps calling handlers while they return 1
+and stops for the frame when one returns 0. What a lesson does with
+them: op 0x19 shows a text (pages split by 0x0F); op 0x28 puts the
+cursor on a tile (x = lo16 / 16, y = hi16 / 16; mode 7 on the map,
+8/9/0xB with a unit selected); op 0x13 and 0x12 set and clear the
+halfword at 0x03000DA4, which is 1 while the script holds the input;
+op 0x27 REGISTERS EVENT HANDLERS -- pairs (event byte, handler script)
+ending in 0xFF, copied by 0x08018AC0 into 8-byte entries at 0x03004280
+(kind 2, the event at +1, the handler at +4); op 0x1C waits for a native
+predicate (the thread's PC stays on the record until bit 0 of the
+input flags at [0x030031B4]+0xC is set, then the routine at +4 runs:
+0x08036D90 "a unit selected", 0x08036C1C "a destination chosen"); op
+0x1E branches when a native predicate holds (0x08037F10: the unit the
+player picked is the one the lesson placed the cursor on); op 0x22
+clears the handlers; op 5 stops the thread.
+
+**The events.** The game raises an event code through 0x08018BA8 for
+what the player does, and a registered handler runs -- measured by an
+exec hook on the raise and labelled actions on the mission-one state:
+
+    0x2C  a unit selected (A on an own unit)      0x11  the map menu opened
+    0x19  Fire chosen in the unit menu            0x15  Options
+    0x21  Wait                                    0x22, 0x25, 0x27, 0x2A  other map items
+    0x18  Capt                                    0x29  End
+    0x1F  Join                                    0x0C  R (intel)
+    0x0F  an attack resolved (raised with the cursor on the target)
+
+Choosing a destination raises nothing; the menu rows carry their event
+bytes (an item table of 32-byte entries at menu+0x20, the row's item
+index at menu+0x30+row, the highlighted row at +0x40; the menu object
+is the r0 of the per-frame handler 0x08018EA0, one of a pool at
+0x03000E70 + 0x60 k).
+
+**Nag or want.** A lesson's table lists the events it will answer, and
+most answers are nags: "You don't need to select End now", "Select
+Options, please." The nag handler shows its text, re-registers the same
+table and stops; the wanted one branches (op 0x1E, 0x0D) or registers
+a different table. So the driver reads the registered table, walks each
+handler's records in ROM, and calls a handler a nag when it re-registers
+the same event set with no branch on the way; what is left is wanted.
+The recipe per wanted event: 0x2C -- press A where the lesson put the
+cursor; a unit-menu item with no menu open -- press A where the cursor
+is (the destination the lesson chose, mode 8/9/0xB), then pick the row
+whose event byte is the wanted one; 0x11 or a map item -- A on an empty
+tile, then the row; 0x29 alone, an attack, or only nags -- the turn is
+the player's. A thread waiting on op 0x1C is answered the same way,
+and the tile the lesson means is read off the script -- the last op 0x28
+before the waiting record, or the one the wanted handler re-places the
+cursor with before its nag -- because the cursor bytes never see the
+script's placement: in map mode the driver walks there with goto_tile,
+in move-select mode (where the cursor bytes do not track, DERIVATION 29)
+by counted taps from the selected unit's tile (state byte 6). The script reacts over a few frames (a cursor walk, a timer,
+a native wait) so the driver polls for a lock, a table or a wait for up
+to 160 frames after each action before calling the turn free.
+
+**Where it runs.** `M.follow_lesson` (harness/mesen_drive.lua) runs at
+every turn start after the screen settles and after every step; when it
+acted the plan is asked again, since the forced moves changed the board.
+`settle_screen` no longer walks the cursor to the empty tile to ask
+whether it answers -- a step aside and back -- because a lesson parks
+the cursor on the unit it wants. `tools/ft_script.py MAP` prints a
+lesson's texts, tables, cursor placements and branches.
+
+**Two rig faults on the way.** Two runs started together read each
+other's start dump (the probe lived in one shared directory; now under
+the run's own), which made mission four's run declare a loss at mission
+three's HQ tile. And the first follower called an empty table "free"
+in the frames between a select and the script's next registration, and
+planned from a board with a unit mid-selection.
+
+**What the games said.** Mission two with the default table: the
+follower opened the map menu for the Save lesson, the planner finished
+both Mechs, a rout on day 3, the debrief's total 999 at rank code 4 --
+Field Training runs with settings `+1` = 0, so the S line is never
+given and A is the ceiling (DERIVATION 58). Mission four with mission
+one's set: the day-2 lesson (select the hurt Tank, walk it onto the
+other, Join) followed in three actions, then the planner's game, the HQ
+taken on day 9: Speed 74, Power 100, Technique 100, total 870, an A.
+The port agreed with every one of its seven CPU turns once one more
+setting was read: the meter never charged in that game, and the meter's
+gate is settings `+7` (0x03004317, the CO Power rule's second flag,
+DERIVATION 27), which every Field Training mission has off -- the dump
+carries `settings_7` and `settings_1` now and the sim charges nothing
+while the flag is 0.
+
+**Mission three is a pen.** The four Tanks stand at (9,2), (10,1),
+(12,1), (13,2) in the north-east, walled by mountains at rows 3 and 4
+and the river down column 11; they never move (the port agrees on all
+25 CPU turns of the first game: the direct pass finds no target it can
+reach, and their movement mode 1 marches on our HQ, which the pen makes
+unreachable, so the fallback stands) and fire only at what stands
+beside them. The first game camped on the cities for 25 days under the default
+table, which has no pull to the HQ. The enemy HQ at (14,5) is reached
+by the south bridge (11,8), a corridor no Tank can enter, and a search
+on the rank over three seeds (from mission one's set: `hq_pull` 50 ->
+800, `damage_taken` 0 -> 5, `kill` 2 -> 4; `data/weights_ft3.json`)
+takes it on day 10 in the port, S 985 by the arithmetic.
+Against the game, from the parked Day 1 through the day-2 lesson (the
+Infantry's capture, the Mech's, six forced actions), the planner cleared
+Grit's -- Olaf's -- foot soldiers as they came out and walked the south
+corridor: the HQ on day 12, Speed 89, Power 100, Technique 77 (two of
+six lost), total 876, an A. The port agreed on every one of the eleven
+CPU turns. All three parked Field Training missions are A-ranks from
+the game's own debrief, which is the ceiling the mode allows; the
+acceptance fixtures `ft2b`, `ft3c` and `ft4b` hold the games.

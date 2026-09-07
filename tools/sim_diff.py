@@ -77,6 +77,18 @@ STATES = {
         note="campaign mission two (map 131, 18x12, luck on), Day 1, Andy's five "
              "against Grit's thirteen; parked by the user 2026-09-05",
         mgba=None),
+    "ft2": dict(
+        mss="AWFT/2.mss", dims=(15, 10),
+        note="Field Training 2 (map 117, no luck, par 3), day 2 after the scripted day; parked by the user 2026-09-06",
+        mgba=None),
+    "ft3": dict(
+        mss="AWFT/3.mss", dims=(15, 10),
+        note="Field Training 3 (map 118, luck on, par 9), day 1 after the scripted capture; the four Tanks never leave their pen",
+        mgba=None),
+    "ft4": dict(
+        mss="AWFT/4.mss", dims=(15, 10),
+        note="Field Training 4 (map 119, luck on, par 5), day 1 after the scripted moves; day 2 is the Join lesson",
+        mgba=None),
 }
 
 FIX = ROOT / "tests" / "fixtures" / "sim_diff"

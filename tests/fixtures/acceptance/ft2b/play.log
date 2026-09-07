@@ -1,0 +1,44 @@
+  battle animations off (settings +9 := 0)
+== play: ft2 as P1, day 2 active 1, control P1=1 P2=2
+  plan requested: turn 1 replan 0
+  step t01r0-1 attack: ok
+  step t01r0-2 attack: ok
+  step t01r0-3 attack: ok
+  step t01r0-4 wait: ok
+  cpu_turn: active 1 idx36AC 1 control P1=2 P2=2
+  W idx36AC addr 030036AC val 2 pc 08024D64 phase 3
+  W army P0 +0x1C val 0 pc 0801E19E phase 3 day 2
+  W army P1 +0x1C val 0 pc 0801E1B0 phase 3 day 2
+  W army P2 +0x1C val 0 pc 0801E1B0 phase 3 day 2
+  W army P3 +0x1C val 0 pc 0801E1B0 phase 3 day 2
+  W army P4 +0x1C val 0 pc 0801E1B0 phase 3 day 2
+  W army P2 +0x1C val 1 pc 0801E1F2 phase 3 day 2
+  W army P1 +0x1C val 2 pc 0801E288 phase 3 day 2
+  W idx36AC addr 030036AC val 3 pc 08024D64 phase 3
+  W idx36AC addr 030036AC val 4 pc 08024D64 phase 3
+  W idx36AC addr 030036AC val 5 pc 08024D64 phase 3
+  W idx36AC addr 030036AC val 1 pc 08024D74 phase 3
+  W army P0 +0x1C val 0 pc 0801E19E phase 3 day 3
+  W army P1 +0x1C val 0 pc 0801E1B0 phase 3 day 3
+  W army P2 +0x1C val 0 pc 0801E1B0 phase 3 day 3
+  W army P3 +0x1C val 0 pc 0801E1B0 phase 3 day 3
+  W army P4 +0x1C val 0 pc 0801E1B0 phase 3 day 3
+  W army P1 +0x1C val 3 pc 0801E1F2 phase 3 day 3
+  phase 5 idx36AC 1 control P1=1 P2=2 day 3 cmds 0
+  cpu side up: the other sides' control bytes restored
+  cpu turn: back, 0 command(s)
+  settle: cursor not answering, tap 1
+  settle: cursor answers after 7 tap(s)
+  lesson: registered [11=map-menu 2C=select] wanted [11=map-menu] lock 0 cursor 7,4 menu false
+  lesson: 1 action(s); registered [] wanted [] lock 0 cursor 7,4 menu true
+  plan requested: turn 2 replan 0
+  step t02r0-1 attack: ok
+  step t02r0-2 join: ok
+  step t02r0-3 attack: ok
+  step t02r0-4 attack: ok
+  decided on our turn: win -- the enemy has no unit left
+  playing the ending out (sram writes so far 0)
+  rank: P1 code 4 speed 100 power 100 technique 100 total 999 (best day 2, fielded 4, lost 0, day 3)
+  ending: tap 20, sram writes 16390, phase 0 day 3
+  ending: a new match has begun; stopping
+  ending played out: sram writes 16390, phase 5 day 1

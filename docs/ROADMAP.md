@@ -283,6 +283,15 @@ Three decisions, made once so they do not get re-argued:
    a GUI process's shell-out opens a console window per call -- the
    plans come from a service beside the emulator through request files.
 
+   *Field Training (DERIVATION 62).* The tutorial missions are scripts
+   that stop the game until the player does what Nell asks; the driver
+   reads the script's registered events and native waits off RAM and
+   does it (`M.follow_lesson`), then the planner plays the rest. Field
+   Training 2, 3 and 4 from the user's parked states are A-ranks in the
+   game's debrief (999, 876, 870), the ceiling the mode allows; mission
+   three needed its own weight set (the Tanks are penned, the HQ is the
+   way) and the meter's gate (settings +7) read for the port to agree.
+
    **The first win against the game.** The last Field Training mission,
    Nell against Olaf under fog on 15x10, from the parked state to Olaf's
    HQ captured on day 13: thirteen turns, three run segments resumed from

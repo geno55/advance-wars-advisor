@@ -737,8 +737,10 @@ tools/fidelity.py         the CPU port against the real CPU's turns of an
                           acceptance run: our steps replayed, the port's
                           reply diffed with the after-dump (`check`), and
                           the rig re-run from a turn's checkpoint (`trace`)
-tests/fixtures/acceptance/ the two mission-one runs, 24 turns: start dumps,
-                          driven steps, after-dumps, logs
+tests/fixtures/acceptance/ the mission-one runs and Field Training 2, 3 and 4:
+                          start dumps, driven steps, after-dumps, logs
+tools/ft_script.py        a mission's tutorial script decoded: texts, event
+                          tables, cursor placements, branches (DERIVATION 62)
 tests/test_fidelity.py    4 tests: the steps file, the step-to-action inverse,
                           and every turn against its known gaps
 tools/sparring.py         the planner against the CPU port to the end: the

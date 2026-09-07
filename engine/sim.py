@@ -301,6 +301,8 @@ def _charge(board, player: int, gain: int, co_ids):
     army = _army(board, player)
     if army is None or army.power_active or gain <= 0:
         return board
+    if board.power_rule is False:        # the rule's flag off: no charge at all (0x0801BF74)
+        return board
     cid = _co_of(board, player, co_ids)
     meter = army.power + gain
     if cid is not None:

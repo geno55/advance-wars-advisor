@@ -169,6 +169,12 @@ class Board:
     # the dump predates the field and engine/economy.py derives the rate from
     # an army's own income instead of assuming one.
     funds_per_property: Optional[int] = None
+    # Settings +7 (0x03004317), the CO Power rule's second flag: the meter
+    # charges only when it is set (0x0801BF74, DERIVATION 27). Off in every
+    # Field Training mission and in a VS match built with the rule off
+    # (DERIVATION 62). None means the dump predates the field; the sim
+    # then charges, as it always did.
+    power_rule: Optional[bool] = None
     # The game's own property list (0x03004500, the tiles it pays for and
     # lets units capture), as a frozenset of (x, y) when the dump carries
     # it. A terrain byte written onto the map never joins this list, so the
@@ -311,6 +317,7 @@ def load(path) -> Board:
         repair_free=(None if raw.get("repair_free") is None
                      else bool(raw["repair_free"])),
         funds_per_property=raw.get("funds_per_property"),
+        power_rule=(None if raw.get("settings_7") is None else bool(raw["settings_7"])),
         listed_properties=(frozenset((p["x"], p["y"]) for p in raw["properties"])
                            if raw.get("properties") else None),
         rng=raw.get("rng"),

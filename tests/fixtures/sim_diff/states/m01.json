@@ -1,7 +1,7 @@
 {
-  "_comment": ["start of a campaign_run"],
+  "_comment": ["parked state m01, dumped by tools/sim_diff.py dump"],
   "source": "harness/mesen_state.lua",
-  "width": 19, "height": 12, "dims_pinned": false,
+  "width": 19, "height": 12, "dims_pinned": true,
   "dims_raw": [19, 12],
   "dims_check": {"stride_width": 19, "walked_height": 12, "width_sources_agree": true},
   "day": 1, "active_player": 1, "active_raw": 32,
@@ -11,7 +11,9 @@
   "funds_per_property": 1000,
   "rng": 923614853,
   "cursor": [1, 10],
-  "map_id": 130, "settings_6": 1, "settings_8": 1, "settings_9": 1,
+  "weather_2d": 0,
+  "ai_order": 0,
+  "map_id": 130, "settings_1": 1, "settings_6": 1, "settings_7": 1, "settings_8": 1, "settings_9": 1,
   "ai_profile": "00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000",
   "armies": [
     {"player": 1, "funds": 4000, "income": 4000, "power": 0, "co_id": 1, "power_active": false, "power_ready": false, "power_uses": 0, "control": 1, "flag14": 0, "flag1C": 3, "team": 1, "enemies": 14, "hq": [1, 10]},

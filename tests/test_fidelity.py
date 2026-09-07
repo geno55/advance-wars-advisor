@@ -84,8 +84,11 @@ class TestTheCheck(unittest.TestCase):
     def test_the_port_replays_every_turn_the_known_gaps_do_not_cover(self):
         found = {}
         # m01e is the S-rank game of DERIVATION 59 (weights.json beside it,
-        # also data/weights_m01_s.json): every one of its nine turns agrees
-        for run in ("m01a", "m01b", "m01c", "m01d", "m01e"):
+        # also data/weights_m01_s.json): every one of its nine turns agrees.
+        # ft2b, ft3c and ft4b are Field Training 2, 3 and 4 played through their
+        # lessons (DERIVATION 62); their dumps carry settings +7 = 0, the
+        # meter rule off, which the port must honour
+        for run in ("m01a", "m01b", "m01c", "m01d", "m01e", "ft2b", "ft3c", "ft4b"):
             d = ACC / run
             steps = fidelity.driven_steps(d)
             for t in sorted(steps):

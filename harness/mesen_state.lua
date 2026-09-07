@@ -173,8 +173,11 @@ function M.state_json(opts)
   -- on, and the 0x130-byte profile copy the AI's state 0 leaves in EWRAM
   w_(string.format('  "weather_2d": %d,', M.r8(M.WEATHER + 1)))   -- 0x0300433D, read by Olaf's power predicate (DERIVATION 54)
   w_(string.format('  "ai_order": %d,', M.r32(0x030051AC)))       -- the in-match option the AI's order list sorts by (DERIVATION 54)
-  w_(string.format('  "map_id": %d, "settings_6": %d, "settings_8": %d, "settings_9": %d,',
-    M.r8(0x03004310 + 2), M.r8(0x03004310 + 6), M.r8(0x03004310 + 8), M.r8(0x03004310 + 9)))
+  w_(string.format('  "map_id": %d, "settings_1": %d, "settings_6": %d, "settings_7": %d, "settings_8": %d, "settings_9": %d,',
+    M.r8(0x03004310 + 2), M.r8(0x03004310 + 1), M.r8(0x03004310 + 6), M.r8(0x03004310 + 7), M.r8(0x03004310 + 8), M.r8(0x03004310 + 9)))
+  -- settings +1: the mode (1 campaign; the rank's S and the campaign par
+  -- table need it, DERIVATION 58); +7: the CO Power rule's second flag,
+  -- the meter charges only when it is set (0x0801BF74, DERIVATION 27)
   -- settings +9: the battle animation. 1 and every battle's scene seeds
   -- 128 RNG draws before the battle's own; 0 and none (DERIVATION 55)
   local prof = {}

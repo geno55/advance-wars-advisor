@@ -242,10 +242,12 @@ end
     return libs + body + sim_diff.SCHEDULER
 
 
-def find_empty_tile_for(mss: pathlib.Path, dims) -> tuple:
+def find_empty_tile_for(mss: pathlib.Path, dims, run_dir: pathlib.Path) -> tuple:
     """An empty plain tile for the map menu, from a one-off dump of the
-    parked state (the driver opens the map menu with A on an empty tile)."""
-    probe = ROOT / "harness" / "out" / "play" / "probe"
+    parked state (the driver opens the map menu with A on an empty tile).
+    The probe lives under the run's own directory: two runs started
+    together once read each other's start (2026-09-06)."""
+    probe = run_dir / "probe"
     probe.mkdir(parents=True, exist_ok=True)
     dump = probe / "start.json"
     dump.unlink(missing_ok=True)                 # never a stale one from an earlier run
@@ -286,7 +288,7 @@ def cmd_run(a) -> int:
         dims = tuple(int(v) for v in a.dims.split("x")) if a.dims else st["dims"]
     run_dir = pathlib.Path(a.out).resolve()
     run_dir.mkdir(parents=True, exist_ok=True)
-    empty, board, start_dump = find_empty_tile_for(mss, dims)
+    empty, board, start_dump = find_empty_tile_for(mss, dims, run_dir)
     start = run_dir / "t00.start.json"
     start.write_text(start_dump.read_text(encoding="utf-8"), encoding="utf-8")
     player = a.player or board.active_player

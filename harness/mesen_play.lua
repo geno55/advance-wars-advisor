@@ -77,9 +77,11 @@ end
 -- the map cursor answers again.
 function M.settle_screen(tag)
   -- a campaign mission's scripted dialogue (mission one's CO power lesson
-  -- ran past twelve presses) is pages of A; B does nothing for it
+  -- ran past twelve presses) is pages of A; B does nothing for it. The
+  -- cursor is asked without being moved: a Field Training lesson parks it
+  -- on the unit it wants selected (DERIVATION 62)
   for i = 1, 80 do
-    if M.goto_tile(M.settle_tile.x, M.settle_tile.y) then
+    if M.r16(M.LESSON_LOCK) == 0 and M.cursor_answers() then
       if i > 1 then M.L(string.format("  settle: cursor answers after %d tap(s)", i - 1)) end
       return true
     end
@@ -217,6 +219,8 @@ function M.play_game(cfg)
       M.L("  " .. rec.why); M.shot(string.format("t%02d-not-ours", turn))
       result.over = "stuck"; break
     end
+    M.settle_screen(string.format("t%02d-start", turn))
+    rec.lesson = M.follow_lesson(cfg, string.format("t%02d-start", turn))   -- a Field Training lesson's forced moves first
     local plan, err = M.ask_plan(cfg, turn, 0)
     if not plan then rec.why = err; M.L("  " .. err); result.over = "harness"; break end
     if plan.over then result.over = plan.over; rec.note = plan.note; M.L("  over: " .. plan.over .. " -- " .. tostring(plan.note)); break end
@@ -241,8 +245,13 @@ function M.play_game(cfg)
       -- build or power whose real outcome the worst-case plan did not
       -- know; a plan costs minutes on a fogged 12-unit board
       local replan = (not r.ok) or (cfg.replan_after and (s.kind == "attack" or s.kind == "build" or s.kind == "power"))
-      if not r.ok then M.cancel(4); M.settle_screen(s.tag) end
-      if replan and i < #queue or (not r.ok) then
+      if not r.ok then M.cancel(4) end
+      M.settle_screen(s.tag)
+      -- a lesson the step woke (or the nag it drew): its forced moves
+      -- change the board, so the plan is asked again after them
+      local forced = M.follow_lesson(cfg, s.tag)
+      if forced > 0 then rec.lesson = (rec.lesson or 0) + forced; replan = true end
+      if (replan and i < #queue) or (not r.ok) or forced > 0 then
         if rec.replans >= M.MAX_REPLANS then
           M.L("  replan budget spent; ending the turn"); break
         end
