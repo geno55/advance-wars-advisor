@@ -141,24 +141,51 @@ to the end of the game as the leaf value:
   rolls; the same seed on the same board gives the same game. The port
   is deterministic given `board.rng`.
 
-**Budget, to be measured rather than believed.** On ft2 with the lean
-enumerator: `N=200`, `M=4`, a rollout of about 15 turns at roughly 4
-decisions and one CPU turn each is on the order of 200 x 4 x 15 x
-(4 x 2 ms + 3 ms), about two minutes per searched day on one core, and
-`multiprocessing` over candidates divides that by the core count. If
-that is wrong by a factor of ten in either direction the plan does not
-change; the numbers `N`, `M`, `B`, `D` do, and they are flags.
+**The budget: a hard cap of 15 minutes a game, decided 2026-09-07.**
+The search is anytime, and the cap is the flag, not `N`, `M`, `B`, `D`:
+`play` takes `--minutes` (default 15) for the whole game and `advise`
+takes it for the one turn (default 3). Inside it the loop spends what it
+has and stops:
+
+- the game's minutes are divided over the days that still earn the
+  target rank (`rank.days_for`, the same arithmetic the debrief uses),
+  so a game that must end by day 9 gets about 100 seconds a day, and a
+  day that finishes early hands its remainder on;
+- a searched day samples candidates and rolls them out until its share
+  is spent, one candidate at a time round-robin over rollouts, so the
+  candidate set is as wide as the clock allowed and every candidate has
+  at least one rollout; the beam's second level starts only if the
+  root finished with time in hand, and is cut off where the clock
+  says, keeping whatever it had ranked;
+- `multiprocessing` over candidates, so the cap is wall time on the
+  cores present (the estimate below assumes eight).
+
+The estimate the cap was set against, for ft3 with the lean enumerator
+(5 decisions a turn at 2 ms, a 12 ms CPU reply, a rollout of 6 turns
+on average): one candidate with 4 rollouts is about half a second of
+one core; a root of 200 candidates is 100 core-seconds; a second beam
+level of width 10 is ten times that. On eight cores that is roughly 2.5
+minutes a searched day at depth 2 and 4 seconds at `N=100`, `M=2`,
+depth 1 -- so a 10-day ft3 game fits the 15 minutes at a little under
+medium depth, and today's enumerator (13 ms a decision) would need 3.5
+times the time, which is why the lean enumerator comes first. Two
+reductions not counted there: the port is deterministic given the board
+and its RNG word, so candidates ending on the same board share one
+reply through a cache keyed by the board's hash; and a rollout stops at
+the decided game, so late days cost a fraction of the average. The
+bench after the first ft3 run replaces every number in this paragraph.
 
 **The tools.** `tools/search.py` with two entry points:
 
-- `play STATE --seed --days --samples N --rollouts M --beam B --depth D
-  --out DIR`: the whole game in the port from a parked state; writes
+- `play STATE --seed --minutes 15 --days --out DIR` (with `--samples`,
+  `--rollouts`, `--beam`, `--depth` as ceilings the clock rarely
+  reaches): the whole game in the port from a parked state; writes
   each turn's chosen actions (as `advisor.describe_action` prints them,
   the same lines `advise.py` shows) with the board before it, the
   port's reply, and the final rank, into `DIR`, plus a one-page
   `game.txt` a person can play from.
-- `advise STATE.json ...`: one turn's search from a dump of the user's
-  running game, printed as moves. This is the in-game verification
+- `advise STATE.json --minutes 3 ...`: one turn's search from a dump of
+  the user's running game, printed as moves. This is the in-game verification
   path: dump, search, play the turn, dump again. A line found by
   `play` is only good while the game follows it, and the user's game
   will not once a strike rolls differently, so `advise` re-searches
@@ -179,17 +206,24 @@ run so that step starts with data and not with a data format.
   re-enumeration after each action never proposes a move the board
   refuses);
 - the default policy finishes a game from ft2 in under the day cap
-  (it is a rollout policy, so it must terminate).
+  (it is a rollout policy, so it must terminate);
+- the clock is obeyed: a `play` with `--minutes 0.05` on ft2 returns a
+  legal turn for every day and finishes within a small margin of the
+  cap, and a searched day whose share runs out mid-rollout still
+  returns its best-ranked candidate.
 
 The port's fidelity is untouched by all of this: no engine semantics
 change, and the acceptance fixtures keep their meaning.
 
 **Done on ft2 means:** `play` from the parked state reaches a 999 in the
-port (a rout on or before day 3 with no unit lost), with a seed, in the
-time the budget above predicts within a factor of a few; and the user
-plays the printed turns in the game and the debrief reads the same. Then
-ft3 is run the same way and its port rank and its game rank are written
-down next to day 11 and day 14, whatever they are.
+port (a rout on or before day 3 with no unit lost), with a seed, inside
+the 15 minutes and well inside it; and the user plays the printed turns
+in the game and the debrief reads the same. Then ft3 is run the same
+way under the same cap and its port rank and its game rank are written
+down next to day 11 and day 14, whatever they are, with the searched
+days' actual seconds beside them. If 15 minutes is not enough for ft3
+the record says by how much, and raising the cap is the user's call,
+not the search's.
 
 ## Part 3: what the profile decides
 
