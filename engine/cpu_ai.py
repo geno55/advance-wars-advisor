@@ -1157,6 +1157,29 @@ class Turn:
         elif unit.type == "TCopter":
             self.tcopter_pass(unit)
 
+    def lander_pass(self, unit):                                 # 0x08064DF4
+        """The naval routine, read only as far as an idle empty Lander: with
+        cargo it takes 0x08064F24 (unread); else it fills the sea (blocked),
+        lists the side's units in pickup state 3 that the grid reaches and
+        are not yet targeted (0x0806164C), takes the nearest by the hunt
+        picker 0x08060A34 and moves toward it (unread); with none it runs
+        0x08064F30, the nearest own Port from the AI's factory list -- with
+        no Port on the map nothing is issued and the Lander stands (Field
+        Training 13's, DERIVATION 65)."""
+        if self.ai(unit)[0] & 0xC0:
+            raise NotImplementedError("0x08064F24 (a loaded Lander)")
+        g = self.fill(unit.x, unit.y, type_id(unit.type), WHOLE_MAP, True)
+        self.expand(g)
+        riders = [u for u in self.board.units_of(self.player)
+                  if u.slot != unit.slot and (self.ai(u)[0] >> 3) & 7 == 3
+                  and not self.targeted.get(u.slot)
+                  and g.get((u.x, u.y), UNREACHABLE) >= 0]
+        if riders:
+            raise NotImplementedError("0x08060A34 (the Lander's nearest pickup)")
+        if any(r["cls"] == 6 for r in self.factory_records()):
+            raise NotImplementedError("0x08064F30 (the Lander's way to a Port)")
+        self.log.append(f"  {unit.type}#{unit.slot}: nothing to fetch and no Port; stands")
+
     def tcopter_pass(self, unit):                                # 0x08060670
         """The APC's pickup with two differences: the fill is not blocked
         by enemy units and the load classes are kind 1's. With nothing to
@@ -1741,6 +1764,11 @@ class Turn:
                     # like the others and hands them the DIRECT routine
                     # 0x080648EC (DERIVATION 64)
                     "air_strike": (5, self.direct_pass),
+                    # 0x08064064: the lander sub-phase lists the unacted units
+                    # of move class 6 (stats +0x15) and hands them
+                    # 0x08064DF4, read as far as Field Training 13 needed
+                    # (DERIVATION 65)
+                    "lander": (6, self.lander_pass),
                     "foot": (1, self.foot_pass),
                     "transport_empty": (2, self.transport_pass),
                     "transport": (2, self.drop_pass),

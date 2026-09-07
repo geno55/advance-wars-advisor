@@ -4373,3 +4373,73 @@ day 3, total 999. All at code 4, the mode's ceiling: nine of the
 fourteen Field Training missions are A-ranks from the game's debrief,
 and the port now plays Olaf's Bombers, Fighters, copters and transport
 copters through them.
+
+## 65. Field Training 11 to 13: the navy the port has not read, and two B-ranks to lift
+
+**The states.** `AWFT/11.mss` to `13.mss` (states `ft11`, `ft12`,
+`ft13`): Field Training 11 (map 126, par 7), the naval lesson, parked
+with the Cruiser's, Battleship's and Sub's scripted shots taken; 12
+(map 127, par 8), Olaf's Blizzard, free play under a scripted snow --
+the only Field Training map with the meter rule on (settings `+7` = 1),
+since the lesson is his power; 13 (map 128, par 6), Fog of War, parked
+after the Infantry's and Mech's scripted moves. Their lessons brought no
+new event or wait: the follower took mission 11's three actions and
+mission 13's two (a Recon walked to a fogged tile the wait named) and
+handed the turns over.
+
+**The port cannot play Olaf's navy.** Mission 11 aborts at the first
+CPU turn on movement mode 6 (0x08065C74): a scan of every reachable
+tile scored by the 4x4-block value table at 0x0202743C (three sums, two
+more under the flags at 0x030050E4), highest wins, terrain value the
+tie-break for a ground unit -- the table's producer is unread. Mission
+13 aborts on the lander sub-phase (0x08064064): the unacted units of
+move class 6 (the stats byte +0x15) through 0x08064DF4, which for an
+empty Lander fills the sea, lists the side's units in pickup state 3
+that its grid reaches (0x0806164C: ai byte +9 bits 3-5 equal to 3, not
+yet targeted), takes the nearest by the hunt picker 0x08060A34 and
+moves toward it, else 0x08064F30 -- the nearest own Port from the AI's
+factory list (class 6), and with no Port on the map nothing at all; a
+loaded one takes 0x08064F24. The idle branch is what mission 13's
+single Lander, and mission 11's from day 3, ever needed: the port's
+`lander_pass` reads that far and raises on the rest, and with it every
+one of mission 13's nine CPU turns and mission 11's days 3 to 5 agree;
+mission 11's first two days stay on mode 6, and modes 3 and 5 are
+unread. (`tools/tune.py --reply planner` was added along the way and
+turned out to change only the planner's own model of the reply -- the
+sparring game's enemy is always the port -- so it is documented as such.)
+
+**Mission 12's day 1 is Olaf's script, not his AI.** The port and the
+game disagree on five of its thirteen CPU turns, all script: the
+lesson's BLIZZARD fires Olaf's power on day 1 (his meter to zero, a use
+counted, snow for three days, then a scripted rain on day 5), which no
+AI read predicts; the other differences are our units' luck rolls under
+it. From day 7 on every turn agrees.
+
+**Two B-ranks lifted.** With mission one's set the game gave mission 11
+an A 980 (a rout on day 8, one of eighteen lost) but mission 12 a B 845
+(the HQ on day 14, three lost) and mission 13 a B 845 (the HQ on day
+10, three lost); each par leaves the A line a day or a unit away. A
+six-seed search on mission 12 (`data/weights_ft12.json`: `objective_pull`
+20 -> 80, `loss` 0.5 -> 0.25, `kill` 2 -> 1; A or S on every seed, days
+9 to 12) took the HQ on day 11 in the game: Speed 88, Technique 84,
+total 892, an A.
+
+**Mission 13 resists.** Its four-seed search (`data/weights_ft13.json`:
+`objective_pull` 5, `capture` 1, `kill` 0, `hq_pull` 200) is an S on
+every seed in the port, the HQ on day 7, and in the game a B 821 -- the
+HQ on day 10 with four of twelve lost, worse than mission one's set.
+Two neighbours of that set gave the identical game and a third a worse
+one; the port agrees with all nine of the game's CPU turns, so the drift
+is in our own turns. It is not fog (the loop's dumps read every enemy
+off RAM, as the port game does) and it is not the worst-case plan
+meeting a rolling game: the sparring game can now roll the planner's
+strikes (`--roll-strikes`: each strike takes the game's own luck reduce
+over a synthetic 32-bit state, a sample and not a prediction of the real
+RNG, and a step the roll voided re-plans the rest of the turn), and the
+set stays an S or A on those seeds. What remains is the real game's own
+sequence of rolls, the enemy's and ours: on its day 3 the Rockets and
+Artillery killed a 12-HP Recon and a 47-HP Tank the planner had left in
+range -- the port's seeds spare them -- and the two losses cost the
+Technique the A needed. The user's decision stands: the planner does
+not model the RNG. So the search widened instead: eight seeds with
+rolled strikes, whose baseline is an A or S on all eight (mean 928).

@@ -40,6 +40,21 @@ KNOWN_GAPS = {
     ("m01d", 11): "not the port: the same zero-damage Recon shot called failed",
     ("m01d", 15): "not the port: our Mech #3's capture step failed its read-back after "
                   "the unit had moved, and the replay leaves a failed step out",
+    # ft11a is Field Training 11 (DERIVATION 65), Olaf's navy: movement
+    # mode 6 (0x08065C74, a scan of the 4x4-block value table at
+    # 0x0202743C) is unread; the lander routine is read as far as an idle
+    # empty Lander, which is all its days 3 to 5 needed
+    ("ft11a", 1): "port abort: movement mode 6",
+    ("ft11a", 2): "port abort: movement mode 6",
+    # ft12b is Field Training 12 (DERIVATION 65), Olaf's Blizzard: the
+    # lesson's script fires his power on day 1 and sets the weather (snow
+    # days 1-3, rain from day 5), which no AI read predicts; the rest is
+    # the rolls and the rain's modifiers under it
+    ("ft12b", 1): "the script: BLIZZARD on day 1 -- Olaf's meter spent, a use counted, snow",
+    ("ft12b", 2): "the script's snow (weather 1)",
+    ("ft12b", 3): "the script's snow (weather 1)",
+    ("ft12b", 5): "the script's rain (weather 2)",
+    ("ft12b", 6): "three hp a point or three apart under the script's rain",
 }
 
 
@@ -88,7 +103,7 @@ class TestTheCheck(unittest.TestCase):
         # ft2b to ft10a are Field Training 2 to 10 played through their
         # lessons (DERIVATION 62); their dumps carry settings +7 = 0, the
         # meter rule off, which the port must honour
-        for run in ("m01a", "m01b", "m01c", "m01d", "m01e", "ft2b", "ft3c", "ft4b", "ft5c", "ft6b", "ft7d", "ft8a", "ft9b", "ft10a"):
+        for run in ("m01a", "m01b", "m01c", "m01d", "m01e", "ft2b", "ft3c", "ft4b", "ft5c", "ft6b", "ft7d", "ft8a", "ft9b", "ft10a", "ft11a", "ft12b"):
             d = ACC / run
             steps = fidelity.driven_steps(d)
             for t in sorted(steps):

@@ -1,0 +1,599 @@
+  battle animations off (settings +9 := 0)
+== play: ft12 as P1, day 1 active 1, control P1=1 P2=2
+  lesson: registered [] wanted [] lock 0 cursor 1,6 menu false
+  plan requested: turn 1 replan 0
+  step t01r0-1 wait: ok
+  lesson: registered [] wanted [] lock 0 cursor 3,0 menu false
+  step t01r0-2 wait: ok
+  lesson: registered [] wanted [] lock 0 cursor 4,4 menu false
+  step t01r0-3 wait: ok
+  lesson: registered [] wanted [] lock 0 cursor 8,7 menu false
+  step t01r0-4 wait: ok
+  lesson: registered [] wanted [] lock 0 cursor 7,7 menu false
+  step t01r0-5 wait: ok
+  lesson: registered [] wanted [] lock 0 cursor 9,7 menu false
+  step t01r0-6 wait: ok
+  lesson: registered [] wanted [] lock 0 cursor 2,6 menu false
+  step t01r0-7 wait: ok
+  lesson: registered [] wanted [] lock 0 cursor 3,8 menu false
+  step t01r0-8 wait: ok
+  lesson: registered [] wanted [] lock 0 cursor 2,8 menu false
+  step t01r0-9 wait: ok
+  lesson: registered [] wanted [] lock 0 cursor 1,2 menu false
+  step t01r0-10 wait: ok
+  lesson: registered [] wanted [] lock 0 cursor 4,3 menu false
+  step t01r0-11 wait: ok
+  lesson: registered [] wanted [] lock 0 cursor 3,6 menu false
+  step t01r0-12 wait: ok
+  lesson: registered [] wanted [] lock 0 cursor 6,8 menu false
+  step t01r0-13 wait: ok
+  lesson: registered [] wanted [] lock 0 cursor 5,4 menu false
+  step t01r0-14 wait: ok
+  lesson: registered [] wanted [] lock 0 cursor 1,5 menu false
+  step t01r0-15 wait: ok
+  lesson: registered [] wanted [] lock 0 cursor 2,9 menu false
+  cpu_turn: active 1 idx36AC 1 control P1=2 P2=2
+  W idx36AC addr 030036AC val 2 pc 08024D64 phase 3
+  W army P0 +0x1C val 0 pc 0801E19E phase 3 day 1
+  W army P1 +0x1C val 0 pc 0801E1B0 phase 3 day 1
+  W army P2 +0x1C val 0 pc 0801E1B0 phase 3 day 1
+  W army P3 +0x1C val 0 pc 0801E1B0 phase 3 day 1
+  W army P4 +0x1C val 0 pc 0801E1B0 phase 3 day 1
+  W army P2 +0x1C val 1 pc 0801E1F2 phase 3 day 1
+  W army P1 +0x1C val 2 pc 0801E288 phase 3 day 1
+  phase 6 idx36AC 2 control P1=1 P2=2 day 1 cmds 0
+  cpu side up: the other sides' control bytes restored
+  order: flag 0 slots [71,72,73,74,75,78,79,76,77,0,0,0] keys [6,6,6,6,6,6,6,5,5,0,0,0]
+  phase 6 idx36AC 2 control P1=1 P2=2 day 1 cmds 1
+  order: flag 0 slots [71,72,73,74,75,78,79,76,77,0,0,0] keys [6,6,6,6,6,6,6,5,5,0,0,0]
+  phase 6 idx36AC 2 control P1=1 P2=2 day 1 cmds 2
+  order: flag 0 slots [71,72,73,74,75,78,79,76,77,0,0,0] keys [6,6,6,6,6,6,6,5,5,0,0,0]
+  phase 6 idx36AC 2 control P1=1 P2=2 day 1 cmds 3
+  order: flag 0 slots [71,72,73,74,75,78,79,76,77,0,0,0] keys [6,6,6,6,6,6,6,5,5,0,0,0]
+  phase 6 idx36AC 2 control P1=1 P2=2 day 1 cmds 4
+  order: flag 0 slots [71,72,73,74,75,78,79,76,77,0,0,0] keys [6,6,6,6,6,6,6,5,5,0,0,0]
+  phase 6 idx36AC 2 control P1=1 P2=2 day 1 cmds 5
+  order: flag 0 slots [71,72,73,74,75,78,79,76,77,0,0,0] keys [6,6,6,6,6,6,6,5,5,0,0,0]
+  phase 6 idx36AC 2 control P1=1 P2=2 day 1 cmds 6
+  order: flag 0 slots [65,66,67,68,0,78,79,76,77,0,0,0] keys [6,5,5,6,6,6,6,5,5,0,0,0]
+  phase 6 idx36AC 2 control P1=1 P2=2 day 1 cmds 7
+  order: flag 0 slots [65,66,67,68,0,78,79,76,77,0,0,0] keys [6,5,5,6,6,6,6,5,5,0,0,0]
+  phase 6 idx36AC 2 control P1=1 P2=2 day 1 cmds 8
+  order: flag 0 slots [65,66,67,68,0,78,79,76,77,0,0,0] keys [6,5,5,6,6,6,6,5,5,0,0,0]
+  phase 6 idx36AC 2 control P1=1 P2=2 day 1 cmds 9
+  order: flag 0 slots [65,66,67,68,0,78,79,76,77,0,0,0] keys [6,5,5,6,6,6,6,5,5,0,0,0]
+  phase 6 idx36AC 2 control P1=1 P2=2 day 1 cmds 10
+  order: flag 0 slots [69,70,0,68,0,78,79,76,77,0,0,0] keys [5,5,5,6,6,6,6,5,5,0,0,0]
+  phase 6 idx36AC 2 control P1=1 P2=2 day 1 cmds 11
+  W idx36AC addr 030036AC val 3 pc 08024D64 phase 3
+  W idx36AC addr 030036AC val 4 pc 08024D64 phase 3
+  W idx36AC addr 030036AC val 5 pc 08024D64 phase 3
+  W idx36AC addr 030036AC val 1 pc 08024D74 phase 3
+  W army P0 +0x1C val 0 pc 0801E19E phase 3 day 2
+  W army P1 +0x1C val 0 pc 0801E1B0 phase 3 day 2
+  W army P2 +0x1C val 0 pc 0801E1B0 phase 3 day 2
+  W army P3 +0x1C val 0 pc 0801E1B0 phase 3 day 2
+  W army P4 +0x1C val 0 pc 0801E1B0 phase 3 day 2
+  W army P1 +0x1C val 3 pc 0801E1F2 phase 3 day 2
+  phase 4 idx36AC 1 control P1=1 P2=2 day 2 cmds 11
+  phase 7 idx36AC 1 control P1=1 P2=2 day 2 cmds 11
+  phase 10 idx36AC 1 control P1=1 P2=2 day 2 cmds 11
+  phase 5 idx36AC 1 control P1=1 P2=2 day 2 cmds 11
+  cpu turn: back, 11 command(s)
+  settle: cursor not answering, tap 1
+  settle: cursor not answering, tap 11
+  settle: cursor not answering, tap 21
+  settle: cursor answers after 21 tap(s)
+  lesson: registered [] wanted [] lock 0 cursor 9,3 menu false
+  plan requested: turn 2 replan 0
+  step t02r0-1 attack: ok
+  lesson: registered [] wanted [] lock 0 cursor 7,6 menu false
+  step t02r0-2 attack: ok
+  lesson: registered [] wanted [] lock 0 cursor 6,4 menu false
+  step t02r0-3 attack: ok
+  lesson: registered [] wanted [] lock 0 cursor 6,4 menu false
+  step t02r0-4 attack: ok
+  lesson: registered [] wanted [] lock 0 cursor 4,0 menu false
+  step t02r0-5 attack: ok
+  lesson: registered [] wanted [] lock 0 cursor 9,8 menu false
+  step t02r0-6 attack: ok
+  lesson: registered [] wanted [] lock 0 cursor 10,7 menu false
+  step t02r0-7 attack: ok
+  lesson: registered [] wanted [] lock 0 cursor 10,7 menu false
+  step t02r0-8 supply: ok
+  lesson: registered [] wanted [] lock 0 cursor 5,3 menu false
+  step t02r0-9 wait: ok
+  lesson: registered [] wanted [] lock 0 cursor 3,1 menu false
+  step t02r0-10 wait: ok
+  lesson: registered [] wanted [] lock 0 cursor 5,8 menu false
+  step t02r0-11 wait: ok
+  lesson: registered [] wanted [] lock 0 cursor 2,5 menu false
+  step t02r0-12 wait: ok
+  lesson: registered [] wanted [] lock 0 cursor 3,7 menu false
+  step t02r0-13 wait: ok
+  lesson: registered [] wanted [] lock 0 cursor 2,8 menu false
+  step t02r0-14 wait: ok
+  lesson: registered [] wanted [] lock 0 cursor 4,8 menu false
+  step t02r0-15 wait: ok
+  lesson: registered [] wanted [] lock 0 cursor 3,5 menu false
+  cpu_turn: active 1 idx36AC 1 control P1=2 P2=2
+  W idx36AC addr 030036AC val 2 pc 08024D64 phase 3
+  W army P0 +0x1C val 0 pc 0801E19E phase 3 day 2
+  W army P1 +0x1C val 0 pc 0801E1B0 phase 3 day 2
+  W army P2 +0x1C val 0 pc 0801E1B0 phase 3 day 2
+  W army P3 +0x1C val 0 pc 0801E1B0 phase 3 day 2
+  W army P4 +0x1C val 0 pc 0801E1B0 phase 3 day 2
+  W army P2 +0x1C val 1 pc 0801E1F2 phase 3 day 2
+  W army P1 +0x1C val 2 pc 0801E288 phase 3 day 2
+  order: flag 0 slots [67,68,65,66,0,78,79,76,77,0,0,0] keys [3,3,2,2,6,6,6,5,5,0,0,0]
+  order: flag 0 slots [69,70,0,66,0,78,79,76,77,0,0,0] keys [5,5,2,2,6,6,6,5,5,0,0,0]
+  order: flag 0 slots [71,73,74,79,76,77,0,76,77,0,0,0] keys [6,6,6,6,5,5,6,5,5,0,0,0]
+  order: flag 0 slots [71,73,74,79,76,77,0,76,77,0,0,0] keys [6,6,6,6,5,5,6,5,5,0,0,0]
+  phase 6 idx36AC 2 control P1=1 P2=2 day 2 cmds 4
+  cpu side up: the other sides' control bytes restored
+  order: flag 0 slots [71,73,74,79,76,77,0,76,77,0,0,0] keys [6,6,6,6,5,5,6,5,5,0,0,0]
+  phase 6 idx36AC 2 control P1=1 P2=2 day 2 cmds 5
+  order: flag 0 slots [65,66,68,0,76,77,0,76,77,0,0,0] keys [6,5,5,6,5,5,6,5,5,0,0,0]
+  phase 6 idx36AC 2 control P1=1 P2=2 day 2 cmds 6
+  order: flag 0 slots [65,66,68,0,76,77,0,76,77,0,0,0] keys [6,5,5,6,5,5,6,5,5,0,0,0]
+  phase 6 idx36AC 2 control P1=1 P2=2 day 2 cmds 7
+  order: flag 0 slots [65,66,68,0,76,77,0,76,77,0,0,0] keys [6,5,5,6,5,5,6,5,5,0,0,0]
+  phase 6 idx36AC 2 control P1=1 P2=2 day 2 cmds 8
+  W idx36AC addr 030036AC val 3 pc 08024D64 phase 3
+  W idx36AC addr 030036AC val 4 pc 08024D64 phase 3
+  W idx36AC addr 030036AC val 5 pc 08024D64 phase 3
+  W idx36AC addr 030036AC val 1 pc 08024D74 phase 3
+  W army P0 +0x1C val 0 pc 0801E19E phase 3 day 3
+  W army P1 +0x1C val 0 pc 0801E1B0 phase 3 day 3
+  W army P2 +0x1C val 0 pc 0801E1B0 phase 3 day 3
+  W army P3 +0x1C val 0 pc 0801E1B0 phase 3 day 3
+  W army P4 +0x1C val 0 pc 0801E1B0 phase 3 day 3
+  W army P1 +0x1C val 3 pc 0801E1F2 phase 3 day 3
+  phase 4 idx36AC 1 control P1=1 P2=2 day 3 cmds 8
+  phase 7 idx36AC 1 control P1=1 P2=2 day 3 cmds 8
+  phase 10 idx36AC 1 control P1=1 P2=2 day 3 cmds 8
+  phase 5 idx36AC 1 control P1=1 P2=2 day 3 cmds 8
+  cpu turn: back, 8 command(s)
+  lesson: registered [] wanted [] lock 0 cursor 3,5 menu false
+  plan requested: turn 3 replan 0
+  step t03r0-1 attack: ok
+  lesson: registered [] wanted [] lock 0 cursor 7,6 menu false
+  step t03r0-2 attack: ok
+  lesson: registered [] wanted [] lock 0 cursor 5,1 menu false
+  step t03r0-3 attack: ok
+  lesson: registered [] wanted [] lock 0 cursor 7,8 menu false
+  step t03r0-4 attack: ok
+  settle: cursor not answering, tap 1
+  settle: cursor answers after 2 tap(s)
+  lesson: registered [] wanted [] lock 0 cursor 7,7 menu false
+  step t03r0-5 attack: ok
+  lesson: registered [] wanted [] lock 0 cursor 7,4 menu false
+  step t03r0-6 supply: ok
+  lesson: registered [] wanted [] lock 0 cursor 5,1 menu false
+  step t03r0-7 wait: ok
+  lesson: registered [] wanted [] lock 0 cursor 6,1 menu false
+  step t03r0-8 wait: ok
+  lesson: registered [] wanted [] lock 0 cursor 5,4 menu false
+  step t03r0-9 wait: ok
+  lesson: registered [] wanted [] lock 0 cursor 3,4 menu false
+  step t03r0-10 wait: ok
+  lesson: registered [] wanted [] lock 0 cursor 4,5 menu false
+  step t03r0-11 wait: ok
+  lesson: registered [] wanted [] lock 0 cursor 3,8 menu false
+  step t03r0-12 wait: ok
+  lesson: registered [] wanted [] lock 0 cursor 3,7 menu false
+  step t03r0-13 wait: ok
+  lesson: registered [] wanted [] lock 0 cursor 4,8 menu false
+  step t03r0-14 wait: ok
+  lesson: registered [] wanted [] lock 0 cursor 5,8 menu false
+  cpu_turn: active 1 idx36AC 1 control P1=2 P2=2
+  W idx36AC addr 030036AC val 2 pc 08024D64 phase 3
+  W army P0 +0x1C val 0 pc 0801E19E phase 3 day 3
+  W army P1 +0x1C val 0 pc 0801E1B0 phase 3 day 3
+  W army P2 +0x1C val 0 pc 0801E1B0 phase 3 day 3
+  W army P3 +0x1C val 0 pc 0801E1B0 phase 3 day 3
+  W army P4 +0x1C val 0 pc 0801E1B0 phase 3 day 3
+  W army P2 +0x1C val 1 pc 0801E1F2 phase 3 day 3
+  W army P1 +0x1C val 2 pc 0801E288 phase 3 day 3
+  order: flag 0 slots [67,68,65,66,0,77,0,76,77,0,0,0] keys [3,3,2,2,5,5,6,5,5,0,0,0]
+  order: flag 0 slots [74,76,77,0,0,77,0,76,77,0,0,0] keys [6,5,5,2,5,5,6,5,5,0,0,0]
+  order: flag 0 slots [65,66,68,0,0,77,0,76,77,0,0,0] keys [6,5,5,2,5,5,6,5,5,0,0,0]
+  order: flag 0 slots [65,66,68,0,0,77,0,76,77,0,0,0] keys [6,5,5,2,5,5,6,5,5,0,0,0]
+  order: flag 0 slots [65,66,68,0,0,77,0,76,77,0,0,0] keys [6,5,5,2,5,5,6,5,5,0,0,0]
+  order: flag 0 slots [69,70,0,0,0,77,0,76,77,0,0,0] keys [5,5,5,2,5,5,6,5,5,0,0,0]
+  W idx36AC addr 030036AC val 3 pc 08024D64 phase 3
+  W idx36AC addr 030036AC val 4 pc 08024D64 phase 3
+  W idx36AC addr 030036AC val 5 pc 08024D64 phase 3
+  W idx36AC addr 030036AC val 1 pc 08024D74 phase 3
+  W army P0 +0x1C val 0 pc 0801E19E phase 3 day 4
+  W army P1 +0x1C val 0 pc 0801E1B0 phase 3 day 4
+  W army P2 +0x1C val 0 pc 0801E1B0 phase 3 day 4
+  W army P3 +0x1C val 0 pc 0801E1B0 phase 3 day 4
+  W army P4 +0x1C val 0 pc 0801E1B0 phase 3 day 4
+  W army P1 +0x1C val 3 pc 0801E1F2 phase 3 day 4
+  phase 4 idx36AC 1 control P1=1 P2=2 day 4 cmds 6
+  cpu side up: the other sides' control bytes restored
+  phase 7 idx36AC 1 control P1=1 P2=2 day 4 cmds 6
+  phase 10 idx36AC 1 control P1=1 P2=2 day 4 cmds 6
+  phase 5 idx36AC 1 control P1=1 P2=2 day 4 cmds 6
+  cpu turn: back, 6 command(s)
+  lesson: registered [] wanted [] lock 0 cursor 8,6 menu false
+  plan requested: turn 4 replan 0
+  step t04r0-1 attack: ok
+  lesson: registered [] wanted [] lock 0 cursor 5,0 menu false
+  step t04r0-2 attack: ok
+  lesson: registered [] wanted [] lock 0 cursor 7,5 menu false
+  step t04r0-3 attack: ok
+  lesson: registered [] wanted [] lock 0 cursor 10,8 menu false
+  step t04r0-4 attack: ok
+  lesson: registered [] wanted [] lock 0 cursor 7,4 menu false
+  step t04r0-5 wait: ok
+  lesson: registered [] wanted [] lock 0 cursor 7,8 menu false
+  step t04r0-6 wait: ok
+  lesson: registered [] wanted [] lock 0 cursor 7,9 menu false
+  step t04r0-7 wait: ok
+  lesson: registered [] wanted [] lock 0 cursor 5,8 menu false
+  step t04r0-8 wait: ok
+  lesson: registered [] wanted [] lock 0 cursor 4,4 menu false
+  step t04r0-9 wait: ok
+  lesson: registered [] wanted [] lock 0 cursor 8,9 menu false
+  step t04r0-10 wait: ok
+  lesson: registered [] wanted [] lock 0 cursor 3,2 menu false
+  step t04r0-11 wait: ok
+  lesson: registered [] wanted [] lock 0 cursor 4,8 menu false
+  step t04r0-12 wait: ok
+  lesson: registered [] wanted [] lock 0 cursor 6,1 menu false
+  step t04r0-13 wait: ok
+  lesson: registered [] wanted [] lock 0 cursor 7,7 menu false
+  step t04r0-14 supply: ok
+  lesson: registered [] wanted [] lock 0 cursor 4,1 menu false
+  cpu_turn: active 1 idx36AC 1 control P1=2 P2=2
+  W idx36AC addr 030036AC val 2 pc 08024D64 phase 3
+  W army P0 +0x1C val 0 pc 0801E19E phase 3 day 4
+  W army P1 +0x1C val 0 pc 0801E1B0 phase 3 day 4
+  W army P2 +0x1C val 0 pc 0801E1B0 phase 3 day 4
+  W army P3 +0x1C val 0 pc 0801E1B0 phase 3 day 4
+  W army P4 +0x1C val 0 pc 0801E1B0 phase 3 day 4
+  W army P2 +0x1C val 1 pc 0801E1F2 phase 3 day 4
+  W army P1 +0x1C val 2 pc 0801E288 phase 3 day 4
+  phase 6 idx36AC 2 control P1=1 P2=2 day 4 cmds 0
+  cpu side up: the other sides' control bytes restored
+  order: flag 0 slots [68,65,66,0,0,77,0,76,77,0,0,0] keys [3,2,2,2,5,5,6,5,5,0,0,0]
+  phase 6 idx36AC 2 control P1=1 P2=2 day 4 cmds 1
+  order: flag 0 slots [69,70,0,0,0,77,0,76,77,0,0,0] keys [5,5,2,2,5,5,6,5,5,0,0,0]
+  phase 6 idx36AC 2 control P1=1 P2=2 day 4 cmds 2
+  order: flag 0 slots [74,76,77,0,0,77,0,76,77,0,0,0] keys [6,5,5,2,5,5,6,5,5,0,0,0]
+  phase 6 idx36AC 2 control P1=1 P2=2 day 4 cmds 3
+  order: flag 0 slots [66,68,0,0,0,77,0,76,77,0,0,0] keys [6,5,5,2,5,5,6,5,5,0,0,0]
+  phase 6 idx36AC 2 control P1=1 P2=2 day 4 cmds 4
+  order: flag 0 slots [66,68,0,0,0,77,0,76,77,0,0,0] keys [6,5,5,2,5,5,6,5,5,0,0,0]
+  phase 6 idx36AC 2 control P1=1 P2=2 day 4 cmds 5
+  W idx36AC addr 030036AC val 3 pc 08024D64 phase 3
+  W idx36AC addr 030036AC val 4 pc 08024D64 phase 3
+  W idx36AC addr 030036AC val 5 pc 08024D64 phase 3
+  W idx36AC addr 030036AC val 1 pc 08024D74 phase 3
+  W army P0 +0x1C val 0 pc 0801E19E phase 3 day 5
+  W army P1 +0x1C val 0 pc 0801E1B0 phase 3 day 5
+  W army P2 +0x1C val 0 pc 0801E1B0 phase 3 day 5
+  W army P3 +0x1C val 0 pc 0801E1B0 phase 3 day 5
+  W army P4 +0x1C val 0 pc 0801E1B0 phase 3 day 5
+  W army P1 +0x1C val 3 pc 0801E1F2 phase 3 day 5
+  phase 3 idx36AC 1 control P1=1 P2=2 day 5 cmds 5
+  phase 4 idx36AC 1 control P1=1 P2=2 day 5 cmds 5
+  phase 7 idx36AC 1 control P1=1 P2=2 day 5 cmds 5
+  phase 10 idx36AC 1 control P1=1 P2=2 day 5 cmds 5
+  phase 5 idx36AC 1 control P1=1 P2=2 day 5 cmds 5
+  cpu turn: back, 5 command(s)
+  settle: cursor not answering, tap 1
+  settle: cursor answers after 2 tap(s)
+  lesson: registered [] wanted [] lock 0 cursor 8,6 menu false
+  plan requested: turn 5 replan 0
+  step t05r0-1 attack: ok
+  lesson: registered [] wanted [] lock 0 cursor 5,1 menu false
+  step t05r0-2 attack: ok
+  lesson: registered [] wanted [] lock 0 cursor 7,4 menu false
+  step t05r0-3 attack: ok
+  lesson: registered [] wanted [] lock 0 cursor 8,7 menu false
+  step t05r0-4 attack: ok
+  lesson: registered [] wanted [] lock 0 cursor 8,7 menu false
+  step t05r0-5 attack: ok
+  lesson: registered [] wanted [] lock 0 cursor 10,8 menu false
+  step t05r0-6 attack: ok
+  lesson: registered [] wanted [] lock 0 cursor 5,1 menu false
+  step t05r0-7 attack: ok
+  lesson: registered [] wanted [] lock 0 cursor 9,8 menu false
+  step t05r0-8 capture: ok
+  lesson: registered [] wanted [] lock 0 cursor 7,4 menu false
+  step t05r0-9 wait: ok
+  lesson: registered [] wanted [] lock 0 cursor 7,8 menu false
+  step t05r0-10 wait: ok
+  lesson: registered [] wanted [] lock 0 cursor 6,2 menu false
+  step t05r0-11 wait: ok
+  lesson: registered [] wanted [] lock 0 cursor 6,9 menu false
+  step t05r0-12 wait: ok
+  lesson: registered [] wanted [] lock 0 cursor 6,1 menu false
+  step t05r0-13 wait: ok
+  lesson: registered [] wanted [] lock 0 cursor 8,9 menu false
+  cpu_turn: active 1 idx36AC 1 control P1=2 P2=2
+  W idx36AC addr 030036AC val 2 pc 08024D64 phase 3
+  W army P0 +0x1C val 0 pc 0801E19E phase 3 day 5
+  W army P1 +0x1C val 0 pc 0801E1B0 phase 3 day 5
+  W army P2 +0x1C val 0 pc 0801E1B0 phase 3 day 5
+  W army P3 +0x1C val 0 pc 0801E1B0 phase 3 day 5
+  W army P4 +0x1C val 0 pc 0801E1B0 phase 3 day 5
+  W army P2 +0x1C val 1 pc 0801E1F2 phase 3 day 5
+  W army P1 +0x1C val 2 pc 0801E288 phase 3 day 5
+  order: flag 0 slots [69,70,0,0,0,77,0,76,77,0,0,0] keys [5,5,5,2,5,5,6,5,5,0,0,0]
+  W idx36AC addr 030036AC val 3 pc 08024D64 phase 3
+  W idx36AC addr 030036AC val 4 pc 08024D64 phase 3
+  W idx36AC addr 030036AC val 5 pc 08024D64 phase 3
+  W idx36AC addr 030036AC val 1 pc 08024D74 phase 3
+  W army P0 +0x1C val 0 pc 0801E19E phase 3 day 6
+  W army P1 +0x1C val 0 pc 0801E1B0 phase 3 day 6
+  W army P2 +0x1C val 0 pc 0801E1B0 phase 3 day 6
+  W army P3 +0x1C val 0 pc 0801E1B0 phase 3 day 6
+  W army P4 +0x1C val 0 pc 0801E1B0 phase 3 day 6
+  W army P1 +0x1C val 3 pc 0801E1F2 phase 3 day 6
+  phase 10 idx36AC 1 control P1=1 P2=2 day 6 cmds 1
+  cpu side up: the other sides' control bytes restored
+  phase 5 idx36AC 1 control P1=1 P2=2 day 6 cmds 1
+  cpu turn: back, 1 command(s)
+  settle: cursor not answering, tap 1
+  settle: cursor answers after 1 tap(s)
+  lesson: registered [29=End] wanted [29=End] lock 0 cursor 8,6 menu false
+  plan requested: turn 6 replan 0
+  step t06r0-1 attack: ok
+  lesson: registered [29=End] wanted [29=End] lock 0 cursor 13,3 menu false
+  step t06r0-2 attack: ok
+  lesson: registered [29=End] wanted [29=End] lock 0 cursor 10,8 menu false
+  step t06r0-3 attack: ok
+  lesson: registered [29=End] wanted [29=End] lock 0 cursor 9,8 menu false
+  step t06r0-4 wait: ok
+  lesson: registered [29=End] wanted [29=End] lock 0 cursor 7,7 menu false
+  step t06r0-5 join: ok
+  lesson: registered [29=End] wanted [29=End] lock 0 cursor 9,9 menu false
+  step t06r0-6 wait: ok
+  lesson: registered [29=End] wanted [29=End] lock 0 cursor 8,4 menu false
+  step t06r0-7 wait: ok
+  lesson: registered [29=End] wanted [29=End] lock 0 cursor 10,1 menu false
+  step t06r0-8 capture: ok
+  lesson: registered [29=End] wanted [29=End] lock 0 cursor 8,9 menu false
+  step t06r0-9 load: ok
+  lesson: registered [29=End] wanted [29=End] lock 0 cursor 6,1 menu false
+  step t06r0-10 drop: ok
+  lesson: registered [29=End] wanted [29=End] lock 0 cursor 12,1 menu false
+  step t06r0-11 wait: ok
+  lesson: registered [29=End] wanted [29=End] lock 0 cursor 10,7 menu false
+  step t06r0-12 wait: ok
+  lesson: registered [29=End] wanted [29=End] lock 0 cursor 7,1 menu false
+  cpu_turn: active 1 idx36AC 1 control P1=2 P2=2
+  W idx36AC addr 030036AC val 2 pc 08024D64 phase 3
+  W army P0 +0x1C val 0 pc 0801E19E phase 3 day 6
+  W army P1 +0x1C val 0 pc 0801E1B0 phase 3 day 6
+  W army P2 +0x1C val 0 pc 0801E1B0 phase 3 day 6
+  W army P3 +0x1C val 0 pc 0801E1B0 phase 3 day 6
+  W army P4 +0x1C val 0 pc 0801E1B0 phase 3 day 6
+  W army P2 +0x1C val 1 pc 0801E1F2 phase 3 day 6
+  W army P1 +0x1C val 2 pc 0801E288 phase 3 day 6
+  phase 6 idx36AC 2 control P1=1 P2=2 day 6 cmds 0
+  cpu side up: the other sides' control bytes restored
+  order: flag 0 slots [70,0,0,0,0,77,0,76,77,0,0,0] keys [5,5,5,2,5,5,6,5,5,0,0,0]
+  phase 6 idx36AC 2 control P1=1 P2=2 day 6 cmds 1
+  order: flag 0 slots [74,77,0,0,0,77,0,76,77,0,0,0] keys [6,5,5,2,5,5,6,5,5,0,0,0]
+  phase 6 idx36AC 2 control P1=1 P2=2 day 6 cmds 2
+  order: flag 0 slots [74,77,0,0,0,77,0,76,77,0,0,0] keys [6,5,5,2,5,5,6,5,5,0,0,0]
+  phase 6 idx36AC 2 control P1=1 P2=2 day 6 cmds 3
+  W idx36AC addr 030036AC val 3 pc 08024D64 phase 3
+  W idx36AC addr 030036AC val 4 pc 08024D64 phase 3
+  W idx36AC addr 030036AC val 5 pc 08024D64 phase 3
+  W idx36AC addr 030036AC val 1 pc 08024D74 phase 3
+  W army P0 +0x1C val 0 pc 0801E19E phase 3 day 7
+  W army P1 +0x1C val 0 pc 0801E1B0 phase 3 day 7
+  W army P2 +0x1C val 0 pc 0801E1B0 phase 3 day 7
+  W army P3 +0x1C val 0 pc 0801E1B0 phase 3 day 7
+  W army P4 +0x1C val 0 pc 0801E1B0 phase 3 day 7
+  W army P1 +0x1C val 3 pc 0801E1F2 phase 3 day 7
+  phase 4 idx36AC 1 control P1=1 P2=2 day 7 cmds 3
+  phase 11 idx36AC 1 control P1=1 P2=2 day 7 cmds 3
+  phase 7 idx36AC 1 control P1=1 P2=2 day 7 cmds 3
+  phase 10 idx36AC 1 control P1=1 P2=2 day 7 cmds 3
+  phase 5 idx36AC 1 control P1=1 P2=2 day 7 cmds 3
+  cpu turn: back, 3 command(s)
+  lesson: registered [] wanted [] lock 0 cursor 7,1 menu false
+  plan requested: turn 7 replan 0
+  step t07r0-1 attack: ok
+  lesson: registered [] wanted [] lock 0 cursor 13,3 menu false
+  step t07r0-2 wait: ok
+  lesson: registered [] wanted [] lock 0 cursor 7,7 menu false
+  step t07r0-3 wait: ok
+  lesson: registered [] wanted [] lock 0 cursor 12,2 menu false
+  step t07r0-4 wait: ok
+  lesson: registered [] wanted [] lock 0 cursor 11,8 menu false
+  step t07r0-5 wait: ok
+  lesson: registered [] wanted [] lock 0 cursor 8,1 menu false
+  step t07r0-6 wait: ok
+  lesson: registered [] wanted [] lock 0 cursor 11,7 menu false
+  step t07r0-7 capture: ok
+  lesson: registered [] wanted [] lock 0 cursor 12,7 menu false
+  step t07r0-8 wait: ok
+  lesson: registered [] wanted [] lock 0 cursor 6,1 menu false
+  step t07r0-9 wait: ok
+  lesson: registered [] wanted [] lock 0 cursor 10,7 menu false
+  step t07r0-10 capture: ok
+  lesson: registered [] wanted [] lock 0 cursor 8,9 menu false
+  step t07r0-11 load: ok
+  lesson: registered [] wanted [] lock 0 cursor 6,1 menu false
+  step t07r0-12 attack: ok
+  lesson: registered [] wanted [] lock 0 cursor 13,2 menu false
+  cpu_turn: active 1 idx36AC 1 control P1=2 P2=2
+  W idx36AC addr 030036AC val 2 pc 08024D64 phase 3
+  W army P0 +0x1C val 0 pc 0801E19E phase 3 day 7
+  W army P1 +0x1C val 0 pc 0801E1B0 phase 3 day 7
+  W army P2 +0x1C val 0 pc 0801E1B0 phase 3 day 7
+  W army P3 +0x1C val 0 pc 0801E1B0 phase 3 day 7
+  W army P4 +0x1C val 0 pc 0801E1B0 phase 3 day 7
+  W army P2 +0x1C val 1 pc 0801E1F2 phase 3 day 7
+  W army P1 +0x1C val 2 pc 0801E288 phase 3 day 7
+  order: flag 0 slots [70,0,0,0,0,77,0,76,77,0,0,0] keys [5,5,5,2,5,5,6,5,5,0,0,0]
+  order: flag 0 slots [74,77,0,0,0,77,0,76,77,0,0,0] keys [6,5,5,2,5,5,6,5,5,0,0,0]
+  order: flag 0 slots [74,77,0,0,0,77,0,76,77,0,0,0] keys [6,5,5,2,5,5,6,5,5,0,0,0]
+  W idx36AC addr 030036AC val 3 pc 08024D64 phase 3
+  W idx36AC addr 030036AC val 4 pc 08024D64 phase 3
+  W idx36AC addr 030036AC val 5 pc 08024D64 phase 3
+  W idx36AC addr 030036AC val 1 pc 08024D74 phase 3
+  W army P0 +0x1C val 0 pc 0801E19E phase 3 day 8
+  W army P1 +0x1C val 0 pc 0801E1B0 phase 3 day 8
+  W army P2 +0x1C val 0 pc 0801E1B0 phase 3 day 8
+  W army P3 +0x1C val 0 pc 0801E1B0 phase 3 day 8
+  W army P4 +0x1C val 0 pc 0801E1B0 phase 3 day 8
+  W army P1 +0x1C val 3 pc 0801E1F2 phase 3 day 8
+  phase 4 idx36AC 1 control P1=1 P2=2 day 8 cmds 3
+  cpu side up: the other sides' control bytes restored
+  phase 7 idx36AC 1 control P1=1 P2=2 day 8 cmds 3
+  phase 10 idx36AC 1 control P1=1 P2=2 day 8 cmds 3
+  phase 5 idx36AC 1 control P1=1 P2=2 day 8 cmds 3
+  cpu turn: back, 3 command(s)
+  lesson: registered [] wanted [] lock 0 cursor 8,6 menu false
+  plan requested: turn 8 replan 0
+  step t08r0-1 attack: ok
+  lesson: registered [] wanted [] lock 0 cursor 13,3 menu false
+  step t08r0-2 wait: ok
+  lesson: registered [] wanted [] lock 0 cursor 7,7 menu false
+  step t08r0-3 attack: ok
+  lesson: registered [] wanted [] lock 0 cursor 13,2 menu false
+  step t08r0-4 attack: ok
+  lesson: registered [] wanted [] lock 0 cursor 12,6 menu false
+  step t08r0-5 join: ok
+  lesson: registered [] wanted [] lock 0 cursor 12,7 menu false
+  step t08r0-6 wait: ok
+  lesson: registered [] wanted [] lock 0 cursor 13,1 menu false
+  step t08r0-7 capture: ok
+  lesson: registered [] wanted [] lock 0 cursor 9,9 menu false
+  step t08r0-8 wait: ok
+  lesson: registered [] wanted [] lock 0 cursor 11,7 menu false
+  step t08r0-9 drop: ok
+  lesson: registered [] wanted [] lock 0 cursor 11,1 menu false
+  cpu_turn: active 1 idx36AC 1 control P1=2 P2=2
+  W idx36AC addr 030036AC val 2 pc 08024D64 phase 3
+  W army P0 +0x1C val 0 pc 0801E19E phase 3 day 8
+  W army P1 +0x1C val 0 pc 0801E1B0 phase 3 day 8
+  W army P2 +0x1C val 0 pc 0801E1B0 phase 3 day 8
+  W army P3 +0x1C val 0 pc 0801E1B0 phase 3 day 8
+  W army P4 +0x1C val 0 pc 0801E1B0 phase 3 day 8
+  W army P2 +0x1C val 1 pc 0801E1F2 phase 3 day 8
+  W army P1 +0x1C val 2 pc 0801E288 phase 3 day 8
+  order: flag 0 slots [74,77,0,0,0,77,0,76,77,0,0,0] keys [6,5,5,2,5,5,6,5,5,0,0,0]
+  order: flag 0 slots [74,77,0,0,0,77,0,76,77,0,0,0] keys [6,5,5,2,5,5,6,5,5,0,0,0]
+  W idx36AC addr 030036AC val 3 pc 08024D64 phase 3
+  W idx36AC addr 030036AC val 4 pc 08024D64 phase 3
+  W idx36AC addr 030036AC val 5 pc 08024D64 phase 3
+  W idx36AC addr 030036AC val 1 pc 08024D74 phase 3
+  W army P0 +0x1C val 0 pc 0801E19E phase 3 day 9
+  W army P1 +0x1C val 0 pc 0801E1B0 phase 3 day 9
+  W army P2 +0x1C val 0 pc 0801E1B0 phase 3 day 9
+  W army P3 +0x1C val 0 pc 0801E1B0 phase 3 day 9
+  W army P4 +0x1C val 0 pc 0801E1B0 phase 3 day 9
+  W army P1 +0x1C val 3 pc 0801E1F2 phase 3 day 9
+  phase 7 idx36AC 1 control P1=1 P2=2 day 9 cmds 2
+  cpu side up: the other sides' control bytes restored
+  phase 10 idx36AC 1 control P1=1 P2=2 day 9 cmds 2
+  phase 5 idx36AC 1 control P1=1 P2=2 day 9 cmds 2
+  cpu turn: back, 2 command(s)
+  lesson: registered [] wanted [] lock 0 cursor 12,1 menu false
+  plan requested: turn 9 replan 0
+  step t09r0-1 wait: ok
+  lesson: registered [] wanted [] lock 0 cursor 8,7 menu false
+  step t09r0-2 wait: ok
+  lesson: registered [] wanted [] lock 0 cursor 13,2 menu false
+  step t09r0-3 wait: ok
+  lesson: registered [] wanted [] lock 0 cursor 5,1 menu false
+  step t09r0-4 capture: ok
+  lesson: registered [] wanted [] lock 0 cursor 9,9 menu false
+  step t09r0-5 capture: ok
+  lesson: registered [] wanted [] lock 0 cursor 12,7 menu false
+  step t09r0-6 wait: ok
+  lesson: registered [] wanted [] lock 0 cursor 12,8 menu false
+  step t09r0-7 wait: ok
+  lesson: registered [] wanted [] lock 0 cursor 12,1 menu false
+  step t09r0-8 wait: ok
+  lesson: registered [] wanted [] lock 0 cursor 12,2 menu false
+  step t09r0-9 wait: ok
+  lesson: registered [] wanted [] lock 0 cursor 9,6 menu false
+  cpu_turn: active 1 idx36AC 1 control P1=2 P2=2
+  W idx36AC addr 030036AC val 2 pc 08024D64 phase 3
+  W army P0 +0x1C val 0 pc 0801E19E phase 3 day 9
+  W army P1 +0x1C val 0 pc 0801E1B0 phase 3 day 9
+  W army P2 +0x1C val 0 pc 0801E1B0 phase 3 day 9
+  W army P3 +0x1C val 0 pc 0801E1B0 phase 3 day 9
+  W army P4 +0x1C val 0 pc 0801E1B0 phase 3 day 9
+  W army P2 +0x1C val 1 pc 0801E1F2 phase 3 day 9
+  W army P1 +0x1C val 2 pc 0801E288 phase 3 day 9
+  order: flag 0 slots [74,77,0,0,0,77,0,76,77,0,0,0] keys [6,5,5,2,5,5,6,5,5,0,0,0]
+  order: flag 0 slots [74,77,0,0,0,77,0,76,77,0,0,0] keys [6,5,5,2,5,5,6,5,5,0,0,0]
+  W idx36AC addr 030036AC val 3 pc 08024D64 phase 3
+  W idx36AC addr 030036AC val 4 pc 08024D64 phase 3
+  W idx36AC addr 030036AC val 5 pc 08024D64 phase 3
+  W idx36AC addr 030036AC val 1 pc 08024D74 phase 3
+  W army P0 +0x1C val 0 pc 0801E19E phase 3 day 10
+  W army P1 +0x1C val 0 pc 0801E1B0 phase 3 day 10
+  W army P2 +0x1C val 0 pc 0801E1B0 phase 3 day 10
+  W army P3 +0x1C val 0 pc 0801E1B0 phase 3 day 10
+  W army P4 +0x1C val 0 pc 0801E1B0 phase 3 day 10
+  W army P1 +0x1C val 3 pc 0801E1F2 phase 3 day 10
+  phase 5 idx36AC 1 control P1=1 P2=2 day 10 cmds 2
+  cpu side up: the other sides' control bytes restored
+  cpu turn: back, 2 command(s)
+  lesson: registered [] wanted [] lock 0 cursor 8,6 menu false
+  plan requested: turn 10 replan 0
+  step t10r0-1 wait: ok
+  lesson: registered [] wanted [] lock 0 cursor 9,7 menu false
+  step t10r0-2 wait: ok
+  lesson: registered [] wanted [] lock 0 cursor 10,8 menu false
+  step t10r0-3 attack: ok
+  lesson: registered [] wanted [] lock 0 cursor 12,3 menu false
+  step t10r0-4 capture: ok
+  lesson: registered [] wanted [] lock 0 cursor 13,1 menu false
+  step t10r0-5 wait: ok
+  lesson: registered [] wanted [] lock 0 cursor 13,7 menu false
+  step t10r0-6 wait: ok
+  lesson: registered [] wanted [] lock 0 cursor 5,1 menu false
+  step t10r0-7 wait: ok
+  lesson: registered [] wanted [] lock 0 cursor 12,2 menu false
+  step t10r0-8 wait: ok
+  lesson: registered [] wanted [] lock 0 cursor 12,7 menu false
+  step t10r0-9 wait: ok
+  lesson: registered [] wanted [] lock 0 cursor 12,9 menu false
+  cpu_turn: active 1 idx36AC 1 control P1=2 P2=2
+  W idx36AC addr 030036AC val 2 pc 08024D64 phase 3
+  W army P0 +0x1C val 0 pc 0801E19E phase 3 day 10
+  W army P1 +0x1C val 0 pc 0801E1B0 phase 3 day 10
+  W army P2 +0x1C val 0 pc 0801E1B0 phase 3 day 10
+  W army P3 +0x1C val 0 pc 0801E1B0 phase 3 day 10
+  W army P4 +0x1C val 0 pc 0801E1B0 phase 3 day 10
+  W army P2 +0x1C val 1 pc 0801E1F2 phase 3 day 10
+  W army P1 +0x1C val 2 pc 0801E288 phase 3 day 10
+  order: flag 0 slots [74,77,0,0,0,77,0,76,77,0,0,0] keys [6,5,5,2,5,5,6,5,5,0,0,0]
+  W idx36AC addr 030036AC val 3 pc 08024D64 phase 3
+  W idx36AC addr 030036AC val 4 pc 08024D64 phase 3
+  W idx36AC addr 030036AC val 5 pc 08024D64 phase 3
+  W idx36AC addr 030036AC val 1 pc 08024D74 phase 3
+  W army P0 +0x1C val 0 pc 0801E19E phase 3 day 11
+  W army P1 +0x1C val 0 pc 0801E1B0 phase 3 day 11
+  W army P2 +0x1C val 0 pc 0801E1B0 phase 3 day 11
+  W army P3 +0x1C val 0 pc 0801E1B0 phase 3 day 11
+  W army P4 +0x1C val 0 pc 0801E1B0 phase 3 day 11
+  W army P1 +0x1C val 3 pc 0801E1F2 phase 3 day 11
+  phase 7 idx36AC 1 control P1=1 P2=2 day 11 cmds 1
+  cpu side up: the other sides' control bytes restored
+  phase 10 idx36AC 1 control P1=1 P2=2 day 11 cmds 1
+  phase 5 idx36AC 1 control P1=1 P2=2 day 11 cmds 1
+  cpu turn: back, 1 command(s)
+  lesson: registered [] wanted [] lock 0 cursor 8,6 menu false
+  plan requested: turn 11 replan 0
+  step t11r0-1 capture: ok
+  decided on our turn: win -- the HQ at (13,1) is ours
+  playing the ending out (sram writes so far 0)
+  rank: P1 code 4 speed 88 power 100 technique 84 total 892 (best day 3, fielded 15, lost 4, day 11)
+  ending: tap 20, sram writes 16390, phase 0 day 11
+  ending: a new match has begun; stopping
+  ending played out: sram writes 16390, phase 5 day 1

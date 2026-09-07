@@ -296,7 +296,12 @@ Three decisions, made once so they do not get re-argued:
    cursor there (DERIVATION 63). Missions 8 to 10 (955, 922, 999) cost
    the port four reads -- the air-strike pass, the transport copter,
    day-one fuel, and a capturer's owner -- after which every CPU turn of
-   the nine Field Training games agrees (DERIVATION 64).
+   the nine Field Training games agrees (DERIVATION 64). Missions 11 and
+   12 followed (980; 892 with its own set), the port reading the idle
+   Lander and leaving the rest of the navy unread; mission 13 is a B in
+   the game where the port says S, the real game's own rolls, and its
+   search widened to eight seeds with the sparring game rolling our
+   strikes (DERIVATION 65).
 
    **The first win against the game.** The last Field Training mission,
    Nell against Olaf under fog on 15x10, from the parked state to Olaf's

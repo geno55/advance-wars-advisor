@@ -1,0 +1,9 @@
+{
+ "objective_pull": 80,
+ "damage_taken": 0,
+ "loss": 0.25,
+ "capture": 0,
+ "kill": 1,
+ "hq_pull": 50,
+ "damage_dealt": 2
+}

@@ -33,6 +33,7 @@ import argparse
 import dataclasses
 import json
 import pathlib
+import random
 import sys
 import time
 from dataclasses import dataclass, field
@@ -177,11 +178,41 @@ def board_to_dump(board, ctx: cpu_ai.Context, source: str) -> dict:
     }
 
 
+def _replay_rolled(board, pl, planner, roller, weights, reply, ctx, branches, warnings, luck):
+    """The plan's steps on `board` with every strike rolled; a step the
+    rolls made impossible re-plans the remainder (twice at most)."""
+    cur = board
+    steps = list(pl.steps)
+    replans = 0
+    while True:
+        try:
+            for s in steps:
+                if s.action.kind == "attack":
+                    cur = sim.apply(cur, s.action, luck="min", rng_state=roller.getrandbits(32),
+                                    warnings=warnings)
+                else:
+                    cur = sim.apply(cur, s.action, luck=luck, warnings=warnings)
+            break
+        except (ValueError, KeyError, AttributeError) as e:
+            replans += 1
+            if replans > 2 or cur.active_player != planner:
+                break
+            warnings.append(f"rolled replay re-planned: {e}")
+            again = advisor.plan(cur, planner, weights=weights, reply=reply,
+                                 cpu_ctx=ctx if reply == "cpu" else None,
+                                 branches=branches, warnings=warnings, luck=luck)
+            steps = list(again.steps)
+    if cur.active_player == planner and pl.board_after.active_player != planner:
+        cur = sim.end_turn(cur, warnings=warnings)
+    return cur
+
+
 def spar(board, ctx: cpu_ai.Context, planner: int, *, days: int = 20,
          weights=None, reply: Optional[str] = "cpu", branches: int = 1,
          seed: Optional[int] = None, state_name: str = "board",
          abort_dir: Optional[pathlib.Path] = None,
-         verbose: bool = False, par: Optional[int] = None) -> Result:
+         verbose: bool = False, par: Optional[int] = None,
+         roll_strikes: bool = False) -> Result:
     """One game from `board`: the planner plays `planner`, the port the
     other side, until decided or `days` days from the start day. `par`,
     the map's par in days, lets a win be ranked as the debrief would."""
@@ -191,6 +222,7 @@ def spar(board, ctx: cpu_ai.Context, planner: int, *, days: int = 20,
     cpu = next(p for p in players if p != planner)
     if seed is not None:
         board = dataclasses.replace(board, rng=seed)
+    roller = random.Random((seed if seed is not None else board.rng or 0) ^ 0x5EED)
     ctx = advisor._fresh_ctx(ctx)
     # a no-luck match (settings +6, DERIVATION 54) adds a flat 5 to every
     # strike: the planner's own forward model uses it, so the game played
@@ -225,7 +257,17 @@ def spar(board, ctx: cpu_ai.Context, planner: int, *, days: int = 20,
             joined |= {s.action.target.slot for s in pl.steps
                        if s.action.kind == "join" and s.action.target is not None}
             before_enemy = {u.slot for u in board.units_of(cpu)}
-            board = pl.board_after
+            if roll_strikes:
+                # The planner planned at the worst case; the game rolls.
+                # Re-apply its steps with a rolled strike each (the game's
+                # own reduce over a synthetic 32-bit state -- a sample, not
+                # a prediction of the real RNG, which stays unmodelled per
+                # the user's decision), and re-plan the rest of the turn
+                # where a roll invalidated a later step (DERIVATION 65)
+                board = _replay_rolled(board, pl, planner, roller, weights, reply,
+                                       ctx, branches, warnings, luck)
+            else:
+                board = pl.board_after
             kills_by_day[board.day] = len(before_enemy - {u.slot for u in board.units_of(cpu)})
         else:
             try:
@@ -323,6 +365,8 @@ def main():
     p.add_argument("--weight", type=parse_weight, action="append", default=[],
                    metavar="NAME=VALUE")
     p.add_argument("--seed", type=int, help="override the dump's RNG state")
+    p.add_argument("--roll-strikes", action="store_true",
+                   help="resolve the planner's strikes with rolled luck (the plan stays worst-case)")
     p.add_argument("--json", help="write every result (with the day log) here")
     p.add_argument("--aborts", help="directory for the boards the port could not play")
     p.add_argument("-v", "--verbose", action="store_true", help="print each turn")
@@ -347,7 +391,7 @@ def main():
             print(f"{name}: planner P{planner}, port P{cpu}, day {board.day}")
             r = spar(board, ctx, planner, days=a.days, weights=dict(a.weight) or None,
                      reply=None if a.reply == "none" else a.reply,
-                     branches=a.branches, seed=a.seed, state_name=name,
+                     branches=a.branches, seed=a.seed, state_name=name, roll_strikes=a.roll_strikes,
                      abort_dir=pathlib.Path(a.aborts) if a.aborts else None,
                      verbose=a.verbose, par=par_of(path))
             print("  " + r.summary())

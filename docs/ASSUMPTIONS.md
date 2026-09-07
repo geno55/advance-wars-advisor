@@ -549,6 +549,17 @@ written.
   property it stands on: a foot soldier at home is an ordinary target.
   Nine acceptance games (Field Training 2 to 10) agree turn for turn.
 
+- **The naval AI, as far as an idle Lander** (DERIVATION 65). The lander
+  sub-phase (0x08064064) is the move-class-6 units through 0x08064DF4: an
+  empty Lander lists the side's units in pickup state 3 its sea grid
+  reaches (0x0806164C), moves toward the nearest (unread), else heads for
+  the nearest own Port from the factory list (0x08064F30, unread) and with
+  none stands still (read; Field Training 11's and 13's Landers). A loaded
+  Lander (0x08064F24) and movement modes 3, 5 and 6 (0x08065C74 scores
+  reachable tiles by the 4x4-block value table at 0x0202743C) are unread.
+  Field Training 12's day 1 is its script: Olaf's power fired and the
+  weather set by the lesson, not the AI.
+
 ## Retired — measured, and compressed into Established above
 
 Numbers cited by code, tests, the README and old commit messages resolve here.

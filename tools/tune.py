@@ -47,7 +47,8 @@ def play(job: dict) -> dict:
     cpu = next(p for p in sim.players_in_order(board) if p != planner)
     ctx = cpu_ai.Context.from_dump(job["state"], player=cpu)
     r = sparring.spar(board, ctx, planner, days=job["days"], weights=job["weights"] or None,
-                      reply="cpu", branches=1, seed=job["seed"],
+                      reply=job.get("reply", "cpu"), branches=1, seed=job["seed"],
+                      roll_strikes=job.get("roll", False),
                       state_name=pathlib.Path(job["state"]).stem, par=sparring.par_of(job["state"]))
     return {"state": job["state"], "seed": job["seed"], "weights": job["weights"],
             "outcome": r.outcome, "reason": r.reason, "end_day": r.stats.get("days"),
@@ -96,6 +97,11 @@ def main() -> int:
     ap.add_argument("--passes", type=int, default=2)
     ap.add_argument("--days", type=int, default=30, help="day cap per game")
     ap.add_argument("--workers", type=int, default=8)
+    ap.add_argument("--roll-strikes", action="store_true",
+                    help="the sparring game rolls the planner's strikes (the plan stays worst-case)")
+    ap.add_argument("--reply", choices=("cpu", "planner"), default="cpu",
+                    help="the enemy's model: the CPU port (default) or the planner itself, "
+                         "for a board the port cannot play yet (a naval side, DERIVATION 65)")
     ap.add_argument("--out", default="harness/out/tune/tune.json")
     a = ap.parse_args()
     seeds = [None if x == "dump" else int(x) for x in a.seeds.split(",") if x]
@@ -118,7 +124,7 @@ def main() -> int:
             for s in a.states:
                 for seed in seeds:
                     jobs.append({"state": s, "planner": a.planner, "seed": seed, "days": a.days,
-                                 "weights": dict(weights)})
+                                 "weights": dict(weights), "reply": a.reply, "roll": a.roll_strikes})
                     owner.append(i)
         t0 = time.time()
         results = list(pool.map(play, jobs))

@@ -725,14 +725,15 @@ class TestReply(unittest.TestCase):
         self.assertEqual(ctx.ai, snapshot)
 
     def test_the_planner_stands_in_where_the_port_cannot_play(self):
-        """A Lander puts the CPU into the lander sub-phase the port has
-        not read (the air strike pass it once stood in for is read now,
-        DERIVATION 64): the reply is the planner's, and the note says why."""
+        """A Lander with a rider waiting for it puts the CPU into the part
+        of the lander routine the port has not read (its pickup, DERIVATION
+        65): the reply is the planner's, and the note says why."""
         b = board([[PLAIN] * 6], [unit("Tank", 0, 0, slot=1),
-                                  unit("Lander", 5, 0, player=2, slot=70)],
+                                  unit("Lander", 5, 0, player=2, slot=70),
+                                  unit("Infantry", 4, 0, player=2, slot=71)],
                   armies=two_armies(0))
         prof = cpu_ai.profile_for(38, {1: ANDY, 2: ANDY}, 2)
-        ctx = cpu_ai.Context(ai={}, sides={1: cpu_ai.Side(0, 0b10, None),
+        ctx = cpu_ai.Context(ai={71: [0x18, 0, 0]}, sides={1: cpu_ai.Side(0, 0b10, None),
                                           2: cpu_ai.Side(1, 0b01, None)},
                              profile=prof)
         warnings = []
@@ -740,7 +741,7 @@ class TestReply(unittest.TestCase):
                          warnings=warnings)
         self.assertEqual(p.reply.model, "planner")
         self.assertIn("could not play P2's turn", p.reply.note)
-        self.assertIn("sub-phase", p.reply.note)
+        self.assertIn("Lander", p.reply.note)
         self.assertTrue(any("no RNG state" in w for w in warnings))
 
 
