@@ -4549,3 +4549,31 @@ nothing (the evaluation's own tests hold it to that). On the reported board the 
 five units move. (`hq_pull` walks the shortest infantry route, which
 on this map runs north over the mountains and through the Tanks'
 bridge; `damage_taken` 5 in that set is what steers it south.)
+
+**A dead unit gains no movement points.** The same human's next two
+boards (days 4 and 5 of the same game) showed the other half of the
+problem. Day 4, Infantry #3 to (8,5): `damage_taken` and `loss` quoted
+its death there, 6010 against, and `hq pull` paid 2400 for three points
+toward the HQ -- the sum, -3610, beat every other tile because every
+tile near the Tanks' wall is in their reach and the retreats cost their
+own pull. Day 5, an 8-HP Infantry firing on a Tank for 0 bars, a 55-66
+counter, and `hq pull` +800 for the one point closer. The pull terms
+priced progress a dead unit never makes. `score_action` now strikes the
+`objective` and `hq pull` terms from any action that carries a `loss`
+term (the worst case kills the unit where it ends), so a certain death
+with "progress" no longer outscores a retreat: on the day-5 board the
+Infantry fires on the Mech from (5,5) instead, a kill, and the Tank is
+left alone. Mission one's set still routs Olaf on day 10 in the port (S
+960), mission three's takes the HQ on day 11 with nothing lost (S 965),
+mission two's is an A 920.
+
+What the change does not touch is why the set could reach that
+arithmetic at all: under it an Infantry's death costs 1500 in all
+(`damage_taken` 5 over ten bars at 100, `loss` 0.5 over a price of
+1000) while `hq_pull` 800 pays for every movement point, and the tuner,
+scoring the rank on the port's games, found those numbers because the
+Tanks never fired in them. The rank's Technique counts units, not
+prices; the `headcount` weight (DERIVATION 66) is the reply's side of
+that, and a step-level price for a unit lost as a UNIT is the next
+thing a rank-aware table wants. Until then a tuned set is a policy for
+the game it was tuned on, and the terms under each step say so.

@@ -842,7 +842,19 @@ def _capture_terms(ctx: Context, a) -> List[Term]:
 
 
 def score_action(ctx: Context, a) -> Scored:
-    """The opinion on one action, as named terms over its facts."""
+    """The opinion on one action, as named terms over its facts. A unit the
+    worst case kills where it ends (a `loss` term) gains no movement
+    points: its pulls are struck, so a certain death with "progress" does
+    not outscore a retreat (a Field Training 3 board, DERIVATION 67)."""
+    sc = _score_action(ctx, a)
+    if any(t.name == "loss" for t in sc.terms):
+        kept = tuple(t for t in sc.terms if t.name not in ("objective", "hq pull"))
+        if len(kept) != len(sc.terms):
+            sc = dataclasses.replace(sc, terms=kept)
+    return sc
+
+
+def _score_action(ctx: Context, a) -> Scored:
     if a.kind == "build":
         return _score_build(ctx, a)
     if a.kind == "power":
