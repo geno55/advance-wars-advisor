@@ -414,3 +414,41 @@ class TestNoUnitTypeBranches(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main(verbosity=2)
+
+
+class TestMemory(unittest.TestCase):
+    """fog.remember: a player keeps what they saw (DERIVATION 66)."""
+
+    def test_an_enemy_seen_yesterday_counts_today_at_its_old_tile(self):
+        rows = [[PLAIN] * 13 for _ in range(3)]
+        us = unit("Infantry", 0, 1, slot=1)              # vision 2
+        yesterday = board(rows, [us, unit("Rockets", 2, 1, player=2, slot=70)], fog_flag=True)
+        today = board(rows, [us, unit("Rockets", 9, 1, player=2, slot=70)], fog_flag=True)
+        self.assertEqual([u.slot for u in fog.visible_units(today, 1) if u.player == 2], [])
+        seen = fog.remember(yesterday, today, 1)
+        self.assertEqual(seen.remembered, frozenset({70}))
+        r = next(u for u in seen.units if u.slot == 70)
+        self.assertEqual((r.x, r.y), (2, 1))              # where we last saw it
+        self.assertEqual([u.slot for u in fog.visible_units(seen, 1) if u.player == 2], [70])
+        # the game's own board is untouched
+        self.assertEqual(next(u for u in today.units if u.slot == 70).x, 9)
+
+    def test_memory_chains_and_sight_now_overrides_it(self):
+        rows = [[PLAIN] * 13 for _ in range(3)]
+        us = unit("Infantry", 0, 1, slot=1)
+        d1 = board(rows, [us, unit("Rockets", 2, 1, player=2, slot=70)], fog_flag=True)
+        d2 = fog.remember(d1, board(rows, [us, unit("Rockets", 9, 1, player=2, slot=70)], fog_flag=True), 1)
+        d3 = fog.remember(d2, board(rows, [us, unit("Rockets", 10, 1, player=2, slot=70)], fog_flag=True), 1)
+        self.assertEqual(next(u for u in d3.units if u.slot == 70).x, 2)   # still the day-1 sighting
+        back = fog.remember(d3, board(rows, [us, unit("Rockets", 1, 1, player=2, slot=70)], fog_flag=True), 1)
+        self.assertEqual(back.remembered, frozenset())
+        self.assertEqual(next(u for u in back.units if u.slot == 70).x, 1)
+
+    def test_a_unit_never_seen_stays_hidden(self):
+        rows = [[PLAIN] * 13 for _ in range(3)]
+        us = unit("Infantry", 0, 1, slot=1)
+        d1 = board(rows, [us, unit("Rockets", 9, 1, player=2, slot=70)], fog_flag=True)
+        d2 = fog.remember(d1, board(rows, [us, unit("Rockets", 9, 1, player=2, slot=70)], fog_flag=True), 1)
+        self.assertIs(d2, d2)
+        self.assertEqual(getattr(d2, "remembered", frozenset()), frozenset())
+        self.assertEqual([u.slot for u in fog.visible_units(d2, 1) if u.player == 2], [])

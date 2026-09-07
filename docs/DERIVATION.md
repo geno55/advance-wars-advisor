@@ -4456,3 +4456,69 @@ recorded as a B 821 (`ft13b`, the port agreeing on all nine CPU turns)
 with its set kept as `data/weights_ft13.json`; lifting it wants a
 planner that keeps hurt units out of indirect range without the
 threat term that stalls it, not another set.
+
+## 66. Under fog the planner remembers what it saw
+
+**The day-3 terms.** Mission 13's day 3, scored again from its dump:
+Tank #10's move to (11,5) with a shot at Infantry #70 quoted its
+exposure as "next turn 2-20 from 2 attackers" -- the two Infantry --
+and tied at +610 with the move to (10,5), the tie broken one way in the
+loop's planner process and the other in a fresh one. Olaf's Rockets at
+(13,8), five tiles from (11,5) and in range, were not in the quote: the
+threat model counts only the enemies the player can see (DERIVATION 20
+to 23, the fog rules), and from the day-3 board the Rockets were unlit.
+They had stood in plain sight on day 2. The game's reply, modelled by
+the port on the same board, then showed the Rockets and the Artillery
+firing on exactly those two units, and the plan was still taken: the
+reply's loss terms, priced at half a unit's cost, lost to the pull.
+
+**Memory.** A player who saw the Rockets yesterday counts them today.
+`fog.remember(prev, board, player)` builds the planning board: every
+enemy unit the player cannot see now but could see, or remembered, on
+the previous board is placed at that board's tile for it and listed in
+`Board.remembered`; `fog.visible_units` counts the listed slots as seen,
+so the threat model, the exposure and the reply model all see them
+there. Sight now overrides the memory; a unit never seen stays hidden,
+as before; the game's own board is not touched -- the sparring game
+applies the plan's steps to the real board (`_replay`, with a re-plan
+where a remembered tile was wrong), and the loop's `plan_once` folds the
+run's earlier turn-start and End Turn dumps into the memory before it
+plans. The three rules are tests in `tests/test_fog.py`.
+
+**Memory alone was not enough.** With it, mission 13 lost three units
+instead of four (B 820, the HQ on day 11): the day-3 pair lived, and
+the Rockets went on killing from (13,8), a tile no unit of ours ever
+lit in either game -- their sight is one, and the road to the HQ runs
+inside their five. A term pricing the headcount at the next turn start
+(`headcount`, funds per unit standing, in the reply's board score --
+the rank's Technique counts units, not funds) changed nothing in the
+game (the same B 820, the proposals ranked the same); a second branch
+made it worse (B 742); a tiny `damage_taken` (0.02, 0.1), which the
+port had at an A on day 9, stalled the real game to the day cap. The
+loop, meanwhile, is deterministic: the base set replayed its B 820
+exactly, so the ties fall the same way run after run.
+
+**What a player brings to a second attempt.** The user asked whether
+the mission is built so that the A needs the enemy's positions known
+before the fog lifts. It is: the Rockets and the Artillery flank Olaf's
+HQ with sight one, the lesson's cursor never touches them, the CPU
+sees the whole board under fog (the port's fog order, DERIVATION 20 to
+23), and the A line is one unit wide. A first attempt walks into them;
+a player who lost once knows where they were. `campaign_run.py run
+--recall RUN` gives the loop that knowledge and nothing more: the
+earlier run's turn-start and End Turn dumps folded into the memory
+earliest sighting first (a unit is back where it began on day 1), plus
+the enemy units that FIRED on us during its CPU turns, at the tiles
+they fired from -- the game plays the attacker's battle, so a player
+knows the unit and about where it stood, and the port, which agrees
+with those turns, names the tile. From the B 821 attempt that is five
+units on day 1: the Tank where it first showed, the two Infantry, the
+Artillery at (13,4) and the Rockets at (13,8). With the plain sightings
+alone the Rockets were missing (`ft13r`); with the reveals the game
+took the HQ on day 7 with one unit lost -- Speed 95, Technique 100,
+total 975, an A, the port agreeing on all six CPU turns. That game is
+the fixture `ft13s`, its recall noted beside it.
+
+Ten of the fourteen Field Training missions are A-ranks from the
+game's debrief now: 2 to 13, one of them on its second attempt, as the
+map intends.

@@ -301,9 +301,13 @@ Three decisions, made once so they do not get re-argued:
    Lander and leaving the rest of the navy unread; mission 13 stays a B
    821 in the game where the port says S on every seed, rolled strikes
    included -- eight sets, one deterministic game each, all losing the
-   same two units on day 3 to the real rolls. Lifting it wants a planner
-   that keeps hurt units out of indirect range, not another set
-   (DERIVATION 65).
+   same two units on day 3 to the real rolls (DERIVATION 65). What lifted
+   it was knowledge, not weights: the planner now remembers what it saw
+   under fog, and `--recall RUN` seeds a replay with an earlier attempt's
+   sightings and the units that fired on it; mission 13 is an A 975 on
+   that second attempt, as its fog and its flanking indirects intend
+   (DERIVATION 66). Ten of the fourteen Field Training missions are
+   A-ranks from the debrief.
 
    **The first win against the game.** The last Field Training mission,
    Nell against Olaf under fog on 15x10, from the parked state to Olaf's

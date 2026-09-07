@@ -187,6 +187,11 @@ class Board:
     # starts here; None when the dump predates the field. sim.apply does
     # not advance it -- a plan's own battles leave it where the dump had it.
     rng: Optional[int] = None
+    # Under fog: the slots of enemy units the player cannot see now but
+    # saw on an earlier turn, standing on this board at their last-seen
+    # tile (fog.remember, DERIVATION 66). The threat model counts them;
+    # nothing else does -- the game's own board is not this one.
+    remembered: frozenset = field(default_factory=frozenset)
     warnings: list = field(default_factory=list)
 
     @property

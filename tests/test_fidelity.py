@@ -103,7 +103,7 @@ class TestTheCheck(unittest.TestCase):
         # ft2b to ft10a are Field Training 2 to 10 played through their
         # lessons (DERIVATION 62); their dumps carry settings +7 = 0, the
         # meter rule off, which the port must honour
-        for run in ("m01a", "m01b", "m01c", "m01d", "m01e", "ft2b", "ft3c", "ft4b", "ft5c", "ft6b", "ft7d", "ft8a", "ft9b", "ft10a", "ft11a", "ft12b", "ft13b"):
+        for run in ("m01a", "m01b", "m01c", "m01d", "m01e", "ft2b", "ft3c", "ft4b", "ft5c", "ft6b", "ft7d", "ft8a", "ft9b", "ft10a", "ft11a", "ft12b", "ft13s"):
             d = ACC / run
             steps = fidelity.driven_steps(d)
             for t in sorted(steps):

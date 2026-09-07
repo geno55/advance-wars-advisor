@@ -41,7 +41,7 @@ from typing import List, Optional
 
 ROOT = pathlib.Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT))
-from engine import advisor, cpu_ai, economy, rank, sim         # noqa: E402
+from engine import advisor, cpu_ai, economy, fog, rank, sim         # noqa: E402
 from engine.state import load                                   # noqa: E402
 
 TERRAIN_HQ = 8
@@ -178,16 +178,18 @@ def board_to_dump(board, ctx: cpu_ai.Context, source: str) -> dict:
     }
 
 
-def _replay_rolled(board, pl, planner, roller, weights, reply, ctx, branches, warnings, luck):
-    """The plan's steps on `board` with every strike rolled; a step the
-    rolls made impossible re-plans the remainder (twice at most)."""
+def _replay(board, pl, planner, roller, weights, reply, ctx, branches, warnings, luck):
+    """The plan's steps applied to `board` -- the REAL board, where the plan
+    was made on the remembered one (fog.remember) -- with every strike
+    rolled when `roller` is given; a step the board or the rolls made
+    impossible re-plans the remainder (twice at most)."""
     cur = board
     steps = list(pl.steps)
     replans = 0
     while True:
         try:
             for s in steps:
-                if s.action.kind == "attack":
+                if s.action.kind == "attack" and roller is not None:
                     cur = sim.apply(cur, s.action, luck="min", rng_state=roller.getrandbits(32),
                                     warnings=warnings)
                 else:
@@ -243,13 +245,18 @@ def spar(board, ctx: cpu_ai.Context, planner: int, *, days: int = 20,
     # debrief's best day read 1; DERIVATION 61)
     enemy_seen = {u.slot for u in board.units_of(cpu)}
     own_seen = {u.slot for u in board.units_of(planner)}
+    memory = None                      # the planner's last board under fog
     joined: set = set()
     kills_by_day: dict = {}
     while board.day - start.day < days:
         mover = board.active_player
         before_w = {p: worth(board, p) for p in (planner, cpu)}
         if mover == planner:
-            pl = advisor.plan(board, planner, weights=weights, reply=reply,
+            # under fog the planner sees the board a player would: what
+            # is lit now plus what it saw before, at the last-seen tiles
+            seen = fog.remember(memory, board, planner) if board.fog else board
+            memory = seen
+            pl = advisor.plan(seen, planner, weights=weights, reply=reply,
                               cpu_ctx=ctx if reply == "cpu" else None,
                               branches=branches, warnings=warnings, luck=luck)
             note = "; ".join(advisor.describe_action(s.action) for s in pl.steps
@@ -257,15 +264,16 @@ def spar(board, ctx: cpu_ai.Context, planner: int, *, days: int = 20,
             joined |= {s.action.target.slot for s in pl.steps
                        if s.action.kind == "join" and s.action.target is not None}
             before_enemy = {u.slot for u in board.units_of(cpu)}
-            if roll_strikes:
-                # The planner planned at the worst case; the game rolls.
-                # Re-apply its steps with a rolled strike each (the game's
-                # own reduce over a synthetic 32-bit state -- a sample, not
-                # a prediction of the real RNG, which stays unmodelled per
-                # the user's decision), and re-plan the rest of the turn
-                # where a roll invalidated a later step (DERIVATION 65)
-                board = _replay_rolled(board, pl, planner, roller, weights, reply,
-                                       ctx, branches, warnings, luck)
+            # The plan's steps on the real board (the planner's board may
+            # carry remembered enemies at old tiles); with --roll-strikes
+            # every strike is rolled -- the game's own reduce over a
+            # synthetic 32-bit state, a sample and not a prediction of the
+            # real RNG, which stays unmodelled per the user's decision --
+            # and a step the board or a roll voided re-plans the rest of
+            # the turn (DERIVATION 65, 66)
+            if roll_strikes or seen is not board:
+                board = _replay(board, pl, planner, roller if roll_strikes else None,
+                                weights, reply, ctx, branches, warnings, luck)
             else:
                 board = pl.board_after
             kills_by_day[board.day] = len(before_enemy - {u.slot for u in board.units_of(cpu)})

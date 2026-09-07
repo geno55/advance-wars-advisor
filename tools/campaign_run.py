@@ -34,6 +34,7 @@ and result.json: who won and how, read off the game.
 from __future__ import annotations
 
 import argparse
+import dataclasses
 import json
 import pathlib
 import subprocess
@@ -45,6 +46,7 @@ sys.path.insert(0, str(ROOT))
 sys.path.insert(0, str(ROOT / "tools"))
 import sim_diff                                                      # noqa: E402
 from engine import actions, advisor, cpu_ai, sim                     # noqa: E402
+from engine import fog                                              # noqa: E402
 from engine.state import load                                        # noqa: E402
 
 TERRAIN_HQ = 8
@@ -118,13 +120,64 @@ def load_weights(path) -> dict:
     return dict(json.loads(pathlib.Path(path).read_text(encoding="utf-8")))
 
 
+def recalled(recall: pathlib.Path, player: int):
+    """What an earlier attempt at this state saw, as a memory board: its
+    turn-start and End Turn dumps folded earliest-first (fog.remember), and
+    the enemy units that FIRED on us during its CPU turns at the tiles they
+    fired from -- the game shows an attacker's battle, so a player knows
+    the unit and roughly where it stood; the port, agreeing with those
+    turns, names the tile (DERIVATION 66)."""
+    names = sorted(f for f in recall.iterdir()
+                   if f.name.startswith("t") and f.suffix == ".json" and f.name[1:3].isdigit()
+                   and (f.name.endswith(".end.json") or f.name.count(".") == 1))
+    reveals = {}
+    for f in names:
+        if not f.name.endswith(".end.json"):
+            continue
+        try:
+            end = load(f)
+            cpu = next(p for p in sim.players_in_order(end) if p != player)
+            ctx = cpu_ai.Context.from_dump(f, player=cpu)
+            turn = cpu_ai.predict(end, cpu, ctx, rng=end.rng or 0)
+        except Exception:
+            continue
+        for c in turn.commands:
+            if c.id == 4 and c.slot not in reveals:
+                reveals[c.slot] = c.tile
+    mem = None
+    for f in reversed(names):
+        b = load(f)
+        if reveals:
+            units = [dataclasses.replace(u, x=reveals[u.slot][0], y=reveals[u.slot][1])
+                     if u.slot in reveals and u.player != player else u for u in b.units]
+            b = dataclasses.replace(b, units=units,
+                                    remembered=frozenset(set(b.remembered) | {sl for sl in reveals
+                                                                             if any(u.slot == sl for u in units)}))
+        mem = fog.remember(mem, b, player) if mem is not None else b
+    return mem
+
+
 def plan_once(dump, steps, player: int, turn: int, replan: int, start_path,
               days: int, branches: int, reply: str, reply_on_replan: bool,
-              weights: dict = None) -> dict:
+              weights: dict = None, recall=None) -> dict:
     """Judge the dump, plan the turn, compile the steps, write `steps` (a
     Lua table file, atomically) and its .plan.txt; return what was written."""
     dump = pathlib.Path(dump)
     board = load(dump)
+    if board.fog:
+        # what we saw on the turns before, at the tiles we saw it
+        # (fog.remember); with --recall, what an earlier attempt at this
+        # state saw, its earliest sighting of each unit first -- the
+        # knowledge a player brings to a replay (DERIVATION 66)
+        mem = None
+        if recall:
+            mem = recalled(pathlib.Path(recall), player)
+        for t in range(1, turn):
+            for name in (f"t{t:02d}.json", f"t{t:02d}.end.json"):
+                f = dump.parent / name
+                if f.exists():
+                    mem = fog.remember(mem, load(f), player) if mem is not None else load(f)
+        board = fog.remember(mem, board, player)
     start = load(start_path) if start_path and pathlib.Path(start_path).exists() else board
     warnings = list(board.warnings)
     out = {"steps": [], "over": None, "note": ""}
@@ -167,7 +220,7 @@ def plan_once(dump, steps, player: int, turn: int, replan: int, start_path,
 
 def cmd_plan(a) -> int:
     plan_once(a.dump, a.steps, a.player, a.turn, a.replan, a.start, a.days,
-              a.branches, a.reply, a.reply_on_replan, load_weights(a.weights))
+              a.branches, a.reply, a.reply_on_replan, load_weights(a.weights), a.recall)
     return 0
 
 
@@ -194,7 +247,7 @@ def cmd_serve(a) -> int:
             turn, replan, dump = head.split(" ", 2)
             t0 = time.time()
             out = plan_once(dump, steps, a.player, int(turn), int(replan), a.start,
-                            a.days, a.branches, a.reply, a.reply_on_replan, weights)
+                            a.days, a.branches, a.reply, a.reply_on_replan, weights, a.recall)
             log.write(f"{req.name}: {len(out['steps'])} step(s), over={out['over']}, "
                       f"{time.time() - t0:.1f}s\n")
         except Exception as e:                  # noqa: BLE001 -- the loop must go on
@@ -314,6 +367,8 @@ def cmd_run(a) -> int:
         serve_cmd.append("--reply-on-replan")
     if a.weights:
         serve_cmd += ["--weights", str(pathlib.Path(a.weights).resolve())]
+    if a.recall:
+        serve_cmd += ["--recall", str(pathlib.Path(a.recall).resolve())]
     service = subprocess.Popen(serve_cmd)        # this console, no window of its own
     t0 = time.time()
     try:
@@ -372,6 +427,7 @@ def main() -> int:
                    help="also re-plan after every attack, build and power (slow; default: only after a failed step)")
     r.add_argument("--reply-on-replan", action="store_true", help="model the reply on re-plans too")
     r.add_argument("--weights", help="JSON file of planner weight overrides (tools/tune.py's <out>.best.json)")
+    r.add_argument("--recall", help="an earlier run of this state: under fog its sightings seed the planner's memory")
     r.add_argument("--animation", action="store_true",
                    help="keep the battle animations (off by default: settings +9 is written to 0 after the load)")
     r.add_argument("--cpu-limit", type=int, default=3000, help="polls of ten frames to wait for the CPU")
@@ -390,6 +446,7 @@ def main() -> int:
     q.add_argument("--reply-on-replan", action="store_true",
                    help="model the reply on mid-turn re-plans too (slow)")
     q.add_argument("--weights", help="JSON file of planner weight overrides")
+    q.add_argument("--recall", help="an earlier run of this state: under fog its sightings seed the planner's memory")
     q.set_defaults(fn=cmd_plan)
     v = sub.add_parser("serve", help="(started by run) answer the loop's plan requests")
     v.add_argument("--dir", required=True)
@@ -400,6 +457,7 @@ def main() -> int:
     v.add_argument("--reply", choices=("cpu", "planner", "none"), default="cpu")
     v.add_argument("--reply-on-replan", action="store_true")
     v.add_argument("--weights", help="JSON file of planner weight overrides")
+    v.add_argument("--recall", help="an earlier run of this state: under fog its sightings seed the planner's memory")
     v.set_defaults(fn=cmd_serve)
     j = sub.add_parser("judge", help="read a dump: won, lost, or still playing")
     j.add_argument("--dump", required=True)

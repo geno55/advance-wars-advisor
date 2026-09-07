@@ -191,6 +191,10 @@ WEIGHTS: Dict[str, float] = {
     "capture_horizon": 6,     # DAYS of income a property is worth
     "enemy_property": 2.0,    # a property taken FROM an enemy is worth this x
     "win": 1_000_000,         # an HQ that falls this turn
+    "headcount": 0,           # funds per unit alive at the next turn start,
+                              #   ours less the enemy's, in the reply's board
+                              #   score: the rank's Technique counts UNITS
+                              #   lost, not funds (DERIVATION 66); 0 is off
     "objective_pull": 40,     # funds per movement point closer
     "hq_pull": 0,             # funds per movement point a FOOT unit ends
                               #   closer to an enemy HQ -- the rank's Speed
@@ -1326,6 +1330,11 @@ def evaluate(board, player: int, weights=None, co_ids=None, *,
     foe = sum(army_worth(board, p, co_ids) for p in others)
     out.append(Term("material", w["material"], own - foe,
                     f"P{player}'s units are worth {own}, the enemy's {foe}"))
+    if w["headcount"]:
+        n_own = len(board.units_of(player))
+        n_foe = sum(len(board.units_of(p)) for p in others)
+        out.append(Term("headcount", w["headcount"], n_own - n_foe,
+                        f"{n_own} of ours standing against {n_foe} of theirs"))
     own_f = funds_of(board, player)
     foe_f = sum(funds_of(board, p) for p in others)
     out.append(Term("treasury", w["treasury"], own_f - foe_f,

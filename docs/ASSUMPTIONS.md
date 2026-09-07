@@ -560,6 +560,19 @@ written.
   Field Training 12's day 1 is its script: Olaf's power fired and the
   weather set by the lesson, not the AI.
 
+- **Under fog the planner remembers, and a replay recalls** (DERIVATION
+  66). `fog.remember` keeps an enemy the player saw on an earlier board
+  at its last-seen tile (`Board.remembered`, counted by
+  `fog.visible_units`); sight now overrides it; a unit never seen stays
+  hidden; the game's own board is untouched (the sparring game applies
+  the plan's steps to the real board). `campaign_run.py --recall RUN`
+  seeds day 1 with an earlier attempt's sightings, earliest first, and
+  with the units that fired on it at the tiles they fired from -- what a
+  player carries into a second attempt. Field Training 13's A needed it;
+  no other mission used it. `headcount` (the reply's board score, units
+  standing) and `--roll-strikes` exist and were not what mission 13
+  needed.
+
 ## Retired — measured, and compressed into Established above
 
 Numbers cited by code, tests, the README and old commit messages resolve here.

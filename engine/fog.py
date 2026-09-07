@@ -344,7 +344,40 @@ def visible_units(board, player: int, rule_set: Optional[dict] = None) -> List:
     that build traps need to know which rule they are under.
     """
     rule_set = rule_set or RULES
-    return [u for u in board.units if can_see(board, player, u, rule_set)]
+    known = getattr(board, "remembered", frozenset())
+    return [u for u in board.units
+            if can_see(board, player, u, rule_set) or u.slot in known]
+
+
+def remember(prev, board, player: int, rule_set: Optional[dict] = None):
+    """The planning board for `player`: `board` with every enemy unit it
+    cannot see now but could see (or remembered) on `prev` moved to where
+    `prev` had it and listed in `remembered`. A player keeps what they saw;
+    an indirect that sat across the river yesterday is still a threat
+    today (Field Training 13's Rockets, DERIVATION 66). Units never seen
+    stay where the board has them and stay hidden, as before. `prev` None
+    returns `board`."""
+    import dataclasses
+    if prev is None or not board.fog:
+        return board
+    rule_set = rule_set or RULES
+    seen_now = {u.slot for u in board.units if can_see(board, player, u, rule_set)}
+    known_prev = {u.slot: u for u in prev.units
+                  if u.player != player and u.player != 0 and not u.loaded
+                  and (can_see(prev, player, u, rule_set)
+                       or u.slot in getattr(prev, "remembered", frozenset()))}
+    units, kept = [], set()
+    for u in board.units:
+        if (u.player != player and u.player != 0 and not u.loaded
+                and u.slot not in seen_now and u.slot in known_prev):
+            old = known_prev[u.slot]
+            if (old.x, old.y) != (u.x, u.y):
+                u = dataclasses.replace(u, x=old.x, y=old.y)
+            kept.add(u.slot)
+        units.append(u)
+    if not kept:
+        return board
+    return dataclasses.replace(board, units=units, remembered=frozenset(kept))
 
 
 def concealed(board, unit, viewer: int) -> bool:
