@@ -101,6 +101,18 @@ STATES = {
         mss="AWFT/7.mss", dims=(15, 10),
         note="Field Training 7 (map 122); parked by the user 2026-09-06",
         mgba=None),
+    "ft8": dict(
+        mss="AWFT/8.mss", dims=(15, 10),
+        note="Field Training 8 (map 123); parked by the user 2026-09-06",
+        mgba=None),
+    "ft9": dict(
+        mss="AWFT/9.mss", dims=(15, 10),
+        note="Field Training 9 (map 124); parked by the user 2026-09-06",
+        mgba=None),
+    "ft10": dict(
+        mss="AWFT/10.mss", dims=(15, 10),
+        note="Field Training 10 (map 125); parked by the user 2026-09-06",
+        mgba=None),
 }
 
 FIX = ROOT / "tests" / "fixtures" / "sim_diff"

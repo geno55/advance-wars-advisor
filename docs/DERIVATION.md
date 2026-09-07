@@ -4310,3 +4310,66 @@ movement mode 3, which the port has not read, though the game ends
 before it would matter. Six of the fourteen Field Training missions are
 now A-ranks from the game's debrief, the ceiling the mode gives, and
 their games are the acceptance fixtures `ft2b` to `ft7d`.
+
+## 64. Field Training 8 to 10: the port learns to fly
+
+**The states.** `AWFT/8.mss` to `10.mss` (states `ft8`, `ft9`, `ft10`):
+Field Training 8 (map 123, par 7, luck off), Olaf's Bombers and Fighters
+low on fuel and the Anti-Air lesson, parked at day 2 with the Anti-Air's
+shot taken; 9 (map 124, par 5), Missiles and Rockets against Bombers
+across the sea, parked with the Missiles' shot taken and the Rockets'
+pending; 10 (map 125, par 3), our air force against Olaf's landing,
+free play from day 1. The Rockets lesson holds the unit selected and
+waits for the attack, so the follower now opens the menu of a held unit
+when the attack is the wanted event, then Fires.
+
+**The port could not play any of them.** Every one aborted in the
+sparring game at the first CPU turn: "sub-phase air_strike", the pass
+the port had never read. The routine (0x08063ADC) lists the unacted
+units of types 16 and 17 -- Fighter and Bomber -- sorts them the way the
+other passes do (0x080641CC with the in-match order option) and installs
+0x080648EC as their per-unit function: the DIRECT routine, the same one
+sub-phases 5, 6 and 17 run. The port's `direct_pass` on that list is the
+whole pass. Mission 8 and 9 then play through (mission one's set: an A
+930 and an A 935 in the port), and mission 10 stopped at the next unread
+routine, the TCopter's pickup (0x08060670): the APC's (0x080605AC) with
+the fill not blocked by enemies and the load classes of kind 1, and with
+nothing to fetch, the retreat check when the profile's second byte beats
+the unit's random and then 0x080656FC -- the cheapest reachable tile the
+type may stop on that no unit holds and no ally owns, later tiles
+winning ties. The unit's own tile is in that scan (the game's tile index
+does not count the mover, and the first reading, which did, sent both of
+Olaf's copters one step sideways where the game's stood still).
+
+**Fuel on the first day.** With the copters right, mission 10's day 1
+still differed by fuel alone: the port's Bombers read 87 where the game
+had 92, the copters 91 against 93 and 97 against 99 -- two for a copter
+and five for a plane, the daily burn, which the game had not taken.
+Olaf's air on Field Training 7 had shown the same two on its first move.
+The turn-start walker does not burn on day 1 (`supply.turn_start`'s
+`first_day`; whether the rule is the day counter or a side's first turn
+is not separated -- they coincide here), and with that mission 10's two
+CPU turns and mission 7's first agree.
+
+**A capturer is one on someone else's property.** Mission 9's day 3
+was the last disagreement: Olaf's two-HP Bomber killed our Mech on the
+city at (2,8) where the port sent it at the Rockets. The attack score
+(0x0805F948) prices a foot soldier on a listed property as a CAPTURER --
+value 100 times a progress term, small -- unless 0x08025484 says the
+property's owner is on the standing unit's own team; and the ROM hands
+that routine the TARGET's unit index (0x0805F9C6), so our Mech on our
+own city is an ordinary Mech, value 1200, worth the kill. The port had
+asked whether the AI's team held the tile, the opposite question for
+enemy units at home. The same misprice had sent Olaf's Medium Tank on
+mission 7's day 2 to a wrong tile; with it read, mission 7's two turns,
+mission 9's five (the day-3 trace `ft9-day3` draw for draw) and mission
+8's seven all agree, and no known gap is left in the acceptance runs.
+
+**The games.** Mission 8 with mission one's set: a rout on day 9,
+Speed 91, none of sixteen lost, total 955. Mission 9: the Rockets'
+lesson fired from the held unit, then a rout on day 6, Speed 94,
+Technique 84 (four of fifteen lost), total 922. Mission 10: a rout on
+day 3, total 999. All at code 4, the mode's ceiling: nine of the
+fourteen Field Training missions are A-ranks from the game's debrief,
+and the port now plays Olaf's Bombers, Fighters, copters and transport
+copters through them.

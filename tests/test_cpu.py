@@ -69,7 +69,7 @@ OLAF = ["m01-olaf-power", "m01-olaf-snow"]
 # records and draws agree. Day 1 and day 16 are the hunt list read right
 # (DERIVATION 56): the nearest target worth hunting, an AntiAir off along
 # the north edge and a Tank standing where its target is adjacent.
-ACCEPT = ["m01-day1", "m01-day4", "m01-day15", "m01-day16"]
+ACCEPT = ["m01-day1", "m01-day4", "m01-day15", "m01-day16", "ft9-day3"]
 BOARD_EXCEPT = {"m01-day15"}
 # The battle animation byte, settings +9, written to 1 on the VS state: the
 # first battle's scene seeds 128 draws and the AI's later randoms shift, so

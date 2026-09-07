@@ -537,6 +537,18 @@ written.
   since: 0x20 Supply, 0x1C Load, 0x1D Drop. The fourteen lessons' other
   predicates and events are read as they come.
 
+- **The CPU's air units, transport copters, first-day fuel and target
+  pricing** (DERIVATION 64). The air-strike sub-phase (0x08063ADC) is the
+  direct routine 0x080648EC over the unacted Fighters and Bombers; the
+  TCopter's pass (0x08060670) is the APC's with an unblocked fill and load
+  kind 1, then the retreat check under the profile's second byte and a
+  move to the cheapest reachable empty stoppable tile no ally owns -- its
+  own tile among them, so an idle copter stands still. The turn-start
+  walker burns no fuel on day 1. The attack score's capturer test
+  (0x0805F9C6 -> 0x08025484) asks whether the TARGET's team owns the
+  property it stands on: a foot soldier at home is an ordinary target.
+  Nine acceptance games (Field Training 2 to 10) agree turn for turn.
+
 ## Retired — measured, and compressed into Established above
 
 Numbers cited by code, tests, the README and old commit messages resolve here.

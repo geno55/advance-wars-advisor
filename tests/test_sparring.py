@@ -76,17 +76,17 @@ class TestSparring(unittest.TestCase):
 
     def test_an_abort_is_reported_and_leaves_a_loadable_dump(self):
         b = board([[PLAIN] * 6], [unit("Tank", 0, 0),
-                                  unit("Bomber", 5, 0, player=2, slot=70)],
+                                  unit("Lander", 5, 0, player=2, slot=70)],
                   armies=armies())
         with tempfile.TemporaryDirectory() as tmp:
             r = sparring.spar(b, context(), 1, days=5, reply=None,
-                              state_name="bomber", abort_dir=pathlib.Path(tmp))
+                              state_name="lander", abort_dir=pathlib.Path(tmp))
             self.assertEqual(r.outcome, "abort")
             self.assertIn("sub-phase", r.reason)
             self.assertIsNotNone(r.abort_dump)
             again = load(r.abort_dump)
             self.assertEqual(again.active_player, 2)
-            self.assertEqual({u.type for u in again.units}, {"Tank", "Bomber"})
+            self.assertEqual({u.type for u in again.units}, {"Tank", "Lander"})
             ctx = cpu_ai.Context.from_dump(r.abort_dump, player=2)
             self.assertEqual(ctx.profile, context().profile)
             self.assertEqual(ctx.sides[2].enemies, 0b01)

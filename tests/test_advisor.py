@@ -725,10 +725,11 @@ class TestReply(unittest.TestCase):
         self.assertEqual(ctx.ai, snapshot)
 
     def test_the_planner_stands_in_where_the_port_cannot_play(self):
-        """A Bomber puts the CPU into the air-strike sub-phase the port
-        has not read: the reply is the planner's, and the note says why."""
+        """A Lander puts the CPU into the lander sub-phase the port has
+        not read (the air strike pass it once stood in for is read now,
+        DERIVATION 64): the reply is the planner's, and the note says why."""
         b = board([[PLAIN] * 6], [unit("Tank", 0, 0, slot=1),
-                                  unit("Bomber", 5, 0, player=2, slot=70)],
+                                  unit("Lander", 5, 0, player=2, slot=70)],
                   armies=two_armies(0))
         prof = cpu_ai.profile_for(38, {1: ANDY, 2: ANDY}, 2)
         ctx = cpu_ai.Context(ai={}, sides={1: cpu_ai.Side(0, 0b10, None),

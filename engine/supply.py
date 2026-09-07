@@ -240,16 +240,22 @@ def turn_start(unit_type: str, *, hp: int, fuel: int, ammo: int,
                funds: Optional[int] = None, charge: bool = True,
                co_id: Optional[int] = None, power: bool = False,
                dived: bool = False, loaded: bool = False,
-               apc_adjacent: bool = False) -> TurnStart:
+               apc_adjacent: bool = False, first_day: bool = False) -> TurnStart:
     """Burn -> crash -> property service -> auto-supply, the measured order.
+
+    `first_day`: the walker does not burn on day 1 -- Olaf's Bombers and
+    copters on Field Training 7 and 10 opened their first turn at the fuel
+    they were parked with, moved, and read exactly their path's cost
+    (DERIVATION 64). Whether the rule is the day counter or a side's first
+    turn is the same thing there and is not separated.
 
     `apc_adjacent` is the caller's statement that an own supplier stands on
     one of the four neighbouring tiles at turn start (the walker reads the
     tile index, so only really-placed units count -- position writes are
     invisible to it)."""
-    burn = daily_burn(unit_type, terrain_id=terrain_id, tile_owner=tile_owner,
-                      player=player, dived=dived, loaded=loaded,
-                      co_id=co_id, power=power)
+    burn = 0 if first_day else daily_burn(
+        unit_type, terrain_id=terrain_id, tile_owner=tile_owner,
+        player=player, dived=dived, loaded=loaded, co_id=co_id, power=power)
     fuel_after = max(0, fuel - burn)
     if (fuel_after == 0 and crashes_at_zero(unit_type)
             and not exempt_from_crash(unit_type, terrain_id=terrain_id,

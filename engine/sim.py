@@ -651,7 +651,7 @@ def turn_start(board, player: int, *, warnings: Optional[list] = None):
             u.type, hp=u.hp, fuel=u.fuel, ammo=u.ammo, terrain_id=terrain_id,
             tile_owner=owner, player=player, funds=funds, charge=not free,
             co_id=cid, power=power, dived=u.dived, loaded=u.loaded,
-            apc_adjacent=adjacent)
+            apc_adjacent=adjacent, first_day=(after.day == 1))
         if ts.crashes:
             dead.append(u.slot)
             continue

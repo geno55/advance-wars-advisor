@@ -547,9 +547,16 @@ class Turn:
             return -1
         ts = stats(target.type)
         value = 1
+        # 0x0805F9C6 hands 0x08025484 the TARGET's unit index and the tile's
+        # terrain byte: a foot soldier on a property its own team holds is
+        # an ordinary target, not a capturer. The port asked whether the
+        # AI's team held it, and so priced our Mech on our own city as a
+        # capturer where Olaf's Bomber went and killed it (ft9-day3,
+        # DERIVATION 64)
+        owner = self.board.owner[target.y][target.x]
         capturer = (ts["type"] <= 2
                     and tables()["property_terrain"][self.board.terrain[target.y][target.x]]
-                    and not self.owner_team_ok(target.x, target.y))
+                    and not (owner != 0 and self.allied(target.player, owner)))
         if capturer:
             terr = self.board.terrain[target.y][target.x]
             if terr == HQ:
@@ -1148,7 +1155,43 @@ class Turn:
         if unit.type == "APC":
             self.apc_pass(unit)
         elif unit.type == "TCopter":
-            raise NotImplementedError("0x08060670 TCopter")
+            self.tcopter_pass(unit)
+
+    def tcopter_pass(self, unit):                                # 0x08060670
+        """The APC's pickup with two differences: the fill is not blocked
+        by enemy units and the load classes are kind 1's. With nothing to
+        fetch: the retreat check when the profile's second byte beats the
+        unit's random, then 0x080656FC -- move to the cheapest reachable
+        EMPTY tile the type may stop on that is not an allied property
+        (later tiles win ties) -- its own tile at cost 0 among them, so a
+        copter with nothing to fetch stands still, as Olaf's did on Field
+        Training 10 (DERIVATION 64)."""
+        g = self.fill(unit.x, unit.y, type_id(unit.type), WHOLE_MAP, False)
+        self.expand(g)
+        self.goal_grid = g
+        goal = self.pickup_target(unit, 1)
+        if goal is not None:
+            self.move_toward(unit, goal)
+            return
+        prof = self.profile_unit(unit)
+        if prof[1] > self.ai(unit)[1] % 100:
+            self.retreat_check(unit)
+        if self.command_issued(unit):
+            return
+        reach = self.own_reach(unit)
+        best, pick = 0x7FFF, None
+        for x, y in self.scan():
+            c = reach.get((x, y))
+            occ = self.unit_at(x, y)
+            if c is None or c < 0 or (occ is not None and occ.slot != unit.slot):
+                continue
+            if self.owner_team_ok(x, y) or not self.can_stop(unit, x, y):
+                continue
+            if c <= best:
+                best, pick = c, (x, y)
+        self.log.append(f"  {unit.type}#{unit.slot}: nothing to fetch; idle tile {pick} cost {best}")
+        if pick is not None:
+            self.move_toward(unit, pick)
 
     def apc_pass(self, unit):                                    # 0x080605AC
         g = self.fill(unit.x, unit.y, type_id(unit.type), WHOLE_MAP, True)
@@ -1693,6 +1736,11 @@ class Turn:
             plan = {"foot_capture": (1, self.capture_pass),
                     "indirect_fire": (4, self.indirect_pass),
                     "direct": (5, self.direct_pass),
+                    # 0x08063ADC: the air strike pass lists the unacted
+                    # Fighters and Bombers (types 16 and 17), sorts them
+                    # like the others and hands them the DIRECT routine
+                    # 0x080648EC (DERIVATION 64)
+                    "air_strike": (5, self.direct_pass),
                     "foot": (1, self.foot_pass),
                     "transport_empty": (2, self.transport_pass),
                     "transport": (2, self.drop_pass),
@@ -1713,6 +1761,8 @@ class Turn:
                 continue
             cls, fn = plan[name]
             units = self.units_of_class(cls, sort=name in self.SORTED_PASSES)
+            if name == "air_strike":
+                units = [u for u in units if u.type in ("Fighter", "Bomber")]
             # NOT read: which units the trailing direct pass (entry 17, the
             # same routine as 5 and 6) takes. Every unacted vehicle fits
             # m01-day4 (three re-decided) and supply-apc-move; on day 5 of

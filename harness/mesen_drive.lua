@@ -1060,6 +1060,9 @@ function M.follow_lesson(cfg, tag)
       -- target the selector offers (a wait names the target's tile if the
       -- lesson minds which)
       if e == 0x0F and M.menu_open() then ev = 0x19 end
+      -- ... or with the unit held selected and no menu yet (the Rockets
+      -- lesson: "now open the Command Menu"): A opens it where it stands
+      if e == 0x0F and not M.menu_open() and M.selected_unit() then ev = 0x2C end
     end
     if not ev and not waiting and last_acted then
       -- the script reacts to an action over a few frames (a cursor walk,

@@ -293,8 +293,10 @@ Three decisions, made once so they do not get re-argued:
    way) and the meter's gate (settings +7) read for the port to agree.
    Missions 5 to 7 followed (975, 869, 999) once the follower read a
    wait's accepted tiles off its predicate and steered the game's true
-   cursor there (DERIVATION 63); mission 7's two CPU turns are the open
-   fidelity gaps.
+   cursor there (DERIVATION 63). Missions 8 to 10 (955, 922, 999) cost
+   the port four reads -- the air-strike pass, the transport copter,
+   day-one fuel, and a capturer's owner -- after which every CPU turn of
+   the nine Field Training games agrees (DERIVATION 64).
 
    **The first win against the game.** The last Field Training mission,
    Nell against Olaf under fog on 15x10, from the parked state to Olaf's
