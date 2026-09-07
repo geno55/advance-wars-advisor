@@ -751,6 +751,9 @@ tools/sparring.py         the planner against the CPU port to the end: the
 tools/tune.py             the weight search: one weight at a time against the
                           port, the rank total as the score, games in parallel,
                           every game appended to its JSON as it finishes
+tools/bench_port.py       how fast the port plays: a random-policy game against
+                          the CPU port, timing enumeration, apply and the CPU
+                          turn (the number docs/PLAN-search.md starts from)
 data/weights_m01_s.json   the seven weights that earned the game's own S on
                           mission one (DERIVATION 59): `campaign_run.py run
                           --weights` and `sparring.py --weight` take them
@@ -832,6 +835,8 @@ docs/ASSUMPTIONS.md       established / assumed / refuted, with kill conditions
 docs/ADVISOR.md           the opinion layer's rules: the line, the weights,
                           what is naive, the shared-delusion caveat
 docs/ROADMAP.md           the steps from the first opinion to the campaign
+docs/PLAN-search.md       the pivot from weights to search in the port: the
+                          lean enumerator, the search loop on Field Training 2
 ```
 
 ## Reading a live board
