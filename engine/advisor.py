@@ -1407,47 +1407,61 @@ def evaluate(board, player: int, weights=None, co_ids=None, *,
             out.append(Term("win", w["win"], -1 if p == player else 1,
                             f"P{p} has lost its last unit (the rout -- "
                             f"stated, not measured)"))
-    # The two pulls the step scorer prices, as a potential: a proposal
-    # that only walks changes no material, and without these the reply's
-    # board score vetoed every advance on Field Training 3 in favour of a
-    # bar of repair (DERIVATION 67). Same fields, same weights.
-    if w.get("hq_pull"):
-        hqs = frozenset((x, y) for y in range(board.height) for x in range(board.width)
-                        if board.terrain[y][x] == TERRAIN_HQ and board.owner[y][x] not in (0, player))
-        if hqs:
-            fields: Dict[str, Dict[Coord, int]] = {}
-            total, n = 0, 0
-            for u in board.units_of(player):
-                st = pathing.unit_stats(u.type)
-                if st["unit_class"] != "foot" or u.loaded:
-                    continue
-                f = fields.setdefault(st["move_type"], distance_field(board, hqs, st["move_type"], None))
-                d = f.get((u.x, u.y))
-                if d is not None:
-                    total += d
-                    n += 1
-            if n:
-                out.append(Term("hq_pull", w["hq_pull"], -total,
-                                f"{n} foot unit{'s' if n != 1 else ''} {total} movement "
-                                f"points from an enemy HQ in all"))
-    if w.get("objective_pull"):
-        fog_on = bool(threat.fog_active(board, None))
+    # The two pulls the step scorer prices, as a potential against
+    # `start`: movement points gained toward an enemy HQ by our foot
+    # units, and toward their objectives by every unit, since the turn
+    # began. A proposal that only walks changes no material, and without
+    # these the reply's board score vetoed every advance on Field
+    # Training 3 in favour of a bar of repair (DERIVATION 67). Same
+    # fields, same weights; nothing at a level start.
+    def hq_distance(b) -> Tuple[int, int]:
+        hqs = frozenset((x, y) for y in range(b.height) for x in range(b.width)
+                        if b.terrain[y][x] == TERRAIN_HQ and b.owner[y][x] not in (0, player))
+        if not hqs:
+            return 0, 0
+        fields: Dict[str, Dict[Coord, int]] = {}
         total, n = 0, 0
-        for u in board.units_of(player):
-            if u.loaded:
+        for u in b.units_of(player):
+            st = pathing.unit_stats(u.type)
+            if st["unit_class"] != "foot" or u.loaded:
                 continue
-            tiles, _label = objective_tiles(board, u, fog_on, None)
-            if not tiles:
-                continue
-            f = distance_field(board, tiles, pathing.unit_stats(u.type)["move_type"], None)
+            f = fields.setdefault(st["move_type"], distance_field(b, hqs, st["move_type"], None))
             d = f.get((u.x, u.y))
             if d is not None:
                 total += d
                 n += 1
-        if n:
-            out.append(Term("objective_pull", w["objective_pull"], -total,
-                            f"{n} unit{'s' if n != 1 else ''} {total} movement points "
-                            f"from their objectives in all"))
+        return total, n
+
+    def objective_distance(b) -> Tuple[int, int]:
+        fog_on = bool(threat.fog_active(b, None))
+        total, n = 0, 0
+        for u in b.units_of(player):
+            if u.loaded:
+                continue
+            tiles, _label = objective_tiles(b, u, fog_on, None)
+            if not tiles:
+                continue
+            f = distance_field(b, tiles, pathing.unit_stats(u.type)["move_type"], None)
+            d = f.get((u.x, u.y))
+            if d is not None:
+                total += d
+                n += 1
+        return total, n
+
+    if w.get("hq_pull") and start is not board:
+        was, _ = hq_distance(start)
+        now, n = hq_distance(board)
+        if was != now:
+            out.append(Term("hq_pull", w["hq_pull"], was - now,
+                            f"our foot units stand {now} movement points from an enemy HQ "
+                            f"in all, {was} at the turn's start"))
+    if w.get("objective_pull") and start is not board:
+        was, _ = objective_distance(start)
+        now, n = objective_distance(board)
+        if was != now:
+            out.append(Term("objective_pull", w["objective_pull"], was - now,
+                            f"our units stand {now} movement points from their objectives "
+                            f"in all, {was} at the turn's start"))
     return tuple(out)
 
 

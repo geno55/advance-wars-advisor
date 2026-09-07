@@ -4539,12 +4539,13 @@ the same map with the same set on `--branches 1`, two proposals, where
 the greedy plan's material happened to hold; `advise.py` defaults to
 three branches, and the fourth proposal was the one that sat.
 
-**The fix.** `evaluate()` now carries the two pulls as a potential:
-`hq_pull` times the movement points every own foot unit stands from
-the nearest enemy HQ, and `objective_pull` times every unit's distance
-to its objective tiles -- the same fields and weights the step scorer
-uses, negated and summed, so a proposal that only walks scores its
-walk. On the reported board the greedy plan is chosen and three of the
+**The fix.** `evaluate()` now carries the two pulls as a potential
+against the turn's start: `hq_pull` times the movement points our foot
+units gained toward the nearest enemy HQ since the turn began, and
+`objective_pull` times what every unit gained toward its objective
+tiles -- the same fields and weights the step scorer uses, so a
+proposal that only walks scores its walk, and a level start scores
+nothing (the evaluation's own tests hold it to that). On the reported board the greedy plan is chosen and three of the
 five units move. (`hq_pull` walks the shortest infantry route, which
 on this map runs north over the mountains and through the Tanks'
 bridge; `damage_taken` 5 in that set is what steers it south.)
