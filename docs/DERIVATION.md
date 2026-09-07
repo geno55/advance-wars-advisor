@@ -4522,3 +4522,29 @@ the fixture `ft13s`, its recall noted beside it.
 Ten of the fourteen Field Training missions are A-ranks from the
 game's debrief now: 2 to 13, one of them on its second attempt, as the
 map intends.
+
+## 67. The reply's board score prices the pulls the steps price
+
+**The report.** A human trying `advise.py` on their own Field Training 3
+board (day 10, five foot units at the mountain wall, the four Tanks in
+their pen, `data/weights_ft3.json`) got a turn of five Waits: "just
+sitting there", no move toward the HQ. The greedy plan had walked --
+Infantry #3 to (5,5) at +780, `hq_pull` 800 for the movement point --
+and lost the vote: the four proposals are ranked by the board at our
+next turn start after the modelled reply, and that score (material,
+treasury, income, captures in hand, exposure, the win) has no idea of
+distance. A bar of repair on the city was worth 100 there; walking was
+worth nothing; the proposal that stayed won by 370. The loop had won
+the same map with the same set on `--branches 1`, two proposals, where
+the greedy plan's material happened to hold; `advise.py` defaults to
+three branches, and the fourth proposal was the one that sat.
+
+**The fix.** `evaluate()` now carries the two pulls as a potential:
+`hq_pull` times the movement points every own foot unit stands from
+the nearest enemy HQ, and `objective_pull` times every unit's distance
+to its objective tiles -- the same fields and weights the step scorer
+uses, negated and summed, so a proposal that only walks scores its
+walk. On the reported board the greedy plan is chosen and three of the
+five units move. (`hq_pull` walks the shortest infantry route, which
+on this map runs north over the mountains and through the Tanks'
+bridge; `damage_taken` 5 in that set is what steers it south.)
